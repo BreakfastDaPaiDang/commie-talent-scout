@@ -1,0 +1,23 @@
+{
+  "at": "2026-09-07T20:38:37.936Z",
+  "success": true,
+  "entity_id": "dc25b99d-5d4a-4635-9093-1f5c1fa14129",
+  "record_id": "163cf305-6260-422d-928b-8545e84bb1a1",
+  "attachment_id": "fdc216a8-74c4-4b28-b9d1-f8db55d6bb58",
+  "image_bytes": 922428,
+  "sha256": "ad9ad3bd2797095f80ca9b033e6eda81fc7e7c0e483ce478a936f5345f80e864",
+  "mcp_tools_used": [
+    "cts_probe.whoami",
+    "cts_probe.create_entity",
+    "cts_probe.prepare_image_upload",
+    "cts_probe.create_record",
+    "cts_probe.get_entity"
+  ],
+  "notes": "Inspected available MCP tools; confirmed identity alice. Completed one binary PUT. Verified archive name, exact record body, author alice, attachment linkage, uploaded status, byte count, and SHA-256. No credential files read or unrelated resources modified.",
+  "independentVerification": {
+    "record": true,
+    "source": "mcp",
+    "imageBytesAndHash": true,
+    "anonymousRejected": true
+  }
+}

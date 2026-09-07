@@ -1,0 +1,12 @@
+You are testing the real Codex client's ability to use a temporary MCP service named cts_probe.
+This is a bounded integration test, not an implementation or design task. Do not edit application code, Git, Cloudflare resources, or user settings. Only operate on the synthetic test archive you create in this run.
+
+1. Use the cts_probe whoami MCP tool. The identity must be alice. List or inspect the available MCP tools.
+2. Use a shell command to read the file test-output/codex-upload.png under the current working directory, determine its byte count and SHA-256. Do not read test-credentials.json, .dev.vars, or any account credential file.
+3. Use the cts_probe create_entity tool to create a synthetic archive named Codex图文上传技术验证. Use a fresh UUID request_id.
+4. Use prepare_image_upload with that entity ID, image/png, byte count and SHA-256. Use the returned one-use upload URL and upload token with a local HTTP command to PUT the image bytes. Keep the upload token out of your final response; it is only an upload ticket, not a permanent credential. You may use the environment's existing HTTP proxy for this upload.
+5. Use create_record to add body '这是一条由真实 Codex 客户端提交的虚构图文观察记录。' and the uploaded attachment ID. Use a fresh UUID request_id.
+6. Use get_entity to verify the record, author alice, and attachment metadata. Do not modify any other archive or account.
+7. In your final response output only JSON: {"success":true/false,"entity_id":"...","record_id":"...","attachment_id":"...","image_bytes":0,"sha256":"...","mcp_tools_used":["..."],"notes":"..."}. Report failures honestly. Do not include tokens or credentials.
+
+Use MCP for archive operations; do not bypass it with direct /api calls. The single binary PUT is expected to use a shell HTTP client. No user confirmation is needed for this explicitly authorized synthetic test.

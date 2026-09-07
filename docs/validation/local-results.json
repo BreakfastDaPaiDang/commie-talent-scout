@@ -1,0 +1,107 @@
+{
+  "at": "2026-09-07T20:38:40.418Z",
+  "base": "http://127.0.0.1:8787",
+  "runId": "85ad14f6-6acd-4282-8a17-ef106f8c149a",
+  "checks": [
+    {
+      "name": "unauthenticated API and MCP rejected",
+      "pass": true,
+      "ms": 22
+    },
+    {
+      "name": "cookie auth and cross-origin mutation protection",
+      "pass": true,
+      "ms": 25
+    },
+    {
+      "name": "MCP SDK v2 tool discovery and identity",
+      "pass": true,
+      "ms": 196
+    },
+    {
+      "name": "legacy 2025 MCP client interoperates with v2 server",
+      "pass": true,
+      "ms": 92
+    },
+    {
+      "name": "2026 MCP negotiation interoperates with stateless handler",
+      "pass": true,
+      "ms": 48
+    },
+    {
+      "name": "D1 failed attachment precondition rolls back record and revision",
+      "pass": true,
+      "ms": 116
+    },
+    {
+      "name": "MCP upload ticket -> private R2 -> record -> authenticated read",
+      "pass": true,
+      "ms": 140
+    },
+    {
+      "name": "author/admin permissions agree between web and MCP",
+      "pass": true,
+      "ms": 160
+    },
+    {
+      "name": "closed archive rejects authors and admins; reopen restores writing",
+      "pass": true,
+      "ms": 164
+    },
+    {
+      "name": "two conflicting edits preserve exactly one new version",
+      "pass": true,
+      "ms": 108
+    },
+    {
+      "name": "close/create races never create a record after closure",
+      "pass": true,
+      "ms": 633
+    },
+    {
+      "name": "concurrent retried command creates one record and one event",
+      "pass": true,
+      "ms": 168
+    },
+    {
+      "name": "unread is per-member and reads do not alter entity activity",
+      "pass": true,
+      "ms": 185
+    },
+    {
+      "name": "freeze invalidates an already connected MCP client and image access",
+      "pass": true,
+      "ms": 149
+    },
+    {
+      "name": "concurrent admin demotions leave an active administrator",
+      "pass": true,
+      "ms": 87
+    },
+    {
+      "name": "password KDF runtime probe (scrypt N32768 r8 p3)",
+      "pass": true,
+      "ms": 209
+    }
+  ],
+  "metrics": {
+    "image": {
+      "bytes": 68,
+      "sha256": "87f9bdc4c34679d10bd945f3d0640bbdf820ed184115147174eaf724b7e391d5",
+      "authenticatedRead": true
+    },
+    "password": {
+      "status": 200,
+      "body": {
+        "algorithm": "scrypt",
+        "N": 32768,
+        "r": 8,
+        "p": 3,
+        "bytes": 64,
+        "wallMs": 162
+      }
+    }
+  },
+  "passed": 16,
+  "failed": 0
+}

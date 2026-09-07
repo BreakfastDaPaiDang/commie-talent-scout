@@ -2,8 +2,14 @@
 
 `commie-talent-scout` 是早餐社内部使用的人物与组织观察档案、接触进度和协作记录系统。
 
-项目已形成产品需求基线，尚未实现应用或部署。
+项目已完成首轮技术验证与前端原型。正式应用尚未实现或上线。
 
+本地查看：在 `prototypes/frontend` 执行 `npm ci`、`npm run dev`，打开 http://127.0.0.1:5181/ 。原型仅含虚构数据，刷新复位。
+
+- [前端原型](./prototypes/frontend/)：人物、组织、记录、登录、账号与 Agent 接入页面。
+- [设计说明与灵感稿](./docs/design/README.md)：风格取舍、六张探索图和原型自查。
+- [技术验证](./docs/technical-validation.md) / [技术方案](./docs/technical-design.md)：云端、真实 Codex 和大陆网络证据及实施边界。
+- [任务拆解草稿](./docs/implementation-issues.md)：按可验收业务路径组织的后续工作。
 - [PRD](./docs/PRD.md)：首版范围、业务规则、默认值与验收要求。
 - [领域词汇表](./CONTEXT.md)：统一领域术语。
 - [决策记录](./docs/adr/)：重要取舍及其原因。

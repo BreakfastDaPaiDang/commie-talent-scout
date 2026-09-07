@@ -1,0 +1,9 @@
+{
+  "name": "cts-frontend-prototype",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": { "dev": "vite --host 127.0.0.1 --port 5181 --strictPort", "build": "vite build", "preview": "vite preview --host 127.0.0.1 --port 5181 --strictPort" },
+  "dependencies": { "react": "19.2.8", "react-dom": "19.2.8" },
+  "devDependencies": { "vite": "8.2.2" }
+}

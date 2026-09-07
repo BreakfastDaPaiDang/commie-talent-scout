@@ -1,0 +1,30 @@
+[
+  {
+    "path": "/api/whoami",
+    "eventTimestamp": 1788817075819,
+    "cpuMs": 9,
+    "wallMs": 442,
+    "outcome": "ok"
+  },
+  {
+    "path": "/api/whoami",
+    "eventTimestamp": 1788817077169,
+    "cpuMs": 11,
+    "wallMs": 193,
+    "outcome": "ok"
+  },
+  {
+    "path": "/probe/password",
+    "eventTimestamp": 1788817077653,
+    "cpuMs": 2,
+    "wallMs": 186,
+    "outcome": "ok"
+  },
+  {
+    "path": "/probe/scrypt",
+    "eventTimestamp": 1788817078045,
+    "cpuMs": 402,
+    "wallMs": 598,
+    "outcome": "ok"
+  }
+]
