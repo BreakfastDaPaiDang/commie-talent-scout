@@ -1,0 +1,616 @@
+{
+  "date": "2026-09-08T13:22:34.369Z",
+  "status": "implementation_and_api_verified_cloud_browser_check_pending",
+  "local": {
+    "date": "2026-09-08T13:14:33.022Z",
+    "base": "http://127.0.0.1:8790",
+    "checks": [
+      "public catalog includes all 34 person and 31 organization entries, independent categories and descriptions",
+      "normalization reuses names without overwriting definitions; invalid fields are rejected and concurrent creation stays unique",
+      "MCP requires actual version reads and evidence, rejects cross-library writes, and retries never duplicate or overwrite evidence",
+      "multi-tag and focus updates emit one event per batch, preserve source conditions, agree with web, and correlate explicit task IDs",
+      "close atomically freezes definitions and evidence; every role is locked; reopening reports current definition differences while history retains old wording",
+      "deleted sources hide derived tags, focus, history, counts and summaries from another member; independent evidence stays visible and restoration creates no duplicate binding",
+      "concurrent tagging and closing commit only one outcome, with no partial bindings or snapshots"
+    ],
+    "recoveries": []
+  },
+  "cloud": {
+    "date": "2026-09-08T13:16:31.919Z",
+    "base": "https://scout-staging.dapaidang.org",
+    "checks": [
+      "public catalog includes all 34 person and 31 organization entries, independent categories and descriptions",
+      "normalization reuses names without overwriting definitions; invalid fields are rejected and concurrent creation stays unique",
+      "MCP requires actual version reads and evidence, rejects cross-library writes, and retries never duplicate or overwrite evidence",
+      "multi-tag and focus updates emit one event per batch, preserve source conditions, agree with web, and correlate explicit task IDs",
+      "close atomically freezes definitions and evidence; every role is locked; reopening reports current definition differences while history retains old wording",
+      "deleted sources hide derived tags, focus, history, counts and summaries from another member; independent evidence stays visible and restoration creates no duplicate binding",
+      "concurrent tagging and closing commit only one outcome, with no partial bindings or snapshots"
+    ],
+    "recoveries": []
+  },
+  "real_codex": {
+    "date": "2026-09-08T13:22:34.369Z",
+    "base": "https://scout-staging.dapaidang.org",
+    "fixture": "虚构冷启动阿禾 c7e73158",
+    "checks": [
+      "real cold Codex session publishes supported facts, reuses and creates tags, removes changed resource, preserves unmentioned skill/language and speaker boundaries",
+      "independent cold session recognizes repeated material and makes no business changes",
+      "same-name ambiguity requests identifying information without guessing or writing",
+      "conflicting unsourced material triggers old-evidence review and does not silently remove established availability",
+      "multi-object partial completion reports actual success and remaining closed object without implicit reopening",
+      "real Codex recovers a deliberately lost post-commit response using the original request and completes remaining tagging without duplicate observations"
+    ],
+    "rounds": [
+      {
+        "round": "primary",
+        "elapsed_ms": 120415,
+        "tools": [
+          {
+            "tool": "get_archive_tags",
+            "outcome": "success",
+            "error_code": null,
+            "task_id": "63da2b8d-88a8-4ed5-9add-57c2dd26919b"
+          },
+          {
+            "tool": "update_archive_tags",
+            "outcome": "success",
+            "error_code": null,
+            "task_id": "63da2b8d-88a8-4ed5-9add-57c2dd26919b"
+          },
+          {
+            "tool": "get_archive_tags",
+            "outcome": "success",
+            "error_code": null,
+            "task_id": "63da2b8d-88a8-4ed5-9add-57c2dd26919b"
+          },
+          {
+            "tool": "get_observation",
+            "outcome": "success",
+            "error_code": null,
+            "task_id": "63da2b8d-88a8-4ed5-9add-57c2dd26919b"
+          },
+          {
+            "tool": "create_observation",
+            "outcome": "success",
+            "error_code": null,
+            "task_id": "63da2b8d-88a8-4ed5-9add-57c2dd26919b"
+          },
+          {
+            "tool": "record_task_context",
+            "outcome": "success",
+            "error_code": null,
+            "task_id": "63da2b8d-88a8-4ed5-9add-57c2dd26919b"
+          },
+          {
+            "tool": "list_observations",
+            "outcome": "success",
+            "error_code": null,
+            "task_id": null
+          },
+          {
+            "tool": "list_observations",
+            "outcome": "rejected",
+            "error_code": "INVALID_TOOL_REQUEST",
+            "task_id": null
+          },
+          {
+            "tool": "get_archive_tags",
+            "outcome": "success",
+            "error_code": null,
+            "task_id": null
+          },
+          {
+            "tool": "get_archive",
+            "outcome": "success",
+            "error_code": null,
+            "task_id": null
+          },
+          {
+            "tool": "list_tag_categories",
+            "outcome": "success",
+            "error_code": null,
+            "task_id": null
+          },
+          {
+            "tool": "list_tags",
+            "outcome": "success",
+            "error_code": null,
+            "task_id": null
+          },
+          {
+            "tool": "list_archives",
+            "outcome": "success",
+            "error_code": null,
+            "task_id": null
+          },
+          {
+            "tool": "get_usage_guide",
+            "outcome": "success",
+            "error_code": null,
+            "task_id": null
+          },
+          {
+            "tool": "get_usage_guide",
+            "outcome": "success",
+            "error_code": null,
+            "task_id": null
+          },
+          {
+            "tool": "get_usage_guide",
+            "outcome": "success",
+            "error_code": null,
+            "task_id": null
+          },
+          {
+            "tool": "whoami",
+            "outcome": "success",
+            "error_code": null,
+            "task_id": null
+          }
+        ],
+        "final": "已保存并核对[「虚构冷启动阿禾 c7e73158」档案](https://scout-staging.dapaidang.org/?archive=71ccd6f4-0fbc-4ee1-80f7-094c8ee6c667)，新增 1 条整理观察。\n\n- 移除「传播渠道」，记录交接及权限终止。\n- 保留「视频剪辑」并补充职责边界，保留原有日语记录。\n- 复用「音频修复」「固定时段」标签，注明九月周三北京时间 20:00—22:00，十月未知。\n- Python、Blender 按学习阶段记录；小敏、小岚的能力未归入阿禾。"
+      },
+      {
+        "round": "no-new-material",
+        "elapsed_ms": 51145,
+        "tools": [
+          {
+            "tool": "get_archive_tags",
+            "outcome": "success",
+            "error_code": null,
+            "task_id": null
+          },
+          {
+            "tool": "list_observations",
+            "outcome": "success",
+            "error_code": null,
+            "task_id": null
+          },
+          {
+            "tool": "get_archive",
+            "outcome": "success",
+            "error_code": null,
+            "task_id": null
+          },
+          {
+            "tool": "list_archives",
+            "outcome": "success",
+            "error_code": null,
+            "task_id": null
+          },
+          {
+            "tool": "get_usage_guide",
+            "outcome": "success",
+            "error_code": null,
+            "task_id": null
+          },
+          {
+            "tool": "get_usage_guide",
+            "outcome": "success",
+            "error_code": null,
+            "task_id": null
+          },
+          {
+            "tool": "get_usage_guide",
+            "outcome": "success",
+            "error_code": null,
+            "task_id": null
+          },
+          {
+            "tool": "whoami",
+            "outcome": "success",
+            "error_code": null,
+            "task_id": null
+          }
+        ],
+        "final": "已核对[「虚构冷启动阿禾 c7e73158」档案](https://scout-staging.dapaidang.org/?archive=71ccd6f4-0fbc-4ee1-80f7-094c8ee6c667)：这段聊天已完整整理，本次没有新增或修改观察、标签及依据，档案版本仍为 5。\n\n现有记录已准确区分频道权限终止与剪辑能力保留，记录音频修复交付及仅限九月的可投入时段；没有把 Python、Blender 学习或他人的英语主持能力记为阿禾的技能。原有日语记录保留。"
+      },
+      {
+        "round": "same-name",
+        "elapsed_ms": 32354,
+        "tools": [
+          {
+            "tool": "get_usage_guide",
+            "outcome": "success",
+            "error_code": null,
+            "task_id": null
+          },
+          {
+            "tool": "list_archives",
+            "outcome": "success",
+            "error_code": null,
+            "task_id": null
+          },
+          {
+            "tool": "whoami",
+            "outcome": "success",
+            "error_code": null,
+            "task_id": null
+          }
+        ],
+        "final": "找到两份「虚构同名小川 c7e73158」档案，分别备注“虚构甲”（QQ：112233445）和“虚构乙”（QQ：556677889）。这条近况应记入哪一份？目前尚未写入。"
+      },
+      {
+        "round": "conflicting-material",
+        "elapsed_ms": 77955,
+        "tools": [
+          {
+            "tool": "get_observation",
+            "outcome": "success",
+            "error_code": null,
+            "task_id": "e4ea62cb-e101-4a3a-8312-eca6ae78a1a4"
+          },
+          {
+            "tool": "create_observation",
+            "outcome": "success",
+            "error_code": null,
+            "task_id": "e4ea62cb-e101-4a3a-8312-eca6ae78a1a4"
+          },
+          {
+            "tool": "record_task_context",
+            "outcome": "success",
+            "error_code": null,
+            "task_id": "e4ea62cb-e101-4a3a-8312-eca6ae78a1a4"
+          },
+          {
+            "tool": "list_archive_timeline",
+            "outcome": "success",
+            "error_code": null,
+            "task_id": null
+          },
+          {
+            "tool": "get_archive_tags",
+            "outcome": "success",
+            "error_code": null,
+            "task_id": null
+          },
+          {
+            "tool": "get_archive",
+            "outcome": "success",
+            "error_code": null,
+            "task_id": null
+          },
+          {
+            "tool": "list_archives",
+            "outcome": "success",
+            "error_code": null,
+            "task_id": null
+          },
+          {
+            "tool": "get_usage_guide",
+            "outcome": "success",
+            "error_code": null,
+            "task_id": null
+          },
+          {
+            "tool": "get_usage_guide",
+            "outcome": "success",
+            "error_code": null,
+            "task_id": null
+          },
+          {
+            "tool": "whoami",
+            "outcome": "success",
+            "error_code": null,
+            "task_id": null
+          }
+        ],
+        "final": "已在[虚构冷启动阿禾 c7e73158 的档案](https://scout-staging.dapaidang.org/?archive=71ccd6f4-0fbc-4ee1-80f7-094c8ee6c667)新增一条待核实转述，保留原话并注明发言者、时间和「他」的指代不明，发生时间留空。\n\n现有可用时段和标签保持不变；这条材料不足以认定阿禾九月周三晚上没空。"
+      },
+      {
+        "round": "partial-completion",
+        "elapsed_ms": 44950,
+        "tools": [
+          {
+            "tool": "create_observation",
+            "outcome": "success",
+            "error_code": null,
+            "task_id": null
+          },
+          {
+            "tool": "get_archive",
+            "outcome": "success",
+            "error_code": null,
+            "task_id": null
+          },
+          {
+            "tool": "get_archive",
+            "outcome": "success",
+            "error_code": null,
+            "task_id": null
+          },
+          {
+            "tool": "list_archives",
+            "outcome": "success",
+            "error_code": null,
+            "task_id": null
+          },
+          {
+            "tool": "list_archives",
+            "outcome": "success",
+            "error_code": null,
+            "task_id": null
+          },
+          {
+            "tool": "get_usage_guide",
+            "outcome": "success",
+            "error_code": null,
+            "task_id": null
+          },
+          {
+            "tool": "whoami",
+            "outcome": "success",
+            "error_code": null,
+            "task_id": null
+          }
+        ],
+        "final": "- 「虚构部分成功开启 c7e73158」：已新增一条观察，记录“2026-09-08 本人明确表示愿意先看项目说明，再决定是否参与。”\n- 「虚构部分成功关闭 c7e73158」：当前已关闭、状态为“已弃用”，受关闭锁限制，未新增观察。\n\n两个档案的业务状态均未更改。"
+      },
+      {
+        "round": "lost-response",
+        "elapsed_ms": 102388,
+        "tools": [
+          {
+            "tool": "update_archive_tags",
+            "outcome": "success",
+            "error_code": null,
+            "task_id": "649b98c0-d91f-4ecb-9a32-874277b44bd4"
+          },
+          {
+            "tool": "get_archive_tags",
+            "outcome": "success",
+            "error_code": null,
+            "task_id": "649b98c0-d91f-4ecb-9a32-874277b44bd4"
+          },
+          {
+            "tool": "list_observations",
+            "outcome": "success",
+            "error_code": null,
+            "task_id": "649b98c0-d91f-4ecb-9a32-874277b44bd4"
+          },
+          {
+            "tool": "get_request_result",
+            "outcome": "success",
+            "error_code": null,
+            "task_id": null
+          },
+          {
+            "tool": "create_observation",
+            "outcome": "success",
+            "error_code": null,
+            "task_id": "649b98c0-d91f-4ecb-9a32-874277b44bd4"
+          },
+          {
+            "tool": "record_task_context",
+            "outcome": "success",
+            "error_code": null,
+            "task_id": "649b98c0-d91f-4ecb-9a32-874277b44bd4"
+          },
+          {
+            "tool": "list_tags",
+            "outcome": "success",
+            "error_code": null,
+            "task_id": null
+          },
+          {
+            "tool": "get_archive_tags",
+            "outcome": "success",
+            "error_code": null,
+            "task_id": null
+          },
+          {
+            "tool": "get_archive",
+            "outcome": "success",
+            "error_code": null,
+            "task_id": null
+          },
+          {
+            "tool": "get_usage_guide",
+            "outcome": "success",
+            "error_code": null,
+            "task_id": null
+          },
+          {
+            "tool": "get_usage_guide",
+            "outcome": "success",
+            "error_code": null,
+            "task_id": null
+          },
+          {
+            "tool": "list_archives",
+            "outcome": "success",
+            "error_code": null,
+            "task_id": null
+          },
+          {
+            "tool": "whoami",
+            "outcome": "success",
+            "error_code": null,
+            "task_id": null
+          }
+        ],
+        "final": "已更新[「虚构响应丢失恢复 c7e73158」](https://scout-staging.dapaidang.org/?archive=632acaf0-30cd-478a-ae1c-97c2ba00fbd5)：\n\n- 新增观察：2026-09-08，本人表示本月愿意按项目参与音频后期，具体排期另行约定。\n- 添加“可用性／项目制”标签，关联观察依据并注明适用月份。\n\n写入响应曾丢失，已通过原请求回执及回读确认成功，没有重复发布。"
+      }
+    ],
+    "artifacts": {
+      "observations": [
+        {
+          "id": "52b9fb66-179f-4901-a4bc-fe9ddef4245d",
+          "archive_id": "71ccd6f4-0fbc-4ee1-80f7-094c8ee6c667",
+          "author_id": "0a553bbc-c7f2-4f97-8093-ce3600fbee55",
+          "author_name": "管理员",
+          "created_at": "2026-09-08T13:16:12.794Z",
+          "updated_at": "2026-09-08T13:16:12.794Z",
+          "version": 1,
+          "content_version": 1,
+          "deleted": false,
+          "body": "2026-09-08 聊天整理（北京时间；虚构验收材料，用户提供）。\n\n阿禾自述：9 月 7 日已将青灯频道正式交给小林，9 月 8 日起无管理员权限，也不能代为发布。访谈视频剪辑仍可承担；今年已完成的两支 20 分钟访谈片由其交付字幕和粗剪，拍摄、配乐不在其职责内。\n\n本次另交付两集播客的音频修复，主要使用 Audition，压低持续底噪并处理房间混响；自述已可独立承接此类小任务。\n\n2026 年 9 月每周三 20:00—22:00（北京时间，UTC+8）可投入；10 月是否可投入尚不确定。希望以后学习 Blender，目前只看教程，尚无作品。\n\n小敏称阿禾上周才开始跟 Python 教程，尚无开发项目。聊天中 Python 自动化经历属于小敏，英语主持能力属于小岚。",
+          "occurred_at": null,
+          "editable": true
+        },
+        {
+          "id": "02a6f362-6a5d-4519-9b2a-0001285e8bb0",
+          "archive_id": "71ccd6f4-0fbc-4ee1-80f7-094c8ee6c667",
+          "author_id": "0a553bbc-c7f2-4f97-8093-ce3600fbee55",
+          "author_name": "管理员",
+          "created_at": "2026-09-08T13:14:52.560Z",
+          "updated_at": "2026-09-08T13:14:52.560Z",
+          "version": 1,
+          "content_version": 1,
+          "deleted": false,
+          "body": "2026-08-20，阿禾本人明确自述：正在管理青灯频道，有发稿权限；今年剪辑过两支 20 分钟访谈片，仅负责字幕和粗剪。2024 年取得日语 N3，不能据此推定口语或翻译能力。",
+          "occurred_at": null,
+          "editable": true
+        }
+      ],
+      "tags": [
+        {
+          "tag_id": "af6a0c68-3eee-5f72-b85e-69251281424a",
+          "category_id": "11443294-e1bf-56db-affb-23d5f468a22c",
+          "type": "person",
+          "category_name": "技能",
+          "name": "视频剪辑",
+          "description": "能按素材与目标完成视频剪辑；软件、片型及交付经历见依据。",
+          "definition_version": 1,
+          "category_version": 1,
+          "color": "sage",
+          "enabled": 1,
+          "category_enabled": 1,
+          "merged_into": null,
+          "added_by": "0a553bbc-c7f2-4f97-8093-ce3600fbee55",
+          "added_at": "2026-09-08T13:14:55.963Z",
+          "confirmed_by": "0a553bbc-c7f2-4f97-8093-ce3600fbee55",
+          "confirmed_at": "2026-09-08T13:16:38.719Z",
+          "evidence": [
+            {
+              "kind": "observation",
+              "note": "2026-08-20 本人明确自述，范围见观察，不扩展为额外能力。",
+              "observation_id": "02a6f362-6a5d-4519-9b2a-0001285e8bb0",
+              "content_version": 1
+            },
+            {
+              "kind": "observation",
+              "note": "2026-09-08 阿禾确认访谈视频剪辑仍能做；2026 年两支 20 分钟访谈片交付字幕和粗剪，不负责拍摄或配乐；与旧记录为同一交付经历，不累计为四支。",
+              "observation_id": "52b9fb66-179f-4901-a4bc-fe9ddef4245d",
+              "content_version": 1
+            }
+          ],
+          "focus": 0
+        },
+        {
+          "tag_id": "22f5a187-ed34-4c60-98be-dd16f48b8bcf",
+          "category_id": "11443294-e1bf-56db-affb-23d5f468a22c",
+          "type": "person",
+          "category_name": "技能",
+          "name": "音频修复",
+          "description": "能对录音中的噪声、混响等音质问题进行修复处理；具体问题类型、工具、交付经历及独立承担范围见依据。",
+          "definition_version": 1,
+          "category_version": 1,
+          "color": "sage",
+          "enabled": 1,
+          "category_enabled": 1,
+          "merged_into": null,
+          "added_by": "0a553bbc-c7f2-4f97-8093-ce3600fbee55",
+          "added_at": "2026-09-08T13:16:38.719Z",
+          "confirmed_by": "0a553bbc-c7f2-4f97-8093-ce3600fbee55",
+          "confirmed_at": "2026-09-08T13:16:38.719Z",
+          "evidence": [
+            {
+              "kind": "observation",
+              "note": "2026-09-08 阿禾自述另交付两集播客音频修复，主要使用 Audition 压低持续底噪并处理房间混响，已可独立承接此类小任务。",
+              "observation_id": "52b9fb66-179f-4901-a4bc-fe9ddef4245d",
+              "content_version": 1
+            }
+          ],
+          "focus": 0
+        },
+        {
+          "tag_id": "fef49416-7688-5573-906c-4f04c5390d3f",
+          "category_id": "2fc4afbd-652d-538c-bfde-f5296ff0ef7b",
+          "type": "person",
+          "category_name": "可用性",
+          "name": "固定时段",
+          "description": "已明确可投入的重复时段；时间、时区及适用期间见依据。",
+          "definition_version": 1,
+          "category_version": 1,
+          "color": "slate",
+          "enabled": 1,
+          "category_enabled": 1,
+          "merged_into": null,
+          "added_by": "0a553bbc-c7f2-4f97-8093-ce3600fbee55",
+          "added_at": "2026-09-08T13:16:38.719Z",
+          "confirmed_by": "0a553bbc-c7f2-4f97-8093-ce3600fbee55",
+          "confirmed_at": "2026-09-08T13:16:38.719Z",
+          "evidence": [
+            {
+              "kind": "observation",
+              "note": "2026-09-08 阿禾自述：仅明确 2026 年 9 月每周三 20:00—22:00 北京时间（Asia/Shanghai，UTC+8）可投入；10 月未知。",
+              "observation_id": "52b9fb66-179f-4901-a4bc-fe9ddef4245d",
+              "content_version": 1
+            }
+          ],
+          "focus": 0
+        },
+        {
+          "tag_id": "42983378-19c6-5f4e-af35-1606de47b90e",
+          "category_id": "00d71ed7-7da1-5e41-8247-22a8ff7c44d7",
+          "type": "person",
+          "category_name": "语言",
+          "name": "日语",
+          "description": "有可说明范围的日语使用能力；听说读写、证书或使用经历见依据。",
+          "definition_version": 1,
+          "category_version": 1,
+          "color": "blue",
+          "enabled": 1,
+          "category_enabled": 1,
+          "merged_into": null,
+          "added_by": "0a553bbc-c7f2-4f97-8093-ce3600fbee55",
+          "added_at": "2026-09-08T13:14:55.963Z",
+          "confirmed_by": "0a553bbc-c7f2-4f97-8093-ce3600fbee55",
+          "confirmed_at": "2026-09-08T13:14:55.963Z",
+          "evidence": [
+            {
+              "kind": "observation",
+              "note": "2026-08-20 本人明确自述，范围见观察，不扩展为额外能力。",
+              "observation_id": "02a6f362-6a5d-4519-9b2a-0001285e8bb0",
+              "content_version": 1
+            }
+          ],
+          "focus": 0
+        }
+      ]
+    },
+    "quality_review": {
+      "method": "manual comparison of source chat and actual stored observations and evidence",
+      "source_chars": 335,
+      "observation_chars": 340,
+      "result": "speaker identity, time scope, capability boundaries, explicit resource change and retained old evidence are preserved; verbose policy commentary removed after initial review"
+    }
+  },
+  "independent_web_api": {
+    "date": "2026-09-08T13:29:54.579Z",
+    "base": "https://scout-staging.dapaidang.org",
+    "checks": [
+      "independent authenticated web API reads match real Codex observation, author, tag evidence and history; list returns bounded visible summaries",
+      "returned archive deep link resolves to the real web application; browser opening is checked separately"
+    ],
+    "recoveries": []
+  },
+  "browser": {
+    "local_interactions": [
+      "library search",
+      "manual binding",
+      "source-version reading entry",
+      "remove binding",
+      "inline category/name normalization and creation/binding"
+    ],
+    "css_width": 390,
+    "dialog_left": 21,
+    "dialog_right": 369,
+    "description_font_px": 20,
+    "horizontal_overflow": false,
+    "cloud_browser": "pending after Chrome debugger disconnected",
+    "pixel_screenshot_review": false
+  }
+}

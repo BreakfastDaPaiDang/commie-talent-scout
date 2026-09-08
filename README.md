@@ -2,7 +2,7 @@
 
 `commie-talent-scout` 是早餐社内部使用的人物与组织观察档案、接触进度和协作记录系统。
 
-正式首版定为 **v0.1.0**，见 [里程碑](https://github.com/BreakfastDaPaiDang/commie-talent-scout/milestone/1)。PRD 文档修订 1.6 包含标签、材料压缩、持久 MCP 接入与请求留存。正式应用已交付隔离测试环境的真实登录、首次改密、MCP 接入、基础调用留存、猎头账号管理、档案状态/负责人/关闭管理与文字观察/版本/草稿，其他能力逐项实施，尚未生产上线。见 [开发说明](./docs/development.md)、[S1 验收](./docs/validation/v0.1.0-s1.md)、[S2 验收](./docs/validation/v0.1.0-s2.md)、[S9 验收](./docs/validation/v0.1.0-s9.md)、[S3 验收](./docs/validation/v0.1.0-s3.md)、[S4 验收](./docs/validation/v0.1.0-s4.md)与 [S5 验收](./docs/validation/v0.1.0-s5.md)。
+正式首版定为 **v0.1.0**，见 [里程碑](https://github.com/BreakfastDaPaiDang/commie-talent-scout/milestone/1)。正式应用已在隔离测试环境实现登录与首次改密、MCP 接入及基础留存、猎头账号管理、档案状态/负责人/关闭管理、文字观察/版本/草稿，以及标签与材料整理。尚未生产上线；当前进度和各切片验收见 [文档导航](./docs/README.md)，本地运行见 [开发说明](./docs/development.md)。
 
 本地查看：在 `prototypes/frontend` 执行 `npm ci`、`npm run dev`，打开 http://127.0.0.1:5181/ 。原型仅含虚构数据，刷新复位。
 
@@ -12,7 +12,7 @@
 - [技术验证](./docs/technical-validation.md) / [技术方案](./docs/technical-design.md)：云端、真实 Codex 和大陆网络证据及实施边界。
 - [GitHub 实施任务](./docs/implementation-issues.md)：已发布 #1–#14，包含验收路径、依赖及 v0.1.0 里程碑映射。
 - [PRD](./docs/PRD.md)：首版范围、业务规则、默认值与验收要求。
-- [标签系统](./docs/tag-system.md) / [初始标签库](./docs/tag-catalog.md)：人物与组织的特征整理、绑定依据、修改影响和 MCP 标签维护；尚未实现。
+- [标签系统](./docs/tag-system.md) / [初始标签库](./docs/tag-catalog.md)：人物与组织的特征整理、绑定依据、修改影响和 MCP 标签维护；当前实现范围见 [S11 验收](./docs/validation/v0.1.0-s11.md)。
 - [领域词汇表](./CONTEXT.md)：统一领域术语。
 - [决策记录](./docs/adr/)：重要取舍及其原因。
 - [Agent 接入提示词](./docs/agent-onboarding-prompt.md)：接入页共用短模板，包含临时/持久配置选择。

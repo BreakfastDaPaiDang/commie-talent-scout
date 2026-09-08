@@ -7,12 +7,14 @@ import {useObservationDraft} from './draft-store';
 import type {Archive} from '../server/archives';
 import type {Observation} from '../server/observations';
 import './observations.css';
+import {TagChip,TagEvidence} from './TagsSection';
+import type {TagBinding} from '../server/tag-state';
 
 type TimelineEvent={id:string;seq:number;kind:string;actor_name:string;source:string;created_at:string;observation_id:string|null;observation:Observation|null;before:Record<string,unknown>|null;after:Record<string,unknown>|null};
 const time=(value:string)=>new Date(value).toLocaleString('zh-CN');
 function localTime(value:string|null){if(!value)return '';const date=new Date(value);return new Date(date.getTime()-date.getTimezoneOffset()*60000).toISOString().slice(0,16);}
 function isoTime(value:string){return value?new Date(value).toISOString():null;}
-const kinds:Record<string,string>={'archive.created':'创建档案','archive.profile_changed':'修改基础资料','archive.state_changed':'变更业务状态','archive.members_changed':'调整关联成员','archive.closed':'已关闭','archive.reopened':'已重新开启','observation.created':'发布观察','observation.edited':'编辑观察'};
+const kinds:Record<string,string>={'archive.tags_changed':'整理标签','archive.created':'创建档案','archive.profile_changed':'修改基础资料','archive.state_changed':'变更业务状态','archive.members_changed':'调整关联成员','archive.closed':'已关闭','archive.reopened':'已重新开启','observation.created':'发布观察','observation.edited':'编辑观察'};
 const fields:Record<string,string>={name:'名称',contacts:'联系方式',links:'资料链接',status:'业务状态',members:'当前成员',content_version:'内容版本'};
 function readingPosition(key:string){try{const value=JSON.parse(sessionStorage.getItem(key)??'null');return {top:typeof value==='number'?value:Number(value?.top??0),pages:Math.max(1,Math.min(100,Number(value?.pages??1))),mode:value?.mode==='observations'?'observations' as const:'all' as const};}catch{return {top:0,pages:1,mode:'all' as const};}}
 function value(v:unknown):string{if(v===null||v===undefined||v==='')return '未填写';if(Array.isArray(v))return v.length?v.map(x=>x.name?x.name+(x.frozen?'（已冻结）':''):x.url?`${x.label||'链接'} ${x.url}`:`${x.type} ${x.value}${x.note?'（'+x.note+'）':''}`).join('、'):'未填写';return String(v);}
@@ -37,7 +39,7 @@ export function ObservationSection({actor,archive,onChanged}:{actor:Member;archi
  return <><ObservationComposer actor={actor} archive={archive} onPublished={()=>{setNotice('观察已发布');onChanged();}}/>
   <div className="observation-toolbar"><div className="observation-tabs" aria-label="历史内容筛选"><button aria-pressed={mode==='all'} onClick={()=>changeMode('all')}>全部动态</button><button aria-pressed={mode==='observations'} onClick={()=>changeMode('observations')}>仅观察记录</button></div><span>{archive.observation_count} 条观察</span></div>
   <div className="observation-stream"><PageError error={error} retry={()=>void load()}/>{notice&&<p className="form-notice" role="status">{notice}</p>}
-   {mode==='observations'?records.map(renderRecord):events.map(e=>e.observation?renderRecord(e.observation):<article key={e.id} className="compact-event" id={'event-'+e.id}><span aria-hidden="true">◇</span><div><p><strong>{kinds[e.kind]??e.kind}</strong><small>{e.actor_name} · {time(e.created_at)} · {e.source==='mcp'?'MCP':'网页'}</small></p>{e.before&&<details><summary>查看变化</summary><ul>{Object.keys(e.after??{}).filter(k=>k!=='id'&&JSON.stringify(e.before?.[k])!==JSON.stringify(e.after?.[k])).map(k=><li key={k}>{fields[k]??k}：{value(e.before?.[k])} → {value(e.after?.[k])}</li>)}</ul></details>}</div></article>)}
+   {mode==='observations'?records.map(renderRecord):events.map(e=>e.observation?renderRecord(e.observation):<article key={e.id} className="compact-event" id={'event-'+e.id}><span aria-hidden="true">◇</span><div><p><strong>{kinds[e.kind]??e.kind}</strong><small>{e.actor_name} · {time(e.created_at)} · {e.source==='mcp'?'MCP':'网页'}</small></p>{e.kind==='archive.tags_changed'?<details><summary>查看标签变化</summary><TagEventChange before={e.before as unknown as TagBinding[]} after={e.after as unknown as TagBinding[]}/></details>:e.before&&<details><summary>查看变化</summary><ul>{Object.keys(e.after??{}).filter(k=>k!=='id'&&JSON.stringify(e.before?.[k])!==JSON.stringify(e.after?.[k])).map(k=><li key={k}>{fields[k]??k}：{value(e.before?.[k])} → {value(e.after?.[k])}</li>)}</ul></details>}</div></article>)}
    {loading?<p className="stream-status" role="status">正在读取观察与动态…</p>:cursor?<button className="button" onClick={()=>void load(cursor)}>更早的{mode==='all'?'动态':'观察'}</button>:<p className="stream-status">{mode==='observations'&&!records.length?'还没有观察记录，写下第一条吧。':'已到历史起点'}</p>}
   </div>
   {edit&&<Modal title="编辑观察" busy={busy} onClose={()=>setEdit(null)}><ObservationEdit key={edit.id+edit.version} record={edit} busy={busy} setBusy={setBusy} onSaved={saved} onReload={async()=>setEdit((await api<{observation:Observation}>('/observations/'+edit.id)).observation)}/></Modal>}
@@ -74,3 +76,5 @@ function ObservationVersions({record}:{record:Observation}){
  useEffect(()=>{void load();},[record.id]);
  return <div className="observation-versions"><p>原作者：{record.author_name} · 旧版本保留当时的正文与发生时间。</p><PageError error={error} retry={()=>void load()}/>{versions.map(v=><article key={v.version}><h3>版本 {v.version}</h3><p>{v.editor_name} · {time(v.created_at)}</p>{v.occurred_at&&<p>观察发生于 {time(v.occurred_at)}</p>}<div className="observation-body">{v.body}</div></article>)}{loading?<p role="status">正在读取旧版本…</p>:cursor?<button className="button" onClick={()=>void load(cursor)}>更早的版本</button>:<p>已到第一个版本</p>}</div>;
 }
+
+function TagEventChange({before,after}:{before:TagBinding[];after:TagBinding[]}){return <div className="tag-event-change">{[{title:'修改前',items:before},{title:'修改后',items:after}].map(group=><section key={group.title}><h4>{group.title}</h4>{group.items.length?group.items.map(t=><div key={t.tag_id}><TagChip tag={t}/><p>{t.description}</p><TagEvidence items={t.evidence}/></div>):<p>无绑定</p>}</section>)}</div>;}

@@ -7,6 +7,7 @@ import type {Archive,BoundMember} from '../server/archives';
 import {ArchiveStateForm,StateFields} from './ArchiveStateForm';
 import {isWorkState,memberLabel} from '../shared/archive-states';
 import './archives.css';
+import {TagsSection,TagSummary} from './TagsSection';
 import {ObservationSection} from './ObservationSection';
 
 type Kind='person'|'org';
@@ -14,7 +15,7 @@ type Preference={query:string;selected:string|null};
 function preferences(key:string):Preference{try{return {query:'',selected:null,...JSON.parse(localStorage.getItem(key)??'{}')};}catch{return {query:'',selected:null};}}
 const date=(value:string)=>new Date(value).toLocaleString('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
 export function ArchivesPage({actor,type}:{actor:Member;type:Kind}){
- const prefKey=`cts:${actor.id}:${type}:archives`,[pref,setPref]=useState(()=>preferences(prefKey));
+ const prefKey=`cts:${actor.id}:${type}:archives`,[pref,setPref]=useState(()=>{const saved=preferences(prefKey),linked=new URLSearchParams(location.search).get('archive');return linked&&/^[0-9a-f-]{36}$/i.test(linked)?{...saved,selected:linked}:saved;});
  const[query,setQuery]=useState(pref.query),[items,setItems]=useState<Archive[]>([]),[cursor,setCursor]=useState<string|null>(null),[loading,setLoading]=useState(true),[error,setError]=useState(''),[notice,setNotice]=useState(''),[revision,setRevision]=useState(0);
  const[dialog,setDialog]=useState<'create'|Archive|null>(null),[stateDialog,setStateDialog]=useState<Archive|null>(null),[busy,setBusy]=useState(false),[selected,setSelected]=useState<Archive|null>(null),[draftIds,setDraftIds]=useState<string[]>([]);
  const request=useRef(0),label=type==='person'?'人物':'组织';
@@ -27,14 +28,14 @@ export function ArchivesPage({actor,type}:{actor:Member;type:Kind}){
  useEffect(()=>{void load();return()=>{request.current++;};},[type,pref.query,revision]);
  function choose(id:string|null){if(pref.selected!==id)setSelected(null);setPref(p=>({...p,selected:id}));}
  useEffect(()=>{let timer:ReturnType<typeof setTimeout>|undefined;const refresh=()=>{clearTimeout(timer);timer=setTimeout(()=>{api<{drafts:{archive_id:string}[]}>('/drafts').then(r=>setDraftIds(r.drafts.map(d=>d.archive_id))).catch(()=>{});},500);};refresh();window.addEventListener('cts-drafts-changed',refresh);return()=>{clearTimeout(timer);window.removeEventListener('cts-drafts-changed',refresh);};},[]);
- async function saved(id:string,changed:boolean){setDialog(null);setStateDialog(null);choose(id);setRevision(v=>v+1);setNotice(changed?'档案已保存':'资料没有变化');}
+ async function saved(id:string,changed:boolean,message?:string){setDialog(null);setStateDialog(null);choose(id);setRevision(v=>v+1);setNotice(message??(changed?'档案已保存':'资料没有变化'));}
  return <main className={'archives-workspace '+(pref.selected?'has-selection':'')}>
   <section className="archives-list-panel" aria-label={`${label}档案列表`}>
    <div className="archives-heading"><div><p className="eyebrow">共同观察</p><h1>{label}档案</h1></div><button className="button primary" onClick={()=>setDialog('create')}>新建{label}</button></div>
    <div className="archives-search"><input aria-label="搜索档案" placeholder="搜索名称、联系方式" value={query} maxLength={200} onChange={e=>setQuery(e.target.value)}/>{query&&<button aria-label="清空搜索" onClick={()=>setQuery('')}>×</button>}</div>
    <div className="archives-caption"><span>{items.length} 个档案{cursor?' · 可继续加载':''}</span><span>最近更新 ↓</span></div>
    <PageError error={error} retry={()=>void load()}/>
-   <div className="archives-rows">{items.map(a=><button key={a.id} className={'archive-row '+(pref.selected===a.id?'selected':'')} onClick={()=>choose(a.id)} aria-label={`查看${a.name}`}><Avatar name={a.name} type={a.type}/><div className="archive-row-content"><div className="archive-row-title"><h2>{a.name}</h2></div><div className="archive-current"><span className={'state-badge small '+(a.closed?'closed':'')}>{a.status}</span>{a.members.length>0&&<span className="archive-assignees">{memberLabel(a.type,a.status)} · {a.members.map(m=>m.name+(m.frozen?'（冻结）':'')).join('、')}</span>}</div><p className="archive-row-excerpt">{a.latest_observation??'还没有观察记录'}</p>{draftIds.includes(a.id)&&<span className="draft-badge">有草稿</span>}<div className="archive-row-footer"><span>{a.observation_count} 条观察</span><time>{date(a.updated_at)}</time></div></div></button>)}</div>
+   <div className="archives-rows">{items.map(a=><button key={a.id} className={'archive-row '+(pref.selected===a.id?'selected':'')} onClick={()=>choose(a.id)} aria-label={`查看${a.name}`}><Avatar name={a.name} type={a.type}/><div className="archive-row-content"><div className="archive-row-title"><h2>{a.name}</h2></div><div className="archive-current"><span className={'state-badge small '+(a.closed?'closed':'')}>{a.status}</span>{a.members.length>0&&<span className="archive-assignees">{memberLabel(a.type,a.status)} · {a.members.map(m=>m.name+(m.frozen?'（冻结）':'')).join('、')}</span>}</div><TagSummary tags={a.tag_summary?.tags??[]} total={a.tag_summary?.total??0}/><p className="archive-row-excerpt">{a.latest_observation??'还没有观察记录'}</p>{draftIds.includes(a.id)&&<span className="draft-badge">有草稿</span>}<div className="archive-row-footer"><span>{a.observation_count} 条观察</span><time>{date(a.updated_at)}</time></div></div></button>)}</div>
    {loading?<p className="archive-list-message" role="status">正在读取档案…</p>:!items.length?<div className="archive-list-message"><h2>{query?'没有找到匹配档案':'从第一个档案开始'}</h2><p>{query?'试试昵称或联系方式。':`把值得关注的${label}留在这里，慢慢积累观察。`}</p></div>:cursor&&<button className="button archive-load" onClick={()=>void load(cursor)}>加载更多档案</button>}
   </section>
   <section className="archive-detail-panel" aria-label="档案详情">
@@ -54,7 +55,7 @@ function ArchiveDetail({actor,onChanged,id,revision,onLoaded,onBack,onEdit,onSta
    <dl className="archive-contacts">{archive.contacts.map((c,i)=><div key={i}><dt>{c.type}</dt><dd><span>{c.value}</span><button className="button quiet" onClick={()=>void copyContact(c.value)} aria-label={`复制${c.type}${c.value}`}>复制</button>{c.note&&<small>{c.note}</small>}</dd></div>)}</dl>
    {archive.links.length>0&&<ul className="archive-links">{archive.links.map((l,i)=><li key={i}><a href={l.url} target="_blank" rel="noopener noreferrer">{l.label||l.url} ↗</a></li>)}</ul>}
    {!archive.contacts.length&&!archive.links.length&&<p className="archive-no-contact">暂未填写联系方式与资料链接</p>}{copy&&<p className="form-notice" role="status">{copy}</p>}{notice&&<p className="form-notice" role="status">{notice}</p>}
-  </div><ObservationSection actor={actor} archive={archive} onChanged={onChanged}/>
+  </div><TagsSection archive={archive} onChanged={onChanged}/><ObservationSection actor={actor} archive={archive} onChanged={onChanged}/>
  </>}</>;
 }
 function ArchiveForm({type,initial,busy,setBusy,onSaved,onReload}:{type:Kind;initial?:Archive;busy:boolean;setBusy:(b:boolean)=>void;onSaved:(id:string,changed:boolean)=>Promise<void>;onReload:()=>Promise<void>}){

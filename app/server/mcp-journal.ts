@@ -38,8 +38,9 @@ export async function startAttempt(env:Env,actor:Actor,tool:string,args:unknown)
   const safe=safeParameters(tool,args),input=args as Record<string,unknown>|undefined;
   const requestId=typeof input?.request_id==='string'&&z.uuid().safeParse(input.request_id).success?input.request_id:null;
   try{
-    await env.DB.prepare(`INSERT INTO mcp_calls(id,member_id,credential_id,tool,contract_version,started_at,outcome,request_id,parameters_json,body_state) VALUES(?,?,?,?,?,?,'unknown',?,?,?)`)
-      .bind(attempt.id,actor.id,actor.credential_id,tool.slice(0,100),CONTRACT_VERSION,new Date(attempt.started).toISOString(),requestId,safe.json,safe.state).run();
+    const taskId=typeof input?.task_id==='string'&&z.uuid().safeParse(input.task_id).success&&(await env.DB.prepare('SELECT 1 FROM mcp_tasks WHERE id=? AND member_id=?').bind(input.task_id,actor.id).first())?input.task_id:null;
+    await env.DB.prepare(`INSERT INTO mcp_calls(id,member_id,credential_id,tool,contract_version,started_at,outcome,request_id,parameters_json,body_state,task_id) VALUES(?,?,?,?,?,?,'unknown',?,?,?,?)`)
+      .bind(attempt.id,actor.id,actor.credential_id,tool.slice(0,100),CONTRACT_VERSION,new Date(attempt.started).toISOString(),requestId,safe.json,safe.state,taskId).run();
     attempt.stored=true;
   }catch{await journalDiagnostic(env,'collection_start_failed');}
   return attempt;
@@ -48,8 +49,9 @@ export async function finishAttempt(env:Env,attempt:Attempt,outcome:Outcome,code
   if(!attempt.stored)return;
   // Results are summaries supplied by the business adapter, never full query responses or secrets.
   const serialized=JSON.stringify(scrub(result));
-  try{await env.DB.prepare('UPDATE mcp_calls SET finished_at=?,duration_ms=?,outcome=?,error_code=?,result_json=? WHERE id=?')
-    .bind(now(),Date.now()-attempt.started,outcome,code,serialized.length<=16000?serialized:JSON.stringify({omitted:'结果摘要过长'}),attempt.id).run();
+  const taskId=result&&typeof result==='object'&&'task_id' in result&&typeof result.task_id==='string'&&z.uuid().safeParse(result.task_id).success?result.task_id:null;
+  try{await env.DB.prepare('UPDATE mcp_calls SET finished_at=?,duration_ms=?,outcome=?,error_code=?,result_json=?,task_id=coalesce(task_id,?) WHERE id=?')
+    .bind(now(),Date.now()-attempt.started,outcome,code,serialized.length<=16000?serialized:JSON.stringify({omitted:'结果摘要过长'}),taskId,attempt.id).run();
   }catch{await journalDiagnostic(env,'collection_finish_failed');}
 }
 export async function listCalls(env:Env,actor:Actor,input:unknown){
@@ -77,6 +79,9 @@ export async function getCall(env:Env,actor:Actor,id:string){
 }
 export async function cleanupJournal(env:Env,at=Date.now()){
   await env.DB.batch([
+    env.DB.prepare("UPDATE mcp_tasks SET purpose=NULL,original_request=NULL,agent_summary=NULL,material_type=NULL,source_material=NULL,source_references_json=NULL,body_state='expired' WHERE created_at<? AND body_state<>'expired'").bind(new Date(at-30*86400000).toISOString()),
+    env.DB.prepare('DELETE FROM mcp_tasks WHERE created_at<?').bind(new Date(at-180*86400000).toISOString()),
+    env.DB.prepare('DELETE FROM observation_reads WHERE read_at<?').bind(new Date(at-30*86400000).toISOString()),
     env.DB.prepare("UPDATE mcp_calls SET parameters_json=NULL,result_json=NULL,body_state='expired' WHERE started_at<? AND body_state<>'expired'").bind(new Date(at-30*86400000).toISOString()),
     env.DB.prepare('DELETE FROM mcp_calls WHERE started_at<?').bind(new Date(at-180*86400000).toISOString()),
     env.DB.prepare('DELETE FROM mcp_diagnostics WHERE day<?').bind(new Date(at-180*86400000).toISOString().slice(0,10)),

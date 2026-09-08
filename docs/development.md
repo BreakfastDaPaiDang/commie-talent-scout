@@ -25,3 +25,5 @@ MCP 行为检查：`node scripts/verify-mcp.mjs`（本地）或加 `--remote`（
 观察与草稿验收依次运行 `node scripts/verify-observations.mjs`、`node scripts/verify-drafts.mjs`、`node scripts/verify-observation-boundaries.mjs`，各可加 `--remote`。边界检查复用观察检查创建的虚构冻结作者，并只修改自身到期测试草稿的时间。通用验收客户端在本进程优先 IPv4，写入超时时先查原请求收据，报告单列恢复方式。
 
 正式草稿保存在 D1，按本人/档案隔离、最近保存后保留 30 天，刷新和退出不清除已保存草稿；浏览器只保留当前未保存输入。退出先提交待保存草稿，失败会提示继续处理。阅读位置仅保存在按本人/档案隔离的 sessionStorage，包含滚动位置、已加载页数及当前历史视图，不含观察正文。
+
+标签验收使用 `node scripts/verify-tags.mjs`，可加 `--remote`；只调整自身虚构来源的删除标记和虚构词条定义来验证读取边界，结束恢复来源并冻结测试成员。`node scripts/verify-codex-compression.mjs --remote` 运行六个真实 Codex 冷启动案例，包含只针对一份虚构档案的响应丢失转发器；`verify-compression-web.mjs --remote` 从网页接口独立核对其实际产物。脚本不改维护者的真实客户端配置，测试后撤销凭证并清理复制的登录文件。调用频繁时先考虑已有登录限速，避免重复跑完整套件。

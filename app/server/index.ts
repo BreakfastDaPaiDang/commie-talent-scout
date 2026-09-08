@@ -11,6 +11,7 @@ import {Members} from './members.ts';
 import {getRequestResult} from './commands.ts';
 import {Archives} from './archives.ts';
 import {Observations} from './observations.ts';
+import {Tags} from './tags.ts';
 import {Drafts} from './drafts.ts';
 
 const app=new Hono<{Bindings:Env}>();
@@ -90,6 +91,12 @@ app.get('/api/observations',async c=>c.json(await new Observations(c.env,await a
 app.get('/api/observations/:id/versions',async c=>c.json(await new Observations(c.env,await authenticate(c.req.raw,c.env),'web').versions({...c.req.query(),id:c.req.param('id')})));
 app.get('/api/observations/:id',async c=>c.json(await new Observations(c.env,await authenticate(c.req.raw,c.env),'web').detail(c.req.param('id'))));
 app.get('/api/archives/:id/timeline',async c=>c.json(await new Observations(c.env,await authenticate(c.req.raw,c.env),'web').timeline({...c.req.query(),id:c.req.param('id')})));
+app.get('/api/tag-categories',async c=>c.json(await new Tags(c.env,await authenticate(c.req.raw,c.env),'web').categories(c.req.query('type'))));
+app.get('/api/tags',async c=>c.json(await new Tags(c.env,await authenticate(c.req.raw,c.env),'web').list({...c.req.query(),include_disabled:c.req.query('include_disabled')==='true'})));
+app.post('/api/tag-categories/create',async c=>c.json(await new Tags(c.env,await authenticate(c.req.raw,c.env),'web').createCategory(await c.req.json())));
+app.post('/api/tags/create',async c=>c.json(await new Tags(c.env,await authenticate(c.req.raw,c.env),'web').create(await c.req.json())));
+app.post('/api/archive-tags/update',async c=>c.json(await new Tags(c.env,await authenticate(c.req.raw,c.env),'web').batch(await c.req.json())));
+app.get('/api/archives/:id/tags',async c=>c.json(await new Tags(c.env,await authenticate(c.req.raw,c.env),'web').bindings(c.req.param('id'))));
 app.all('/api/*',c=>c.json({error:{code:'NOT_FOUND',message:'接口不存在'}},404));
 app.all('/mcp',c=>handleMcp(c.req.raw,c.env,c.executionCtx as ExecutionContext));
 app.all('/images/*',async c=>{await authenticate(c.req.raw,c.env);return c.notFound();});
