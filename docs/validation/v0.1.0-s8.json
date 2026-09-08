@@ -174,7 +174,8 @@
     "types": "pass",
     "unit_service_tests": 15,
     "build": "pass",
-    "real_browser": "blocked: Debugger unattached; no scroll, foreground/background, highlight or queue UI acceptance claimed"
+    "real_browser": "pass: independent headless Edge, actual HTTP, five groups local and cloud, 390px screenshot inspected",
+    "dom_tests_current": 5
   },
   "representative_data": {
     "archives": 150,
@@ -195,5 +196,34 @@
       "final deployed event/timeline response exposes personal already-read state for queue reconciliation"
     ],
     "recoveries": []
+  },
+  "browser_joint_validation": {
+    "deployment": "3b7032dd-a1c9-4ce7-91e3-05b25896f5a3",
+    "local": {
+      "date": "2026-09-08T20:51:03.743Z",
+      "base": "http://127.0.0.1:8790",
+      "checks": [
+        "real old-observation search highlights and positions the exact body; list excerpt does not acknowledge, foreground body retries one injected failure, offscreen body stays unread, and activity is unchanged",
+        "mine uses the real current responsible member; person and organization retain separate search/filter preferences, and empty results can clear all conditions",
+        "actual list read failure is visible and its retry replaces the failure with the correct empty result",
+        "actual unread queue crosses person/organization, opens closed and deleted contexts, keeps read row positions until completion, and shares zero remaining events with the authenticated API",
+        "completed mobile queue is readable without horizontal overflow or runtime errors"
+      ],
+      "recoveries": []
+    },
+    "cloud": {
+      "date": "2026-09-08T20:52:06.110Z",
+      "base": "https://scout-staging.dapaidang.org",
+      "checks": [
+        "real old-observation search highlights and positions the exact body; list excerpt does not acknowledge, foreground body retries one injected failure, offscreen body stays unread, and activity is unchanged",
+        "mine uses the real current responsible member; person and organization retain separate search/filter preferences, and empty results can clear all conditions",
+        "actual list read failure is visible and its retry replaces the failure with the correct empty result",
+        "actual unread queue crosses person/organization, opens closed and deleted contexts, keeps read row positions until completion, and shares zero remaining events with the authenticated API",
+        "completed mobile queue is readable without horizontal overflow or runtime errors"
+      ],
+      "recoveries": []
+    },
+    "foreground_background": "actual React DOM simulation; no claim of native browser tab switching",
+    "real_codex": "existing two cold rounds above reused, not rerun"
   }
 }
