@@ -27,3 +27,9 @@ MCP 行为检查：`node scripts/verify-mcp.mjs`（本地）或加 `--remote`（
 正式草稿保存在 D1，按本人/档案隔离、最近保存后保留 30 天，刷新和退出不清除已保存草稿；浏览器只保留当前未保存输入。退出先提交待保存草稿，失败会提示继续处理。阅读位置仅保存在按本人/档案隔离的 sessionStorage，包含滚动位置、已加载页数及当前历史视图，不含观察正文。
 
 标签验收使用 `node scripts/verify-tags.mjs`，可加 `--remote`；只调整自身虚构来源的删除标记和虚构词条定义来验证读取边界，结束恢复来源并冻结测试成员。`node scripts/verify-codex-compression.mjs --remote` 运行六个真实 Codex 冷启动案例，包含只针对一份虚构档案的响应丢失转发器；`verify-compression-web.mjs --remote` 从网页接口独立核对其实际产物。脚本不改维护者的真实客户端配置，测试后撤销凭证并清理复制的登录文件。调用频繁时先考虑已有登录限速，避免重复跑完整套件。
+
+图片与头像验收使用 `node scripts/verify-images.mjs`，可加 `--remote`。`verify-image-boundaries.mjs` 验证 10 MiB、十图、并发引用和清理；本地先开 `npm run dev:scheduled`，云端保留自身清理样例等待真实 cron 后复核。测试只使用 `tests/fixtures/images` 的生成图形；不上传个人照片。QQ 的缓存时间、并发刷新和失败回退通过真实 SQLite 服务测试、替代外部网络响应验证。
+
+`verify-codex-images.mjs --remote` 是完整真实客户端验收脚本，要求该客户端同时具备本地文件读取和 HTTP PUT 能力。本轮隔离 CLI 的只读策略拒绝 PowerShell，未完成上传；不能将 SDK 集成通过当作真实 Codex 已通过，不修改维护者的真实客户端权限来绕过拒绝。完整诊断保留私有，当前结果见 S6 报告。
+
+本地 Worker 显式使用 `dev.host=127.0.0.1:8790`，避免 Wrangler 把无 Origin 的本地 MCP URL 改写为云端域名。Vite 的同源开发代理涵盖 API、MCP、上传、图片和头像；只对明确的本地开发 Origin 改写上游 Origin。正式页面仍由同域 Worker 提供。

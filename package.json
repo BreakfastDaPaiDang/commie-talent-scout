@@ -9,7 +9,7 @@
     "dev:scheduled": "node scripts/dev-scheduled.mjs",
     "build": "vite build",
     "check": "tsc --noEmit",
-    "test": "node --experimental-strip-types --test tests/*.test.ts",
+    "test": "node --experimental-transform-types --test tests/*.test.ts tests/*.test.mjs",
     "test:auth": "node --experimental-strip-types --test tests/password.test.ts",
     "bootstrap": "node scripts/bootstrap.mjs",
     "deploy:staging": "npm run build && wrangler deploy --env staging",

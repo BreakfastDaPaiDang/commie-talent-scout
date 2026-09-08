@@ -13,11 +13,14 @@ import {Archives} from './archives.ts';
 import {Observations} from './observations.ts';
 import {Tags} from './tags.ts';
 import {Drafts} from './drafts.ts';
+import {Images,cleanupImages} from './images.ts';
+import {Avatars} from './avatars.ts';
 
 const app=new Hono<{Bindings:Env}>();
 app.use('/api/*',bodyLimit({maxSize:1024*1024,onError:c=>c.json({error:{code:'REQUEST_TOO_LARGE',message:'请求内容过大'}},413)}));
 app.use('/mcp',bodyLimit({maxSize:1024*1024,onError:c=>c.json({error:{code:'REQUEST_TOO_LARGE',message:'请求内容过大'}},413)}));
 app.use('*',async(c,next)=>{
+  c.env={...c.env,APP_ORIGIN:new URL(c.req.url).origin};
   c.header('X-Content-Type-Options','nosniff');
   c.header('Referrer-Policy','same-origin');
   c.header('X-Frame-Options','DENY');
@@ -97,9 +100,16 @@ app.post('/api/tag-categories/create',async c=>c.json(await new Tags(c.env,await
 app.post('/api/tags/create',async c=>c.json(await new Tags(c.env,await authenticate(c.req.raw,c.env),'web').create(await c.req.json())));
 app.post('/api/archive-tags/update',async c=>c.json(await new Tags(c.env,await authenticate(c.req.raw,c.env),'web').batch(await c.req.json())));
 app.get('/api/archives/:id/tags',async c=>c.json(await new Tags(c.env,await authenticate(c.req.raw,c.env),'web').bindings(c.req.param('id'))));
+app.post('/api/images/prepare',async c=>c.json(await new Images(c.env,await authenticate(c.req.raw,c.env),'web').prepare(await c.req.json())));
+app.get('/api/images/uploads/:id',async c=>c.json(await new Images(c.env,await authenticate(c.req.raw,c.env),'web').status(c.req.param('id'))));
+app.post('/api/avatars/set',async c=>c.json(await new Avatars(c.env,await authenticate(c.req.raw,c.env),'web').set(await c.req.json())));
+app.post('/api/profile',async c=>c.json(await new Members(c.env,await authenticate(c.req.raw,c.env),'web').updateOwnProfile(await c.req.json())));
 app.all('/api/*',c=>c.json({error:{code:'NOT_FOUND',message:'接口不存在'}},404));
 app.all('/mcp',c=>handleMcp(c.req.raw,c.env,c.executionCtx as ExecutionContext));
-app.all('/images/*',async c=>{await authenticate(c.req.raw,c.env);return c.notFound();});
+app.get('/images/:id',async c=>new Images(c.env,await authenticate(c.req.raw,c.env),'web').read(c.req.param('id')));
+app.get('/avatars/archives/:id',async c=>new Avatars(c.env,await authenticate(c.req.raw,c.env),'web').read('archive',c.req.param('id')));
+app.get('/avatars/members/:id',async c=>new Avatars(c.env,await authenticate(c.req.raw,c.env),'web').read('member',c.req.param('id')));
+app.put('/uploads/:id',async c=>c.json(await Images.receive(c.env,c.req.param('id'),c.req.raw)));
 app.all('/uploads/*',c=>c.notFound());
 app.get('*',c=>c.env.ASSETS.fetch(c.req.raw));
 
@@ -112,5 +122,6 @@ export default {
       env.DB.prepare('DELETE FROM auth_rates WHERE expires_at<?').bind(Math.floor(Date.now()/1000)),
       env.DB.prepare('DELETE FROM credentials WHERE expires_at<? OR revoked_at<?').bind(new Date(Date.now()-86400000).toISOString(),new Date(Date.now()-86400000).toISOString()),
     ]);
+    await cleanupImages(env);
   },
 };

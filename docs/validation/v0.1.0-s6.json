@@ -1,0 +1,64 @@
+{
+  "date": "2026-09-08",
+  "issue": 8,
+  "state": "implemented_with_acceptance_blocks",
+  "deploy": "1f16011e-fd97-412f-819f-e9740253ecf7",
+  "local": {
+    "date": "2026-09-08T14:10:54.190Z",
+    "base": "http://127.0.0.1:8790",
+    "checks": [
+      "upload tickets enforce secret, MIME, length, SHA-256, expiry, single completion and supported actual container; rejected transfer can retry immutable bytes",
+      "MCP returns standard image content; HTTP metadata agrees; ordered attachments, current edits and immutable history survive idempotent retries and old image reads",
+      "image-only drafts are discoverable, reload with attachments, support older text-only clients and publish once using their durable request ID",
+      "unbound images are owner-only; another member can read shared history until current deletion removes access, and restoration makes the same old image readable",
+      "avatars bind to their declared subject, share authenticated reads, advance profile history, prefer uploaded bytes over QQ and preserve QQ when removed; organizations skip QQ",
+      "freeze and epoch invalidation immediately reject image reads and original upload tickets; unfreezing does not revive them; closed archives reject upload/avatar mutations but retain history",
+      "request journal records metadata for upload and image tools without tickets or binary payloads"
+    ],
+    "recoveries": []
+  },
+  "cloud": {
+    "date": "2026-09-08T14:30:10.095Z",
+    "base": "https://scout-staging.dapaidang.org",
+    "checks": [
+      "upload tickets enforce secret, MIME, length, SHA-256, expiry, single completion and supported actual container; rejected transfer can retry immutable bytes",
+      "MCP returns standard image content; HTTP metadata agrees; ordered attachments, current edits and immutable history survive idempotent retries and old image reads",
+      "image-only drafts are discoverable, reload with attachments, support older text-only clients and publish once using their durable request ID",
+      "unbound images are owner-only; another member can read shared history until current deletion removes access, and restoration makes the same old image readable",
+      "avatars bind to their declared subject, share authenticated reads, advance profile history, prefer uploaded bytes over QQ and preserve QQ when removed; organizations skip QQ",
+      "freeze and epoch invalidation immediately reject image reads and original upload tickets; unfreezing does not revive them; closed archives reject upload/avatar mutations but retain history",
+      "request journal records metadata for upload and image tools without tickets or binary payloads"
+    ],
+    "recoveries": []
+  },
+  "local_boundaries": {
+    "date": "2026-09-08T14:32:05.942Z",
+    "base": "http://127.0.0.1:8790",
+    "checks": [
+      "exact 10 MiB valid PNG and ten ordered images succeed; eleven images fail; concurrent same-ticket upload has one winner; removing all current images preserves ten historical references",
+      "concurrent publication cannot claim one uploaded image for two records; revoking the original MCP credential invalidates its otherwise unexpired upload ticket",
+      "real scheduled cleanup removes old unbound/pending objects while historical record, current draft and removed-avatar history references remain ready and readable"
+    ],
+    "recoveries": []
+  },
+  "unit_tests": 11,
+  "r2_public_access": "disabled, verified using wrangler r2 bucket dev-url get",
+  "pending": [
+    "real cloud large-image/cleanup follow-up",
+    "actual desktop/mobile browser interaction",
+    "real Codex file upload and history flow"
+  ],
+  "real_codex_attempt": {
+    "result": "blocked_before_upload",
+    "profile": "read-only",
+    "error": "PowerShell Get-Item for local fictional fixtures rejected: blocked by policy",
+    "business_writes": 0,
+    "identity_and_guide_checks": "passed",
+    "test_credential": "revoked",
+    "copied_auth_file": "deleted"
+  },
+  "browser_attempt": {
+    "result": "Debugger unattached",
+    "actual_page_verification": false
+  }
+}

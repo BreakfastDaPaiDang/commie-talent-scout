@@ -8,7 +8,7 @@ export type Outcome='success'|'no_change'|'rejected'|'failed'|'unknown';
 const fields:Record<string,string[]>={whoami:[],get_usage_guide:['topic'],list_connections:[],revoke_connection:['id']};
 export function registerJournalFields(tool:string,names:string[]){fields[tool]=names;}
 export function redactText(text:string){
-  return text.replace(/cts_[a-f0-9]{64}/gi,'[已移除凭证]')
+  return text.replace(/cts(?:u)?_[a-f0-9]{64}/gi,'[已移除凭证]')
     .replace(/\bBearer\s+[^\s"'<>]+/gi,'Bearer [已移除凭证]')
     .replace(/\b(?:sk-[\w-]{12,}|gh[pousr]_[\w]{16,}|github_pat_[\w_]{16,})\b/g,'[已移除凭证]')
     .replace(/\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/g,'[已移除凭证]')

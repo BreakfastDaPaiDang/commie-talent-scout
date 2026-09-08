@@ -1,5 +1,6 @@
 export type Env = {
   DB: D1Database;
+  IMAGES: R2Bucket;
   ASSETS: Fetcher;
   ENVIRONMENT: 'staging' | 'production';
   APP_ORIGIN: string;

@@ -5,7 +5,8 @@ import {registerJournalFields} from './mcp-journal.ts';
 import {getRequestResult,requestId} from './commands.ts';
 import {type Actor,type Env} from './types.ts';
 
-export type McpReply=(action:()=>Promise<Record<string,unknown>>,summary?:(result:Record<string,unknown>)=>Record<string,unknown>)=>Promise<{content:{type:'text';text:string}[];structuredContent:Record<string,unknown>;isError?:boolean}>;
+export type McpContent={type:'text';text:string}|{type:'image';data:string;mimeType:string};
+export type McpReply=(action:()=>Promise<Record<string,unknown>>,summary?:(result:Record<string,unknown>)=>Record<string,unknown>,content?:(result:Record<string,unknown>)=>Promise<McpContent[]>)=>Promise<{content:McpContent[];structuredContent:Record<string,unknown>;isError?:boolean}>;
 export const memberToolNames=['list_members','get_member','create_member','reset_member_password','set_member_frozen','set_member_role','update_member_profile','get_member_history','get_request_result'];
 const fields:Record<string,string[]>={
   list_members:['before','limit'],get_member:['id'],create_member:['username','name','role','qq','request_id'],

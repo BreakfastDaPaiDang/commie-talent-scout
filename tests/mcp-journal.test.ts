@@ -8,6 +8,7 @@ test('request retention removes recognizable credentials from nested business pr
   const result=safeParameters('journal_test',{body:`资料 ${secret} password=hidden Bearer abc123`,evidence:[{description:'链接 https://example.test/?token=abcdef',uploadToken:'not-stored'}],Authorization:'not-stored',surprise:'ignored'});
   assert.equal(result.state,'retained');
   assert.ok(!result.json.includes(secret));
+  assert.ok(!redactText('上传票据 ctsu_'+'b'.repeat(64)).includes('b'.repeat(64)));
   for(const value of ['hidden','abc123','abcdef','not-stored','ignored'])assert.ok(!result.json.includes(value));
   assert.ok(result.json.includes('资料'));
   assert.ok(!redactText('临时密码是 带 空格 的秘密\n下一条观察').includes('带 空格'));

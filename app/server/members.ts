@@ -104,8 +104,14 @@ export class Members{
     }
   }
   async updateProfile(input:unknown){
-    assertAdmin(this.actor);const a=memberProfileInput.parse(input);
-    return command(this.env,this.actor,{requestId:a.request_id,operation:'member.profile',parameters:{id:a.id,expected_version:a.expected_version,name:a.name,qq:a.qq},requireAdmin:true},async()=>{
+    assertAdmin(this.actor);return this.profile(input,true);
+  }
+  async updateOwnProfile(input:unknown){
+    const a=memberProfileInput.parse(input);if(a.id!==this.actor.id)throw new Failure(403,'OWN_PROFILE_REQUIRED','只能修改本人的资料');return this.profile(a,false);
+  }
+  private async profile(input:unknown,admin:boolean){
+    const a=memberProfileInput.parse(input);
+    return command(this.env,this.actor,{requestId:a.request_id,operation:admin?'member.profile':'member.own_profile',parameters:{id:a.id,expected_version:a.expected_version,name:a.name,qq:a.qq},requireAdmin:admin},async()=>{
       const member=await this.get(a.id,a.expected_version),key=uid(),changed=member.name!==a.name||member.qq!==a.qq;
       const statements=[this.versionGuard(a.id,a.expected_version,key)];
       if(changed)statements.push(this.stmt('UPDATE members SET name=?,qq=?,version=version+1 WHERE id=?',a.name,a.qq,a.id),this.event(a.id,'member.profile_changed',{name:member.name,qq:member.qq},{name:a.name,qq:a.qq}));

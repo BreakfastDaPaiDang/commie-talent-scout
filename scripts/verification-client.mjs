@@ -2,8 +2,10 @@ import assert from 'node:assert/strict';
 import {readFileSync,writeFileSync,mkdirSync} from 'node:fs';
 import {Client,StreamableHTTPClientTransport} from '@modelcontextprotocol/client';
 import {setDefaultResultOrder} from 'node:dns';
+import {setDefaultAutoSelectFamily} from 'node:net';
 // This verification host advertises IPv6 DNS records but cannot reliably connect over IPv6.
 setDefaultResultOrder('ipv4first');
+setDefaultAutoSelectFamily(false);
 export async function verificationClient(name){
  const remote=process.argv.includes('--remote'),target=remote?'cloud':'local',base=remote?'https://scout-staging.dapaidang.org':'http://127.0.0.1:8790';
  assert.equal((await fetch(base+'/api/health',{headers:{Connection:'close'}}).then(r=>r.json())).environment,'staging');
