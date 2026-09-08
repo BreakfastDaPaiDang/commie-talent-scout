@@ -1,0 +1,49 @@
+{
+  "archive-states-local": {
+    "date": "2026-09-08T11:53:14.273Z",
+    "base": "http://127.0.0.1:8790",
+    "checks": [
+      "work states require explicit responsibility, with no sequential workflow prerequisite",
+      "only current-state members display, earlier bindings remain available in history, and no-op saves add no version",
+      "close and profile races serialize, and even administrators cannot edit a closed archive or bypass explicit reopen",
+      "reopen validates state and responsibility atomically; creation supports valid work states and type-specific state sets"
+    ]
+  },
+  "archive-states-cloud": {
+    "date": "2026-09-08T12:04:19.594Z",
+    "base": "https://scout-staging.dapaidang.org",
+    "checks": [
+      "work states require explicit responsibility, with no sequential workflow prerequisite",
+      "only current-state members display, earlier bindings remain available in history, and no-op saves add no version",
+      "close and profile races serialize, and even administrators cannot edit a closed archive or bypass explicit reopen",
+      "reopen validates state and responsibility atomically; creation supports valid work states and type-specific state sets"
+    ],
+    "recoveries": []
+  },
+  "bindings-local": {
+    "date": "2026-09-08T11:56:28.395Z",
+    "base": "http://127.0.0.1:8790",
+    "checks": [
+      "freezing a member preserves stable responsibility and marks it in both archive detail and list",
+      "new frozen assignments are rejected while close/reopen can retain existing frozen associations",
+      "searchable member directory paginates without exposing account management fields"
+    ]
+  },
+  "bindings-cloud": {
+    "date": "2026-09-08T11:58:54.033Z",
+    "base": "https://scout-staging.dapaidang.org",
+    "checks": [
+      "freezing a member preserves stable responsibility and marks it in both archive detail and list",
+      "new frozen assignments are rejected while close/reopen can retain existing frozen associations",
+      "searchable member directory paginates without exposing account management fields"
+    ]
+  },
+  "state-timeout-recovery-cloud": {
+    "date": "2026-09-08T12:01:47.216Z",
+    "base": "https://scout-staging.dapaidang.org",
+    "checks": [
+      "original timed-out mutation was committed, and replaying its exact request returned the original version without another change"
+    ],
+    "recoveries": []
+  }
+}

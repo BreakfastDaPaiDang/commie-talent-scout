@@ -66,7 +66,7 @@ export async function handleMcp(request:Request,env:Env,ctx:ExecutionContext){
   server.registerTool('whoami',{
     description:'接入、新会话或身份不明时先调用。返回当前成员、角色、服务环境、版本与实际能力；不能证明客户端已持久配置。没有业务写入。',annotations:readOnly,inputSchema:{},
     outputSchema:z.object({service:z.string(),environment:z.string(),origin:z.string(),member:z.object({id:z.string(),username:z.string(),name:z.string(),role:z.string()}).passthrough(),contract_version:z.string(),capabilities:z.array(z.string()),guide_topics:z.array(z.string()),limitations:z.array(z.string())}),
-  },async()=>reply(async()=>({service:'commie-talent-scout',environment:env.ENVIRONMENT,origin,member:publicMember(actor),contract_version:CONTRACT_VERSION,capabilities:names,guide_topics:Object.keys(guides),limitations:['当前已交付基础档案与猎头账号管理；状态调整、观察与标签尚未开放。','服务端不能核实本机配置持久性。']})));
+  },async()=>reply(async()=>({service:'commie-talent-scout',environment:env.ENVIRONMENT,origin,member:publicMember(actor),contract_version:CONTRACT_VERSION,capabilities:names,guide_topics:Object.keys(guides),limitations:['当前已交付基础档案与猎头账号管理；观察与标签尚未开放。','服务端不能核实本机配置持久性。']})));
   server.registerTool('get_usage_guide',{
     description:'按主题取得服务自身的操作指南；初次操作、上下文丢失或错误恢复时使用。无需加载可选 resources/prompts；指南不授予新权限。',annotations:readOnly,
     inputSchema:{topic:z.enum(['overview','connections','recovery','members','archives']).default('overview').describe('本次需要的主题。')},

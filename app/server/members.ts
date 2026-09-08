@@ -26,6 +26,14 @@ export class Members{
     if(version!==undefined&&member.version!==version)throw new Failure(409,'VERSION_CONFLICT','账号已被更新，请刷新后核对');
     return member;
   }
+  async directory(input:unknown){
+    const a=z.object({query:z.string().trim().max(100).default(''),before:z.string().max(150).optional(),limit:z.coerce.number().int().min(1).max(100).default(30)}).parse(input);
+    const where=['1=1'],args:unknown[]=[];
+    if(a.query){where.push('instr(lower(name),lower(?))>0');args.push(a.query);}
+    if(a.before){where.push('id>?');args.push(a.before);}
+    const r=await this.stmt(`SELECT id,name,frozen,avatar_id,qq FROM members WHERE ${where.join(' AND ')} ORDER BY id LIMIT ?`,...args,a.limit+1).all<Record<string,unknown>>();
+    const members=r.results.slice(0,a.limit).map(m=>({...m,frozen:!!m.frozen}));return {members,next_cursor:r.results.length>a.limit?String(r.results[a.limit-1].id):null};
+  }
   private versionGuard(id:string,version:number,key:string){return this.stmt('INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(SELECT 1 FROM members WHERE id=? AND version=?) THEN 1 ELSE 0 END)',key,id,version);}
   private event(id:string,kind:string,before:unknown,after:unknown){return this.stmt('INSERT INTO member_events(id,actor_id,member_id,source,kind,before_json,after_json,created_at) VALUES(?,?,?,?,?,?,?,?)',uid(),this.actor.id,id,this.source,kind,JSON.stringify(before),JSON.stringify(after),now());}
   async list(input:unknown={}){
