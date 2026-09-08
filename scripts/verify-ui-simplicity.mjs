@@ -22,7 +22,7 @@ try{
  const fonts=await page.evaluate(()=>Object.fromEntries(['body','.record-body','.record-byline time','.row-foot time','.scope-tabs small','.composer textarea','.tag-chip'].map(s=>[s,getComputedStyle(document.querySelector(s)).fontFamily])));
  check('正文、辅助信息、控件使用统一字体',new Set(Object.values(fonts)).size===1);
  check('范围计数不是当前页条数',(await page.locator('.scope-tabs small').allTextContents()).join(',')==='137,42,11');
- check('标签只显示名称，按类别着色且不显示星号',await page.locator('.archive-tags .tag-chip').first().evaluate(e=>{const s=getComputedStyle(e);return s.borderWidth==='0px'&&s.backgroundColor!=='rgba(0, 0, 0, 0)'&&!e.querySelector('.tag-category')&&!e.querySelector('.tag-focus')&&!!e.querySelector('.tag-name');}));
+ check('标签保留类别与名称，按类别着色且不显示星号',await page.locator('.archive-tags .tag-chip').first().evaluate(e=>{const s=getComputedStyle(e);return s.borderWidth==='0px'&&s.backgroundColor!=='rgba(0, 0, 0, 0)'&&!!e.querySelector('.tag-category')&&!e.querySelector('.tag-focus')&&!!e.querySelector('.tag-name');}));
  const cdp=await context.newCDPSession(page);await cdp.send('DOM.enable');await cdp.send('CSS.enable');const {root}=await cdp.send('DOM.getDocument');const glyphFonts={};
  for(const selector of ['.record-body p','.entity-heading h1','.row-foot time','.assigned-members .member-chip','.tag-name']){const {nodeId}=await cdp.send('DOM.querySelector',{nodeId:root.nodeId,selector});glyphFonts[selector]=(await cdp.send('CSS.getPlatformFontsForNode',{nodeId})).fonts;}
  check('实际中文与数字字形使用本地统一字体',Object.values(glyphFonts).flat().every(f=>f.isCustomFont&&f.postScriptName.startsWith('NotoSansSC')));await cdp.detach();

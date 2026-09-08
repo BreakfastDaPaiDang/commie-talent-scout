@@ -13,11 +13,11 @@ try{
  page.on('pageerror',e=>errors.push(e.message));await page.route('**/api/**',fixture);await page.route('**/avatars/**',r=>r.fulfill({status:404,body:''}));
  await page.goto((process.env.CTS_UI_BASE??'http://127.0.0.1:8790')+'/?archive='+uuid('p1'));await page.locator('.record-body').first().waitFor();await page.evaluate(()=>document.fonts.ready);
  check('删除计数与排序整行，保留范围计数',await page.locator('.list-caption').count()===0&&(await page.locator('.scope-tabs small').allTextContents()).join(',')==='137,42,11');
- check('常态不显示字段名或星号',await page.locator('.assignment-label,.work-marker,.tag-category,.tag-focus,.archive-tags>header').count()===0);
+ check('常态不显示字段名或星号',await page.locator('.assignment-label,.work-marker,.tag-focus,.archive-tags>header').count()===0);
  check('无成员不留占位',await page.locator('.entity-row').nth(1).locator('.row-binding').count()===0);
  const chips=await page.locator('.archive-tags .tag-chip').evaluateAll(es=>es.map(e=>({text:e.textContent,title:e.title,color:getComputedStyle(e).color,background:getComputedStyle(e).backgroundColor,padding:getComputedStyle(e).padding})));
  check('同类别同色，不同类别区分，重点与普通外形一致',chips[0].background===chips[2].background&&chips[0].color===chips[2].color&&chips[0].background!==chips[1].background&&chips.every(c=>c.padding===chips[0].padding));
- check('仅显示标签名，类别可悬停查看',chips[0].text==='视频剪辑'&&chips[0].title==='技能：视频剪辑');
+ check('标签完整显示类别与名称',chips[0].text==='技能：视频剪辑'&&chips[0].title==='技能：视频剪辑');
  await page.locator('.archive-tags .tag-binding-button').first().click();await page.getByRole('dialog',{name:'技能：视频剪辑',exact:true}).waitFor();await page.keyboard.press('Escape');await page.locator('.entity-heading h1').click();
  for(const width of [1920,1440,1024,390]){
   await page.setViewportSize({width,height:width<600?844:1080});
