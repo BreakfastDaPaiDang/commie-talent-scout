@@ -1,9 +1,12 @@
-import React,{useEffect,useState,type FormEvent} from 'react';
+import React,{useContext,useEffect,useState,type FormEvent} from 'react';
+import {createPortal} from 'react-dom';
+import {ModalAlertTarget} from '../ui/Modal';
 import {api} from './api';
 import template from '../shared/bootstrap-prompt.txt?raw';
 
 export function PageError({error,retry,retryLabel='重试'}:{error:string;retry?:()=>void;retryLabel?:string}){
-  return error?<div className="form-error" role="alert">{error}{retry&&<button type="button" className="button quiet" onClick={retry}>{retryLabel}</button>}</div>:null;
+  const target=useContext(ModalAlertTarget),content=error?<div className="form-error" role="alert">{error}{retry&&<button type="button" className="button quiet" onClick={retry}>{retryLabel}</button>}</div>:null;
+  return target&&content?createPortal(content,target):content;
 }
 export function AgentPage(){
   const[copied,setCopied]=useState(false),[fallback,setFallback]=useState(false);

@@ -1,0 +1,11 @@
+{
+  "date": "2026-09-08T17:08:34.045Z",
+  "base": "https://scout-staging.dapaidang.org",
+  "checks": [
+    "shared detail and observation components read real data, expand reading, edit through the formal command and retain accessible immutable history",
+    "approved composer saves private drafts, uploads a real PNG, publishes exactly one record and clears the published draft",
+    "promoted member picker loads the real member directory and saves a required responsible member through the existing state command",
+    "archive filters and avatar management remain reachable through the shared layout with no browser runtime errors"
+  ],
+  "recoveries": []
+}

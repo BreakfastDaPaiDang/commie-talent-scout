@@ -20,7 +20,10 @@ const archive={id,type:'person',name:'虚构对齐档案',status:'视奸观察',
 test('approved workspace keeps name and state together, compact header, and tabs above composer',async()=>{
  const f=environment();const {ArchivesPage}=await import('../app/client/ArchivesPage');globalThis.fetch=async url=>Response.json(String(url).includes('/timeline')?{events:[],next_cursor:null}:String(url).includes('/members')?{members:[],next_cursor:null}:String(url).includes('/drafts')?{drafts:[]}:String(url).includes('/draft/')?{draft:null}:String(url).includes('/archives?')?{archives:[archive],next_cursor:null}:{archive});
  try{await act(async()=>{f.root.render(<ArchivesPage actor={actor} type="person"/>);});await act(async()=>{await new Promise(r=>setTimeout(r,300));});
-  assert.ok(f.w.document.querySelector('.archive-head .archives-search'),'approved compact header contains search instead of a separate tall block');
+  assert.ok(f.w.document.querySelector('.scope-filter-row .filter-toggle'),'approved prototype puts filter control on the scope row');
+  assert.ok(f.w.document.querySelector('.detail-panel > .detail-top + .detail-scroll > .detail-inner'),'approved prototype has fixed detail controls and a separate scrolling body');
+  assert.ok(f.w.document.querySelector('[aria-label="展开阅读视图"]'),'approved prototype keeps the reading view control');
+  assert.ok(f.w.document.querySelector('.archive-head .search-field'),'approved compact header contains search instead of a separate tall block');
   assert.ok(f.w.document.querySelector('.entity-heading h1 + .state-badge'),'name and state share the approved heading row');
   const tabs=f.w.document.querySelector('.observation-toolbar')!,composer=f.w.document.querySelector('.observation-composer')!;assert.ok(tabs.compareDocumentPosition(composer)&4,'timeline tabs precede the composer');
  }finally{await f.close();}

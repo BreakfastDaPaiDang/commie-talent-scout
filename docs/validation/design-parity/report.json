@@ -1,0 +1,37 @@
+{
+  "revision": "531ab51",
+  "reports": [
+    {
+      "width": 1920,
+      "differences": [],
+      "prototypeDifferences": [],
+      "overflow": false
+    },
+    {
+      "width": 1440,
+      "differences": [],
+      "prototypeDifferences": [],
+      "overflow": false
+    },
+    {
+      "width": 1024,
+      "differences": [],
+      "prototypeDifferences": [],
+      "overflow": false
+    },
+    {
+      "width": 390,
+      "differences": [],
+      "prototypeDifferences": [],
+      "overflow": false
+    }
+  ],
+  "errors": [],
+  "interaction_checks": [
+    "expanded reading",
+    "keyboard tabs",
+    "search shortcut",
+    "modal focus restoration",
+    "unread navigation and actual visible-content confirmation in fixture environment"
+  ]
+}

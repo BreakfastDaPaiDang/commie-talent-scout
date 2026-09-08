@@ -1,3 +1,4 @@
+import {Modal as SharedModal} from '../../../app/ui/Modal';
 import React, {
   createContext,
   useContext,
@@ -43,61 +44,7 @@ export function Feedback({ toast, inline = false }) {
     </div>
   );
 }
-export function Modal({ title, children, onClose, wide = false }) {
-  const ref = useRef(null);
-  const titleId = useId();
-  const toast = useContext(FeedbackContext);
-  const backdropPress = useRef(false);
-  const outside = (e) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    return (
-      e.target === e.currentTarget &&
-      (e.clientX < rect.left ||
-        e.clientX > rect.right ||
-        e.clientY < rect.top ||
-        e.clientY > rect.bottom)
-    );
-  };
-  useEffect(() => {
-    const trigger = document.activeElement;
-    ref.current?.showModal();
-    ref.current
-      ?.querySelector(
-        'input:not([type="file"]):not([type="hidden"]), textarea, select',
-      )
-      ?.focus({ preventScroll: true });
-    return () => {
-      if (trigger instanceof HTMLElement && trigger.isConnected)
-        trigger.focus({ preventScroll: true });
-    };
-  }, []);
-  return (
-    <dialog
-      ref={ref}
-      aria-labelledby={titleId}
-      className={`modal ${wide ? "wide" : ""}`}
-      onCancel={(e) => {
-        e.preventDefault();
-        onClose();
-      }}
-      onPointerDown={(e) => {
-        backdropPress.current = outside(e);
-      }}
-      onClick={(e) => {
-        if (backdropPress.current && outside(e)) onClose();
-      }}
-    >
-      <div className="modal-chrome">
-        <header className="modal-head">
-          <h2 id={titleId}>{title}</h2>
-          <IconButton name="close" label="关闭对话框" onClick={onClose} />
-        </header>
-        <Feedback toast={toast} inline />
-      </div>
-      {children}
-    </dialog>
-  );
-}
+export function Modal({title,children,onClose,wide=false}){const toast=useContext(FeedbackContext);return <SharedModal title={title} onClose={onClose} wide={wide} feedback={<Feedback toast={toast} inline/>}>{children}</SharedModal>;}
 export function Empty({ type = "person", title, children, action }) {
   return (
     <div className="empty">

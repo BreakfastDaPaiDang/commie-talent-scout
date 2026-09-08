@@ -1,6 +1,5 @@
-import React,{useEffect,useRef,type ReactNode} from 'react';
-export function Modal({title,onClose,busy=false,children}:{title:string;onClose:()=>void;busy?:boolean;children:ReactNode}){
-  const ref=useRef<HTMLDialogElement>(null);
-  useEffect(()=>{const dialog=ref.current!;dialog.showModal();return()=>dialog.close();},[]);
-  return <dialog ref={ref} className="form-dialog" aria-label={title} onCancel={e=>{e.preventDefault();if(!busy)onClose();}}><div className="dialog-heading"><h2>{title}</h2><button className="icon-close" aria-label="关闭" disabled={busy} onClick={onClose}>×</button></div>{children}</dialog>;
-}
+import React,{useContext,type ComponentProps,type ReactNode} from 'react';
+import {Modal as Dialog,ModalControls} from '../ui/Modal';
+export function Modal({children,...props}:ComponentProps<typeof Dialog>){return <Dialog {...props}><div className="live-modal-body">{children}</div></Dialog>;}
+
+export function ModalActions({children}:{children:ReactNode}){const controls=useContext(ModalControls);return <div className="modal-actions">{controls&&<button type="button" className="button quiet" disabled={controls.busy} onClick={controls.onClose}>取消</button>}{children}</div>;}

@@ -3,7 +3,7 @@ import React,{useEffect,useState,type FormEvent} from 'react';
 import {api,type Member} from './api';
 import {PageError} from './ConnectionPages';
 import {Avatar} from './Avatar';
-import {Modal} from './Modal';
+import {Modal,ModalActions} from './Modal';
 
 type ManagedMember=Member&{frozen:boolean;created_at:string};
 type Dialog={type:'edit'|'reset'|'history';member:ManagedMember}|{type:'create'};
@@ -29,12 +29,12 @@ type FormProps={busy:boolean;setBusy:(value:boolean)=>void;onSaved:(message:stri
 function CreateForm({busy,setBusy,onSaved}:FormProps){
   const[password]=useState(makePassword),[saved,setSaved]=useState(false),[requestId]=useState(()=>crypto.randomUUID()),[error,setError]=useState('');
   async function submit(e:FormEvent<HTMLFormElement>){e.preventDefault();setBusy(true);setError('');const data=new FormData(e.currentTarget);try{await api('/admin/members/create',{username:data.get('username'),name:data.get('name'),role:data.get('role'),qq:data.get('qq')||null,temporary_password:password,request_id:requestId});await onSaved('账号已创建，请私下交付保存的临时密码');}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
-  return <form className="manage-form" onSubmit={submit}><label>登录账号<input name="username" autoFocus required minLength={3} maxLength={40} pattern="[a-zA-Z0-9_.-]+" autoComplete="off"/><small>3–40 位字母、数字、点、下划线或连字符，创建后保持不变。</small></label><label>显示名称<input name="name" required maxLength={80}/></label><div className="form-columns"><label>角色<select name="role" defaultValue="member"><option value="member">普通成员</option><option value="admin">管理员</option></select></label><label>QQ（可选）<input name="qq" inputMode="numeric" pattern="[0-9]{5,20}" maxLength={20}/></label></div><TemporaryPassword password={password} onSaved={setSaved}/><PageError error={error}/><div className="dialog-actions"><button className="button primary" disabled={busy||!saved}>{busy?'正在创建…':'创建账号'}</button></div></form>;
+  return <form className="manage-form" onSubmit={submit}><label>登录账号<input name="username" autoFocus required minLength={3} maxLength={40} pattern="[a-zA-Z0-9_.-]+" autoComplete="off"/><small>3–40 位字母、数字、点、下划线或连字符，创建后保持不变。</small></label><label>显示名称<input name="name" required maxLength={80}/></label><div className="form-columns"><label>角色<select name="role" defaultValue="member"><option value="member">普通成员</option><option value="admin">管理员</option></select></label><label>QQ（可选）<input name="qq" inputMode="numeric" pattern="[0-9]{5,20}" maxLength={20}/></label></div><TemporaryPassword password={password} onSaved={setSaved}/><PageError error={error}/><ModalActions><button className="button primary" disabled={busy||!saved}>{busy?'正在创建…':'创建账号'}</button></ModalActions></form>;
 }
 function ResetForm({member,busy,setBusy,onSaved,onReload}:FormProps&{member:ManagedMember;onReload:()=>void}){
   const[password]=useState(makePassword),[saved,setSaved]=useState(false),[requestId]=useState(()=>crypto.randomUUID()),[error,setError]=useState('');
   async function reset(e:FormEvent){e.preventDefault();setBusy(true);setError('');try{await api('/admin/members/reset-password',{id:member.id,expected_version:member.version,temporary_password:password,request_id:requestId});await onSaved('密码已重置，旧登录和连接已失效');}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
-  return <form className="manage-form" onSubmit={reset}><p>重置 <strong>{member.name}</strong>（{member.username}）的密码。所有旧登录和连接会立即失效。</p><TemporaryPassword password={password} onSaved={setSaved}/><PageError error={error} retry={onReload}/><div className="dialog-actions"><button className="button primary" disabled={busy||!saved}>{busy?'正在重置…':'重置密码'}</button></div></form>;
+  return <form className="manage-form" onSubmit={reset}><p>重置 <strong>{member.name}</strong>（{member.username}）的密码。所有旧登录和连接会立即失效。</p><TemporaryPassword password={password} onSaved={setSaved}/><PageError error={error} retry={onReload}/><ModalActions><button className="button primary" disabled={busy||!saved}>{busy?'正在重置…':'重置密码'}</button></ModalActions></form>;
 }
 function EditForm({member,busy,setBusy,onSaved,onReload,onReset,onHistory}:FormProps&{member:ManagedMember;onReload:()=>void;onReset:()=>void;onHistory:()=>void}){
   const[error,setError]=useState(''),[profileRequest]=useState(()=>crypto.randomUUID()),[roleRequest]=useState(()=>crypto.randomUUID()),[frozenRequest]=useState(()=>crypto.randomUUID());

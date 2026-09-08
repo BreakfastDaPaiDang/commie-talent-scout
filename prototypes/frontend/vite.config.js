@@ -83,4 +83,4 @@ function qqAvatarPlugin() {
     },
   };
 }
-export default defineConfig({ plugins: [qqAvatarPlugin()] });
+export default defineConfig({ resolve: { dedupe: ["react", "react-dom"] }, plugins: [qqAvatarPlugin()] });

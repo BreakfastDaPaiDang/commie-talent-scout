@@ -1,3 +1,4 @@
+import {TopBar,ArchiveHead} from '../../../app/ui/Workspace';
 import React from "react";
 import { Icon, Mark } from "./icons.jsx";
 import { Avatar, Placeholder } from "./Avatar.jsx";
@@ -38,21 +39,7 @@ export default function App() {
     <div
       className={`app ${w.detailVisible ? "has-detail" : ""} ${w.detailWide ? "expanded-detail" : ""}`}
     >
-      <header className="topbar">
-        <a
-          className="brand"
-          href="#"
-          onClick={(e) => {
-            e.preventDefault();
-            w.navigate("person");
-          }}
-        >
-          <Mark />
-          <span>
-            康米巨星<small>猎头系统</small>
-          </span>
-        </a>
-        <nav className="primary-nav" aria-label="主要导航">
+      <TopBar onHome={()=>w.navigate('person')} navigation={<>
           {[
             ["person", "人物"],
             ["org", "组织"],
@@ -70,8 +57,7 @@ export default function App() {
               )}
             </button>
           ))}
-        </nav>
-        <div className="topbar-tools">
+</>} tools={<>
           <button
             className={`tool-link ${w.page === "agent" ? "active" : ""}`}
             onClick={() => w.navigate("agent")}
@@ -101,13 +87,14 @@ export default function App() {
             <Icon name="down" size={15} />
           </button>
           <span className="prototype-tag">原型</span>
-        </div>
+</>} mobileTools={<>
         <IconButton
           name="menu"
           label="打开工具导航"
           onClick={() => w.setMenuOpen(!w.menuOpen)}
         />
-      </header>
+</>}/>
+
       {w.menuOpen && (
         <div className="mobile-menu">
           <Button icon="agent" onClick={() => w.navigate("agent")}>
@@ -134,7 +121,7 @@ export default function App() {
         <main
           className={`main-panel ${["accounts", "agent"].includes(w.page) ? "support-panel" : ""}`}
         >
-          <header
+          {['person','org'].includes(w.page)?<ArchiveHead label={labels[w.page]} count={w.entities.filter(e=>e.type===w.page).length.toString().padStart(2,'0')} query={w.search} onQuery={w.setSearch} onCreate={()=>w.setDialog({type:'entity-new'})}/>:(          <header
             className={`page-head ${["person", "org"].includes(w.page) ? "archive-head" : ""}`}
           >
             <div>
@@ -180,7 +167,8 @@ export default function App() {
                 新建账号
               </Button>
             )}
-          </header>
+          </header>)}
+
           {["person", "org"].includes(w.page) && <ArchiveList w={w} />}
           {w.page === "unread" && <Updates w={w} />}
           {w.page === "accounts" && <Accounts w={w} />}

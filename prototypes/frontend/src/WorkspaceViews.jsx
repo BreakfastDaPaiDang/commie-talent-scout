@@ -1,3 +1,4 @@
+import {CaughtUp,UpdateRow,ArchiveRow,ScopeToolbar,DetailFrame,EntityHeader,TimelineTabs,ComposerFrame,ObservationFrame,RecordBody} from '../../../app/ui/Workspace';
 import React, { useRef, useEffect, useLayoutEffect } from "react";
 import { Icon } from "./icons.jsx";
 import { Avatar } from "./Avatar.jsx";
@@ -90,249 +91,12 @@ export function ArchiveSearch({ w }) {
     </div>
   );
 }
-export function ArchiveList({ w }) {
-  const states = w.page === "org" ? orgStates : personStates;
-  const activeFilters =
-    w.stateFilter !== "all" ||
-    w.lifeFilter !== "open" ||
-    w.ownerFilter.length > 0;
-  return (
-    <>
-      <section className="list-toolbar">
-        <div className="scope-filter-row">
-          <div className="scope-tabs" aria-label="档案范围">
-            {[
-              ["all", "全部"],
-              ["mine", "我负责"],
-              ["unread", "有未读"],
-            ].map(([key, label]) => (
-              <button
-                key={key}
-                aria-pressed={w.scope === key}
-                className={w.scope === key ? "active" : ""}
-                onClick={() => {
-                  w.setScope(key);
-                  if (key === "unread") w.setLifeFilter("all");
-                  else if (w.scope === "unread") w.setLifeFilter("open");
-                }}
-              >
-                {label}
-                <small>{w.scopeCounts[key]}</small>
-              </button>
-            ))}
-          </div>
-          <button
-            className={`filter-toggle ${activeFilters ? "has-filters" : ""}`}
-            aria-expanded={w.filtersOpen}
-            onClick={() => w.setFiltersOpen(!w.filtersOpen)}
-          >
-            <Icon name="filter" size={18} />
-            筛选{activeFilters && <span className="unread-dot" />}
-          </button>
-        </div>
-        {w.filtersOpen && (
-          <div className="filter-row">
-            <select
-              aria-label="筛选业务状态"
-              value={w.stateFilter}
-              onChange={(e) => w.setStateFilter(e.target.value)}
-            >
-              <option value="all">全部状态</option>
-              {states.map((state) => (
-                <option key={state}>{state}</option>
-              ))}
-            </select>
-            <MemberPicker
-              members={w.members}
-              value={w.ownerFilter}
-              onChange={w.setOwnerFilter}
-              multiple={false}
-              label="筛选绑定成员"
-              placeholder="全部成员"
-            />
-            <select
-              aria-label="筛选开启关闭"
-              value={w.lifeFilter}
-              onChange={(e) => w.setLifeFilter(e.target.value)}
-            >
-              <option value="open">开启中</option>
-              <option value="closed">已关闭</option>
-              <option value="all">全部档案</option>
-            </select>
-          </div>
-        )}
-        <div className="list-caption">
-          <span>
-            {w.filtered.length} 个档案{w.scope === "mine" && " · 当前工作负责"}
-          </span>
-          {activeFilters || w.search ? (
-            <button onClick={w.resetFilters}>清除条件</button>
-          ) : (
-            <span>最近更新 ↓</span>
-          )}
-        </div>
-      </section>
-      <div className="entity-list">
-        {w.filtered.length ? (
-          w.filtered.map((e) => {
-            const matching = w.search
-                ? e.records.find(
-                    (r) =>
-                      !r.deleted &&
-                      r.body.toLowerCase().includes(w.search.toLowerCase()),
-                  )
-                : null,
-              latest = matching ?? e.records.find((r) => !r.deleted),
-              bound = e.owners[e.state] ?? [],
-              working = isWorkState(e.type, e.state),
-              contactMatch = w.search
-                ? e.contacts.find((c) =>
-                    c.value.toLowerCase().includes(w.search.toLowerCase()),
-                  )
-                : null;
-            return (
-              <button
-                className={`entity-row ${w.selected === e.id ? "selected" : ""}`}
-                key={e.id}
-                onClick={() => w.pick(e.id, matching?.id)}
-              >
-                <Avatar
-                  type={e.type}
-                  name={e.name}
-                  src={e.avatar}
-                  contacts={e.contacts}
-                />
-                <div className="row-content">
-                  <div className="row-title">
-                    <h2>
-                      <Highlight text={e.name} query={w.search} />
-                    </h2>
-                    {w.unreadItems(e).length > 0 && (
-                      <span className="unread-dot" aria-label="有未读更新" />
-                    )}
-                    <Icon name="arrow" size={18} />
-                  </div>
-                  <div className="row-meta">
-                    <StateBadge entity={e} small />
-                    {working && (
-                      <span
-                        className="work-marker"
-                        title="工作状态，须指定负责成员"
-                      >
-                        ◆
-                      </span>
-                    )}
-                    {w.hasDraft(e.id) && (
-                      <span className="draft-tag">草稿</span>
-                    )}
-                  </div>
-                  <div className="row-binding">
-                    <span>{working ? "负责人" : "关联"}</span>
-                    <span title={bound.map(w.memberName).join("、")}>
-                      {bound.length
-                        ? bound.map(w.memberName).join("、")
-                        : working
-                          ? "未指定"
-                          : "暂无"}
-                    </span>
-                  </div>
-                  <p className="record-excerpt">
-                    <Highlight
-                      text={excerpt(
-                        contactMatch && !matching
-                          ? `${contactMatch.type} ${contactMatch.value}`
-                          : (latest?.body ?? "还没有观察记录"),
-                        w.search,
-                      )}
-                      query={w.search}
-                    />
-                  </p>
-                  <div className="row-foot">
-                    <span>
-                      {e.records.filter((r) => !r.deleted).length} 条观察记录
-                    </span>
-                    <time>{e.updated}</time>
-                  </div>
-                </div>
-              </button>
-            );
-          })
-        ) : (
-          <Empty
-            type={w.page}
-            title={
-              w.scope === "mine" && !w.search
-                ? "暂无你负责的工作"
-                : "没有找到对应档案"
-            }
-            action={
-              <Button variant="outline" onClick={w.resetFilters}>
-                查看全部档案
-              </Button>
-            }
-          >
-            {w.scope === "mine" && !w.search
-              ? "工作状态中绑定你的档案，会出现在这里。"
-              : "换个关键词，或清除筛选条件。"}
-          </Empty>
-        )}
-      </div>
-    </>
-  );
+export function ArchiveList({w}) {
+ const states=w.page==='org'?orgStates:personStates,activeFilters=w.stateFilter!=='all'||w.lifeFilter!=='open'||w.ownerFilter.length>0;
+ return <><ScopeToolbar scope={w.scope} counts={w.scopeCounts} onScope={key=>{w.setScope(key);if(key==='unread')w.setLifeFilter('all');else if(w.scope==='unread')w.setLifeFilter('open');}} filtersOpen={w.filtersOpen} onFilters={()=>w.setFiltersOpen(!w.filtersOpen)} activeFilters={activeFilters} caption={<>{w.filtered.length} 个档案{w.scope==='mine'&&' · 当前工作负责'}</>} onReset={activeFilters||w.search?w.resetFilters:undefined} filters={<><select aria-label="筛选业务状态" value={w.stateFilter} onChange={e=>w.setStateFilter(e.target.value)}><option value="all">全部状态</option>{states.map(state=><option key={state}>{state}</option>)}</select><MemberPicker members={w.members} value={w.ownerFilter} onChange={w.setOwnerFilter} multiple={false} label="筛选绑定成员" placeholder="全部成员"/><select aria-label="筛选开启关闭" value={w.lifeFilter} onChange={e=>w.setLifeFilter(e.target.value)}><option value="open">开启中</option><option value="closed">已关闭</option><option value="all">全部档案</option></select></>}/>
+ <div className="entity-list">{w.filtered.length?w.filtered.map(e=>{const matching=w.search?e.records.find(r=>!r.deleted&&r.body.toLowerCase().includes(w.search.toLowerCase())):null,latest=matching??e.records.find(r=>!r.deleted),bound=e.owners[e.state]??[],working=isWorkState(e.type,e.state),contactMatch=w.search?e.contacts.find(c=>c.value.toLowerCase().includes(w.search.toLowerCase())):null;return <ArchiveRow key={e.id} selected={w.selected===e.id} onClick={()=>w.pick(e.id,matching?.id)} avatar={<Avatar type={e.type} name={e.name} src={e.avatar} contacts={e.contacts}/>} name={<Highlight text={e.name} query={w.search}/>} unread={w.unreadItems(e).length>0} state={<StateBadge entity={e} small/>} working={working} draft={w.hasDraft(e.id)} binding={bound.length?bound.map(w.memberName).join('、'):working?'未指定':'暂无'} excerpt={<Highlight text={excerpt(contactMatch&&!matching?`${contactMatch.type} ${contactMatch.value}`:latest?.body??'还没有观察记录',w.search)} query={w.search}/>} footer={<><span>{e.records.filter(r=>!r.deleted).length} 条观察记录</span><time>{e.updated}</time></>}/>;}):<Empty type={w.page} title="没有找到对应档案" action={<Button variant="outline" onClick={w.resetFilters}>查看全部档案</Button>}>换个关键词，或清除筛选条件。</Empty>}</div></>;
 }
-export function Updates({ w }) {
-  return (
-    <section className="updates-list">
-      <p className="section-description">从变化的地方读起。</p>
-      {w.unreadEntities.length ? (
-        w.sessionUpdates.map((e) => {
-          const pending = w.unreadItems(e),
-            latest = [
-              ...(pending.length
-                ? pending
-                : [...e.records.filter((r) => !r.deleted), ...e.events]),
-            ].sort((a, b) => timelineOrder(b) - timelineOrder(a))[0];
-          return (
-            <button
-              className={`update-row ${w.selected === e.id ? "selected" : ""} ${!pending.length ? "read" : ""}`}
-              key={e.id}
-              onClick={() => w.openUnread(e)}
-            >
-              <Avatar
-                type={e.type}
-                name={e.name}
-                contacts={e.contacts}
-                src={e.avatar}
-              />
-              <div>
-                <span className="kind-label">
-                  {e.type === "person" ? "人物" : "组织"} ·{" "}
-                  {pending.length ? `${pending.length} 项更新` : "已阅"}
-                </span>
-                <h2>{e.name}</h2>
-                <p>{latest?.kind === "system" ? latest.text : latest?.body}</p>
-                <time>{latest?.time}</time>
-              </div>
-              <Icon name={pending.length ? "arrow" : "check"} />
-            </button>
-          );
-        })
-      ) : (
-        <div className="caught-up">
-          <img
-            src="/art/observation-pause-v3.png"
-            alt="放下望远镜，暂歇片刻的观察员"
-          />
-          <h2>近况，都看过了。</h2>
-          <p>新的观察与变化，会在这里等你。</p>
-          <Button variant="outline" onClick={() => w.navigate("person")}>
-            回到人物档案
-          </Button>
-        </div>
-      )}
-    </section>
-  );
-}
+export function Updates({w}){return <section className="updates-list"><p className="section-description">从变化的地方读起。</p>{w.unreadEntities.length?w.sessionUpdates.map(e=>{const pending=w.unreadItems(e),latest=[...(pending.length?pending:[...e.records.filter(r=>!r.deleted),...e.events])].sort((a,b)=>timelineOrder(b)-timelineOrder(a))[0];return <UpdateRow key={e.id} selected={w.selected===e.id} read={!pending.length} onClick={()=>w.openUnread(e)} avatar={<Avatar type={e.type} name={e.name} contacts={e.contacts} src={e.avatar}/>} label={<>{e.type==='person'?'人物':'组织'} · {pending.length?`${pending.length} 项更新`:'已阅'}</>} name={e.name} excerpt={latest?.kind==='system'?latest.text:latest?.body} time={latest?.time}/>;}):<CaughtUp action={<Button variant="outline" onClick={()=>w.navigate('person')}>回到人物档案</Button>}/>}</section>;}
 
 export function Detail({ w }) {
   const { entity, locked, actor, memberName } = w,
@@ -362,74 +126,8 @@ export function Detail({ w }) {
     w.setComposeOpen(true);
   }
   return (
-    <aside className="detail-panel" aria-label={`${entity.name}档案详情`}>
-      <div className="detail-top">
-        <span>
-          {entity.type === "person" ? "人物档案" : "组织档案"}
-          <span className="detail-number">
-            / {entity.id.toUpperCase().slice(0, 6)}
-          </span>
-        </span>
-        <div>
-          {w.unreadEntities.length > 0 && (
-            <button className="next-unread" onClick={w.nextUnread}>
-              下一处未读
-              <Icon name="arrow" size={15} />
-            </button>
-          )}
-          <IconButton
-            name="expand"
-            label={w.detailWide ? "收起阅读视图" : "展开阅读视图"}
-            onClick={() => w.setDetailWide(!w.detailWide)}
-          />
-          <IconButton
-            name="close"
-            label="关闭档案详情"
-            onClick={w.closeDetail}
-          />
-        </div>
-      </div>
-      <div
-        className="detail-scroll"
-        key={entity.id}
-        ref={scroll}
-        onScroll={(event) => {
-          w.readingPositions.current[`${w.actorId}:${entity.id}`] =
-            event.currentTarget.scrollTop;
-        }}
-      >
-        <div className="detail-inner">
-          <header className="entity-header">
-            <div className="entity-identity">
-              <div className="entity-heading">
-                <h1>{entity.name}</h1>
-                <StateBadge
-                  entity={entity}
-                  onClick={
-                    locked
-                      ? undefined
-                      : () =>
-                          w.setDialog({
-                            type: "state",
-                            nextState: entity.state,
-                          })
-                  }
-                />
-              </div>
-              <Avatar
-                type={entity.type}
-                name={entity.name}
-                contacts={entity.contacts}
-                src={entity.avatar}
-                size="hero"
-              />
-              <IconButton
-                name="more"
-                label="档案操作"
-                onClick={() => w.setDialog({ type: "entity-actions" })}
-              />
-            </div>
-            <div className={`assignment-row ${work ? "is-work" : ""}`}>
+    <DetailFrame label={entity.type==='person'?'人物档案':'组织档案'} code={entity.id.toUpperCase().slice(0,6)} expanded={w.detailWide} onExpand={()=>w.setDetailWide(!w.detailWide)} onClose={w.closeDetail} onNextUnread={w.unreadEntities.length?w.nextUnread:undefined} scrollRef={scroll} onScroll={event=>{w.readingPositions.current[`${w.actorId}:${entity.id}`]=event.currentTarget.scrollTop;}}>
+          <EntityHeader name={entity.name} state={<StateBadge entity={entity} onClick={locked?undefined:()=>w.setDialog({type:'state',nextState:entity.state})}/>} avatar={<Avatar type={entity.type} name={entity.name} contacts={entity.contacts} src={entity.avatar} size="hero"/>} actions={<IconButton name="more" label="档案操作" onClick={()=>w.setDialog({type:'entity-actions'})}/>} assignment={            <div className={`assignment-row ${work ? "is-work" : ""}`}>
               <span className="assignment-label">
                 {work && <span className="assignment-flag">◆</span>}
                 {work
@@ -468,7 +166,7 @@ export function Detail({ w }) {
                 </button>
               )}
             </div>
-            <div className="contacts-bar">
+} contacts={<>
               {entity.contacts.map((contact, i) => (
                 <button
                   className="contact-pill"
@@ -497,8 +195,7 @@ export function Detail({ w }) {
                   编辑资料
                 </Button>
               )}
-            </div>
-          </header>
+</>}/>
           {locked && (
             <div className="locked-notice">
               <Icon name="lock" />
@@ -517,80 +214,9 @@ export function Detail({ w }) {
               </button>
             </div>
           )}
-          <div className="timeline-tabs" role="tablist" aria-label="动态筛选">
-            {[
-              ["all", "全部动态"],
-              ["records", "观察记录"],
-              ["deleted", "已删除"],
-            ].map(([key, label]) => (
-              <button
-                role="tab"
-                id={`${entity.id}-tab-${key}`}
-                aria-controls={`${entity.id}-timeline`}
-                aria-selected={w.recordView === key}
-                tabIndex={w.recordView === key ? 0 : -1}
-                onKeyDown={(e) => {
-                  const tabs = [
-                    ...e.currentTarget.parentElement.querySelectorAll(
-                      '[role="tab"]',
-                    ),
-                  ];
-                  const index = tabs.indexOf(e.currentTarget);
-                  const next = {
-                    ArrowRight: (index + 1) % tabs.length,
-                    ArrowLeft: (index + tabs.length - 1) % tabs.length,
-                    Home: 0,
-                    End: tabs.length - 1,
-                  }[e.key];
-                  if (next === undefined) return;
-                  e.preventDefault();
-                  tabs[next].click();
-                  tabs[next].focus();
-                }}
-                className={w.recordView === key ? "active" : ""}
-                key={key}
-                onClick={() => w.setRecordView(key)}
-              >
-                {label}
-                {key === "deleted" && w.deletedCount > 0 && (
-                  <small>{w.deletedCount}</small>
-                )}
-              </button>
-            ))}
-          </div>
+          <TimelineTabs id={entity.id} value={w.recordView==='records'?'observations':w.recordView} onChange={value=>w.setRecordView(value==='observations'?'records':value)} deletedCount={w.deletedCount}/>
           {!locked && w.recordView !== "deleted" && (
-            <section
-              className={`composer ${w.composeOpen ? "open" : ""}`}
-              aria-label="撰写观察"
-            >
-              <div className="composer-line">
-                <button
-                  className="compose-launch"
-                  aria-label="开始撰写观察"
-                  onClick={() => {
-                    w.setComposeOpen(true);
-                    textarea.current?.focus();
-                  }}
-                >
-                  <Icon name="plus" size={22} />
-                </button>
-                <textarea
-                  ref={textarea}
-                  aria-label="新的观察记录"
-                  rows={w.composeOpen ? 3 : 1}
-                  placeholder="写下新的观察…"
-                  value={w.text}
-                  onFocus={() => w.setComposeOpen(true)}
-                  onChange={(e) => w.setText(e.target.value)}
-                  onPaste={(e) => {
-                    const files = [...e.clipboardData.files];
-                    if (files.length) {
-                      e.preventDefault();
-                      addImages(files);
-                    }
-                  }}
-                />
-              </div>
+            <ComposerFrame open={w.composeOpen} onOpen={()=>w.setComposeOpen(true)} textarea={{value:w.text,onChange:e=>w.setText(e.target.value),onPaste:e=>{const files=[...e.clipboardData.files];if(files.length){e.preventDefault();addImages(files);}}}}>
               {w.composeOpen && (
                 <>
                   <Images
@@ -618,7 +244,7 @@ export function Detail({ w }) {
                   </div>
                 </>
               )}
-            </section>
+            </ComposerFrame>
           )}
           {w.recordView === "deleted" && (
             <p className="deleted-explanation">
@@ -631,7 +257,7 @@ export function Detail({ w }) {
             className="timeline"
             role="tabpanel"
             id={`${entity.id}-timeline`}
-            aria-labelledby={`${entity.id}-tab-${w.recordView}`}
+            aria-labelledby={`${entity.id}-tab-${w.recordView==='records'?'observations':w.recordView}`}
             tabIndex={0}
           >
             {!w.visibleRecords.length && (
@@ -673,50 +299,8 @@ export function Detail({ w }) {
                       </div>
                     </div>
                   ) : (
-                    <article
-                      className={`observation ${item.deleted ? "deleted" : ""}`}
-                    >
-                      <header className="record-byline">
-                        <Avatar
-                          name={memberName(item.author)}
-                          qq={w.members.find((m) => m.id === item.author)?.qq}
-                          src={
-                            w.members.find((m) => m.id === item.author)?.avatar
-                          }
-                          size="tiny"
-                        />
-                        <strong>{memberName(item.author)}</strong>
-                        {unread && <span className="unread-dot" />}
-                        <time>{item.time}</time>
-                        {item.edited && <small>已编辑</small>}
-                        <IconButton
-                          name="history"
-                          label={`查看${memberName(item.author)}记录的历史`}
-                          onClick={() =>
-                            w.setDialog({ type: "history", record: item })
-                          }
-                        />
-                      </header>
-                      <div className="record-body">
-                        {item.body
-                          .split("\n")
-                          .filter(Boolean)
-                          .map((line, i) => (
-                            <p key={i}>{line}</p>
-                          ))}
-                      </div>
-                      <Images
-                        images={item.images}
-                        onOpen={(im) =>
-                          w.setDialog({
-                            type: "image",
-                            image: im,
-                            record: item,
-                          })
-                        }
-                      />
-                      {!locked && canEditRecord(item, actor) && (
-                        <footer className="record-actions">
+                    <ObservationFrame id={`observation-${item.id}`} avatar={<Avatar name={memberName(item.author)} qq={w.members.find(m=>m.id===item.author)?.qq} src={w.members.find(m=>m.id===item.author)?.avatar} size="tiny"/>} author={memberName(item.author)} time={item.time} edited={item.edited?'已编辑':undefined} unread={unread} onHistory={()=>w.setDialog({type:'history',record:item})} historyLabel={`查看${memberName(item.author)}记录的历史`} deleted={item.deleted} footer={<>                      {!locked && canEditRecord(item, actor) && (
+                        <>
                           {item.deleted ? (
                             <button
                               onClick={() => w.changeRecord(item, "恢复")}
@@ -748,16 +332,26 @@ export function Detail({ w }) {
                               </button>
                             </>
                           )}
-                        </footer>
+                        </>
                       )}
-                    </article>
+</>}>
+                      <RecordBody body={item.body}/>
+                      <Images
+                        images={item.images}
+                        onOpen={(im) =>
+                          w.setDialog({
+                            type: "image",
+                            image: im,
+                            record: item,
+                          })
+                        }
+                      />
+                    </ObservationFrame>
                   )}
                 </ReadBoundary>
               );
             })}
           </section>
-        </div>
-      </div>
-    </aside>
+    </DetailFrame>
   );
 }
