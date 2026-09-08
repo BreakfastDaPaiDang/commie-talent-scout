@@ -1,0 +1,33 @@
+{
+  "samples": [
+    {
+      "width": 1440,
+      "pending": {
+        "path": "/organizations",
+        "active": "组织",
+        "label": "组织档案 / 2352DA",
+        "accessible": "组织档案详情"
+      },
+      "loaded": {
+        "path": "/organizations",
+        "active": "组织",
+        "label": "组织档案 / 2352DA"
+      }
+    },
+    {
+      "width": 390,
+      "pending": {
+        "path": "/organizations",
+        "active": "组织",
+        "label": "组织档案 / 2352DA",
+        "accessible": "组织档案详情"
+      },
+      "loaded": {
+        "path": "/organizations",
+        "active": "组织",
+        "label": "组织档案 / 2352DA"
+      }
+    }
+  ],
+  "errors": []
+}

@@ -8,6 +8,7 @@ const html=readFileSync('dist/index.html','utf8'),cssPath=html.match(/href="([^"
 assert.ok(cssPath,'build first');
 const css=readFileSync('dist'+cssPath,'utf8'),served=await fetch(base).then(r=>r.text());
 assert.ok(served.includes(cssPath),'server must serve the current build');
+const jsPath=html.match(/src="([^" ]+\.js)"/)?.[1];assert.ok(jsPath&&served.includes(jsPath),'server must reference the current application bundle');assert.ok(await fetch(base+jsPath).then(r=>r.text())===readFileSync('dist'+jsPath,'utf8'),'server must serve the exact built application bundle');
 assert.ok(await fetch(base+cssPath).then(r=>r.text())===css,'server must serve the exact built stylesheet');
 const artPath='/art/observation-pause-v3.png',art=await fetch(base+artPath);assert.ok(art.headers.get('content-type')?.startsWith('image/png'),'empty-state illustration must be served as an image, not SPA fallback');assert.deepEqual(Buffer.from(await art.arrayBuffer()),readFileSync('public'+artPath));
 const dom=new JSDOM('<style>'+css+'</style><span class="tag-chip tag-teal">测试标签</span>',{virtualConsole:new VirtualConsole()});

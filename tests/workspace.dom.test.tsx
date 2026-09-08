@@ -50,3 +50,20 @@ test('five-minute group shows observation body and mounts operation reading boun
   await act(async()=>{details.open=false;details.dispatchEvent(new f.w.Event('toggle'));await new Promise(r=>setTimeout(r,20));});assert.equal(f.w.document.querySelectorAll('.reading-boundary').length,1);
  }finally{await f.close();}
 });
+
+test('organization detail keeps its type while the archive request is pending',async()=>{
+ const f=environment();const {ArchivesPage}=await import('../app/client/ArchivesPage');
+ const organization={...archive,type:'org',name:'虚构组织'};let release!:(response:Response)=>void;
+ const response=new Promise<Response>(resolve=>{release=resolve;});
+ f.w.history.replaceState(null,'','/organizations?archive='+id);
+ globalThis.fetch=async url=>String(url)==='/api/archives/'+id?response:Response.json(String(url).includes('/timeline')?{events:[],next_cursor:null}:String(url).includes('/members')?{members:[],next_cursor:null}:String(url).includes('/drafts')?{drafts:[]}:String(url).includes('/archives?')?{archives:[organization],next_cursor:null}:{draft:null});
+ try{
+  await act(async()=>{f.root.render(<ArchivesPage actor={actor} type="org"/>);});
+  assert.match(f.w.document.querySelector('.detail-top')?.textContent??'',/^组织档案/,'pending organization data must not default to a person label');
+  assert.equal(f.w.document.querySelector('.detail-panel')?.getAttribute('aria-label'),'组织档案详情');
+  assert.equal(f.w.location.pathname,'/organizations');
+  await act(async()=>{release(Response.json({archive:organization}));});
+  assert.match(f.w.document.querySelector('.detail-top')?.textContent??'',/^组织档案/);
+  assert.equal(f.w.document.querySelector('.entity-heading h1')?.textContent,organization.name);
+ }finally{release(Response.json({archive:organization}));await f.close();}
+});
