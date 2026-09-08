@@ -24,11 +24,11 @@ export function EntityForm({
       onSubmit={(e) => {
         e.preventDefault();
         if (!name.trim()) {
-          notify("请填写名称");
+          notify("请填写名称", "error");
           return;
         }
         if (work && !owners.length) {
-          notify("工作状态必须选择负责成员");
+          notify("工作状态必须选择负责成员", "error");
           return;
         }
         const data = new FormData(e.target);
@@ -43,7 +43,7 @@ export function EntityForm({
           (c) => c.type === "QQ" && !/^\d{5,12}$/.test(c.value),
         );
         if (invalid) {
-          notify("QQ 号需为 5–12 位数字");
+          notify("QQ 号需为 5–12 位数字", "error");
           return;
         }
         onSave({ name: name.trim(), avatar, contacts, state, owners });
@@ -140,7 +140,7 @@ export function StateForm({
       onSubmit={(e) => {
         e.preventDefault();
         if (work && !owners.length) {
-          notify("这个工作状态必须指定负责成员");
+          notify("这个工作状态必须指定负责成员", "error");
           return;
         }
         onSave(state, owners);
@@ -216,7 +216,7 @@ export function RecordForm({ record, onSave, onCancel, notify, onOpen }) {
       onSubmit={(e) => {
         e.preventDefault();
         if (!body.trim() && !images.length) {
-          notify("请至少保留文字或图片");
+          notify("请至少保留文字或图片", "error");
           return;
         }
         onSave(body.trim(), images);

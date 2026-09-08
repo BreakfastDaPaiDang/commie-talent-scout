@@ -1,4 +1,4 @@
-/* Fourth edition: readable work surfaces and a star/observer identity. */
+/* Readable work surfaces and a star/observer identity. */
 :root {
   --red: #ef3328;
   --muted: #626262;
@@ -695,4 +695,136 @@ body {
   .login-form .prototype-note {
     font-size: 14px;
   }
+}
+
+/* Desktop refinement: retain type sizes, shorten reading lines and clarify controls. */
+@media (min-width: 851px) {
+  .detail-inner,
+  .expanded-detail .detail-inner {
+    max-width: 1040px;
+  }
+  .detail-inner {
+    padding-top: 20px;
+  }
+  .entity-header {
+    margin-bottom: 19px;
+  }
+  .record-body {
+    max-width: 40em;
+    text-wrap: pretty;
+  }
+  .entity-row {
+    padding-top: 21px;
+    padding-bottom: 21px;
+  }
+  .row-meta {
+    margin-top: 6px;
+  }
+  .row-binding {
+    margin-top: 5px;
+  }
+  .record-excerpt {
+    margin-top: 11px;
+    margin-bottom: 13px;
+  }
+  .detail-top {
+    min-height: 48px;
+  }
+  .detail-top .icon-button,
+  .entity-identity > .icon-button,
+  .record-byline .icon-button {
+    width: 38px;
+    height: 38px;
+    flex-shrink: 0;
+  }
+  .entity-identity > .icon-button {
+    align-self: center;
+    margin-top: 0;
+  }
+  .assignment-row > .text-button,
+  .contacts-bar .contact-pill,
+  .contacts-bar > .button {
+    min-height: 40px;
+  }
+  .composer:not(.open) textarea,
+  .composer.open textarea {
+    font-size: 20px;
+  }
+  .modal-actions {
+    position: sticky;
+    bottom: -28px;
+    z-index: 3;
+    background: white;
+    margin: 4px -28px -28px;
+    padding: 18px 28px 24px;
+  }
+}
+.record-byline .icon-button {
+  opacity: 1;
+  color: #747474;
+}
+.record-byline .icon-button:hover,
+.entity-identity > .icon-button:hover {
+  color: var(--ink);
+  background: #ededed;
+}
+button,
+a,
+input,
+select,
+textarea {
+  scroll-margin-block: 110px;
+}
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--red);
+  outline-offset: 3px;
+}
+.search-field:focus-within {
+  border-color: var(--red);
+  box-shadow: 0 0 0 1px var(--red);
+}
+.search-field input:focus-visible {
+  outline: none;
+}
+.composer.open:focus-within {
+  border-color: var(--red);
+}
+.modal-chrome {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: white;
+}
+.modal-chrome .modal-head {
+  position: static;
+}
+.dialog-feedback {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 14px 28px;
+  background: #f3f3f3;
+  color: var(--ink);
+  border-bottom: 1px solid var(--line);
+  font-size: 17px;
+  line-height: 1.6;
+}
+.dialog-feedback.error {
+  background: #fff2ef;
+  color: #a3241c;
+}
+.dialog-feedback > svg,
+.toast > svg {
+  flex-shrink: 0;
+  margin-top: 4px;
+}
+.toast {
+  font-size: 17px;
+}
+.toast.error {
+  border-left-color: var(--red);
 }

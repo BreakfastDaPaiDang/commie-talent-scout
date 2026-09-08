@@ -88,13 +88,20 @@ export function useWorkspace() {
   const actor = members.find((m) => m.id === actorId),
     entity = entities.find((e) => e.id === selected);
   const memberName = (id) => members.find((m) => m.id === id)?.name ?? id;
-  const notify = (message) => setToast(message),
-    closeDialog = () => setDialog(null);
+  const notify = (message, tone = "success") =>
+      setToast({ message, tone, id: Date.now() }),
+    closeDialog = () => {
+      setDialog(null);
+      setToast((current) => (current?.tone === "error" ? "" : current));
+    };
   const locked = entity && isClosed(entity.state),
     detailVisible = !!entity && ["person", "org", "unread"].includes(page);
   useEffect(() => {
     if (!toast) return;
-    const timer = setTimeout(() => setToast(""), 3600);
+    const timer = setTimeout(
+      () => setToast(""),
+      toast.tone === "error" ? 6500 : 3600,
+    );
     return () => clearTimeout(timer);
   }, [toast]);
   const isUnread = (e, item) =>
@@ -221,7 +228,7 @@ export function useWorkspace() {
   }
   function saveState(next, owners) {
     if (isWorkState(entity.type, next) && !owners.length) {
-      notify("工作状态必须指定负责成员");
+      notify("工作状态必须指定负责成员", "error");
       return;
     }
     const sameState = next === entity.state;

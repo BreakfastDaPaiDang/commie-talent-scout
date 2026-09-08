@@ -337,7 +337,7 @@ function BindingForm({ entity, members, onSave, onCancel, notify }) {
       onSubmit={(e) => {
         e.preventDefault();
         if (work && !owners.length) {
-          notify("工作状态必须选择负责成员");
+          notify("工作状态必须选择负责成员", "error");
           return;
         }
         onSave(owners);
@@ -381,17 +381,17 @@ function MemberForm({ member, members, onSave, onCancel, notify }) {
           frozen = f.get("frozen") === "yes",
           qq = f.get("qq").trim();
         if (!name || !username) {
-          notify("名称和账号不能为空");
+          notify("名称和账号不能为空", "error");
           return;
         }
         if (qq && !/^\d{5,12}$/.test(qq)) {
-          notify("QQ 号需为 5–12 位数字");
+          notify("QQ 号需为 5–12 位数字", "error");
           return;
         }
         if (
           members.some((m) => m.id !== member?.id && m.username === username)
         ) {
-          notify("账号已存在");
+          notify("账号已存在", "error");
           return;
         }
         if (
@@ -401,7 +401,7 @@ function MemberForm({ member, members, onSave, onCancel, notify }) {
             (m) => m.id !== member.id && m.role === "admin" && !m.frozen,
           )
         ) {
-          notify("须保留至少一名未冻结的管理员");
+          notify("须保留至少一名未冻结的管理员", "error");
           return;
         }
         onSave({
@@ -484,7 +484,7 @@ function HunterProfile({ actor, w }) {
         event.preventDefault();
         const nextQQ = qq.trim();
         if (nextQQ && !/^\d{5,12}$/.test(nextQQ)) {
-          w.notify("QQ 号需为 5–12 位数字");
+          w.notify("QQ 号需为 5–12 位数字", "error");
           return;
         }
         w.setMembers((previous) =>

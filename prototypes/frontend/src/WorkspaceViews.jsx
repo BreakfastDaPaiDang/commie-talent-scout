@@ -355,7 +355,8 @@ export function Detail({ w }) {
   function addImages(files) {
     const added = imageFiles(files, w.notify);
     w.setImages((old) => {
-      if (old.length + added.length > 10) w.notify("每条记录最多 10 张图片");
+      if (old.length + added.length > 10)
+        w.notify("每条记录最多 10 张图片", "error");
       return [...old, ...added].slice(0, 10);
     });
     w.setComposeOpen(true);
@@ -478,7 +479,7 @@ export function Detail({ w }) {
                       await navigator.clipboard.writeText(contact.value);
                       w.notify(`${contact.type}已复制`);
                     } catch {
-                      w.notify("复制未成功，可选择文字复制");
+                      w.notify("复制未成功，可选择文字复制", "error");
                     }
                   }}
                 >
@@ -524,7 +525,28 @@ export function Detail({ w }) {
             ].map(([key, label]) => (
               <button
                 role="tab"
+                id={`${entity.id}-tab-${key}`}
+                aria-controls={`${entity.id}-timeline`}
                 aria-selected={w.recordView === key}
+                tabIndex={w.recordView === key ? 0 : -1}
+                onKeyDown={(e) => {
+                  const tabs = [
+                    ...e.currentTarget.parentElement.querySelectorAll(
+                      '[role="tab"]',
+                    ),
+                  ];
+                  const index = tabs.indexOf(e.currentTarget);
+                  const next = {
+                    ArrowRight: (index + 1) % tabs.length,
+                    ArrowLeft: (index + tabs.length - 1) % tabs.length,
+                    Home: 0,
+                    End: tabs.length - 1,
+                  }[e.key];
+                  if (next === undefined) return;
+                  e.preventDefault();
+                  tabs[next].click();
+                  tabs[next].focus();
+                }}
                 className={w.recordView === key ? "active" : ""}
                 key={key}
                 onClick={() => w.setRecordView(key)}
@@ -605,7 +627,13 @@ export function Detail({ w }) {
                 : "这里只展示你作为原作者的已删除记录。"}
             </p>
           )}
-          <section className="timeline">
+          <section
+            className="timeline"
+            role="tabpanel"
+            id={`${entity.id}-timeline`}
+            aria-labelledby={`${entity.id}-tab-${w.recordView}`}
+            tabIndex={0}
+          >
             {!w.visibleRecords.length && (
               <Empty
                 type={entity.type}

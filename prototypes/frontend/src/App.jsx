@@ -1,7 +1,13 @@
 import React from "react";
 import { Icon, Mark } from "./icons.jsx";
 import { Avatar, Placeholder } from "./Avatar.jsx";
-import { Button, IconButton, Login } from "./components.jsx";
+import {
+  Button,
+  IconButton,
+  Login,
+  Feedback,
+  FeedbackContext,
+} from "./components.jsx";
 import {
   ArchiveList,
   ArchiveSearch,
@@ -54,6 +60,7 @@ export default function App() {
           ].map(([key, label]) => (
             <button
               className={w.page === key ? "active" : ""}
+              aria-current={w.page === key ? "page" : undefined}
               key={key}
               onClick={() => w.navigate(key)}
             >
@@ -81,6 +88,7 @@ export default function App() {
           )}
           <button
             className="current-member"
+            title="猎头账号"
             onClick={() => w.setDialog({ type: "profile" })}
           >
             <Avatar
@@ -191,13 +199,10 @@ export default function App() {
           )
         )}
       </div>
-      {w.toast && (
-        <div className="toast" role="status">
-          <Icon name="check" />
-          {w.toast}
-        </div>
-      )}
-      <Dialogs w={w} />
+      {!w.dialog && <Feedback toast={w.toast} />}
+      <FeedbackContext.Provider value={w.toast}>
+        <Dialogs w={w} />
+      </FeedbackContext.Provider>
     </div>
   );
 }

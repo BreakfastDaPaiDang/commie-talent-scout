@@ -1,4 +1,10 @@
-import React, { useRef, useEffect } from "react";
+import React, {
+  createContext,
+  useContext,
+  useId,
+  useRef,
+  useEffect,
+} from "react";
 import { Icon, Mark } from "./icons.jsx";
 import { Placeholder } from "./Avatar.jsx";
 
@@ -23,27 +29,71 @@ export function IconButton({ name, label, ...props }) {
     </button>
   );
 }
+export const FeedbackContext = createContext(null);
+export function Feedback({ toast, inline = false }) {
+  if (!toast) return null;
+  return (
+    <div
+      className={`${inline ? "dialog-feedback" : "toast"} ${toast.tone}`}
+      role={toast.tone === "error" ? "alert" : "status"}
+      key={toast.id}
+    >
+      <Icon name={toast.tone === "error" ? "info" : "check"} />
+      <span>{toast.message}</span>
+    </div>
+  );
+}
 export function Modal({ title, children, onClose, wide = false }) {
   const ref = useRef(null);
+  const titleId = useId();
+  const toast = useContext(FeedbackContext);
+  const backdropPress = useRef(false);
+  const outside = (e) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    return (
+      e.target === e.currentTarget &&
+      (e.clientX < rect.left ||
+        e.clientX > rect.right ||
+        e.clientY < rect.top ||
+        e.clientY > rect.bottom)
+    );
+  };
   useEffect(() => {
+    const trigger = document.activeElement;
     ref.current?.showModal();
+    ref.current
+      ?.querySelector(
+        'input:not([type="file"]):not([type="hidden"]), textarea, select',
+      )
+      ?.focus({ preventScroll: true });
+    return () => {
+      if (trigger instanceof HTMLElement && trigger.isConnected)
+        trigger.focus({ preventScroll: true });
+    };
   }, []);
   return (
     <dialog
       ref={ref}
+      aria-labelledby={titleId}
       className={`modal ${wide ? "wide" : ""}`}
       onCancel={(e) => {
         e.preventDefault();
         onClose();
       }}
+      onPointerDown={(e) => {
+        backdropPress.current = outside(e);
+      }}
       onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
+        if (backdropPress.current && outside(e)) onClose();
       }}
     >
-      <header className="modal-head">
-        <h2>{title}</h2>
-        <IconButton name="close" label="关闭对话框" onClick={onClose} />
-      </header>
+      <div className="modal-chrome">
+        <header className="modal-head">
+          <h2 id={titleId}>{title}</h2>
+          <IconButton name="close" label="关闭对话框" onClick={onClose} />
+        </header>
+        <Feedback toast={toast} inline />
+      </div>
       {children}
     </dialog>
   );
@@ -93,7 +143,7 @@ export function imageFiles(files, notify) {
       f.size <= 10 * 1024 * 1024,
   );
   if (accepted.length !== files.length)
-    notify("图片需为 PNG、JPEG 或 WebP，单张不超过 10 MB");
+    notify("图片需为 PNG、JPEG 或 WebP，单张不超过 10 MB", "error");
   return accepted.map((f) => ({ url: URL.createObjectURL(f), name: f.name }));
 }
 export function Images({ images, onOpen, onRemove }) {

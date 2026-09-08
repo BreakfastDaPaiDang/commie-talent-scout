@@ -30,6 +30,12 @@ export function Icon({ name, size = 18, ...props }) {
       </>
     ),
     plus: <path d="M12 5v14M5 12h14" />,
+    info: (
+      <>
+        <circle cx="12" cy="12" r="9" />
+        <path d="M12 7v6M12 16v1" />
+      </>
+    ),
     close: <path d="m6 6 12 12M18 6 6 18" />,
     arrow: <path d="m9 5 7 7-7 7" />,
     back: <path d="m15 5-7 7 7 7" />,

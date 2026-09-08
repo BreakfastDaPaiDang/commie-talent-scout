@@ -28,7 +28,7 @@ export function AvatarEditor({
     } catch {
       URL.revokeObjectURL(image.url);
       if (sequence === request.current)
-        notify("这张图片无法读取，请换一张 PNG、JPEG 或 WebP 图片");
+        notify("这张图片无法读取，请换一张 PNG、JPEG 或 WebP 图片", "error");
     } finally {
       if (sequence === request.current) setLoading(false);
     }
