@@ -10,7 +10,7 @@
 - [前端原型](./prototypes/frontend/)：人物、组织、记录、登录、账号与 Agent 接入页面。
 - [第四版设计与资产](./docs/design/README.md)：品牌与登录、阅读字号、头像优先级、Assembly 排版和连续工作体验。
 - [技术验证](./docs/technical-validation.md) / [技术方案](./docs/technical-design.md)：云端、真实 Codex 和大陆网络证据及实施边界。
-- [任务拆解草稿](./docs/implementation-issues.md)：14 项可验收业务路径、依赖和发布正文；确认拆分后建立 GitHub Issues。
+- [GitHub 实施任务](./docs/implementation-issues.md)：已发布 #1–#14，包含验收路径、依赖及 v0.1.0 里程碑映射。
 - [PRD](./docs/PRD.md)：首版范围、业务规则、默认值与验收要求。
 - [标签系统](./docs/tag-system.md) / [初始标签库](./docs/tag-catalog.md)：人物与组织的特征整理、绑定依据、修改影响和 MCP 标签维护；尚未实现。
 - [领域词汇表](./CONTEXT.md)：统一领域术语。

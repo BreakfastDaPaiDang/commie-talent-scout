@@ -17,6 +17,14 @@
 
 正式运行按 Workers Paid 所需能力设计；账号现有套餐及实际增量费用在部署前确认。React/Vite 原型已实际构建并在浏览器运行，参见 [原型](../prototypes/frontend/)。Workers 对 [React + Vite](https://developers.cloudflare.com/workers/framework-guides/web-apps/react/)有官方集成路径；具体集成在首条实施切片中固定版本。
 
+### 已确认的开工条件（2026-09-08）
+
+- 正式版本 v0.1.0，正式域名采用用户确认的 `scout.dapaidang.org`，不继续检查域名候选。测试环境默认使用独立的 `scout-staging.dapaidang.org` 或隔离 workers.dev 入口，不混用数据。
+- 本机 Wrangler OAuth 已确认具备 Workers 和 D1 写权限，数据库创建、迁移、管理员初始化及部署可直接通过 CLI/API 完成，不依赖浏览器操作数据库。
+- 用户已授权由 Agent 初始化管理员；默认账号名 `admin`，随机临时密码、只存哈希、首次登录改密，交付凭证通过私有方式，不进源码、Issue 或请求日志。
+- GitHub 仓库维护权限可用，#1–#14 已发布并归入首版里程碑；仓库尚无 Cloudflare CI 部署凭证。本机登录与 GitHub Actions 是独立认证，正式自动部署仍须配置限定用途的凭证，不能把本机 OAuth 复制为长期 CI 秘密。
+- 当前 OAuth 无法读取订阅账单，不能据此判定账号为 Free 或 Paid；新开付费订阅仍待费用授权。该条件不阻止本地实现与无需新增付费的工作，遇到实际付费步骤再按授权范围处理。
+
 ## 业务边界
 
 ```mermaid

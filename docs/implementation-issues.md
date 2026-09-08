@@ -1,25 +1,25 @@
-# GitHub 任务拆解草稿
+# v0.1.0 GitHub 实施任务
 
-正式首版 **v0.1.0**。依据 [PRD（文档修订 1.6）](./PRD.md)、[技术方案](./technical-design.md)、[验证报告](./technical-validation.md)、[原型设计](./design/README.md)、[材料压缩体验](./mcp-agent-experience.md)、[标签系统](./tag-system.md)及[请求留存](./mcp-request-data.md)。编号 S1–S14 是稳定草稿引用，不是已发布的 Issue 编号。2026-09-08 用户已确认拆分；按依赖发布并归入 v0.1.0 里程碑，发布结果在本页补充映射。
+正式首版 **v0.1.0**。依据 [PRD（文档修订 1.6）](./PRD.md)、[技术方案](./technical-design.md)、[验证报告](./technical-validation.md)、[原型设计](./design/README.md)、[材料压缩体验](./mcp-agent-experience.md)、[标签系统](./tag-system.md)及[请求留存](./mcp-request-data.md)。S1–S14 保留为设计切片编号；14 项均已发布为 GitHub Issues，归入 [v0.1.0 里程碑](https://github.com/BreakfastDaPaiDang/commie-talent-scout/milestone/1)。状态以 GitHub 为准。
 
 每项交付可演示的完整业务路径，包含所需持久化、共享业务规则、网页/MCP 入口与行为验证。风格和窄屏适配随每项交付，不留到最后统一补皮肤；原型提供设计参考，正式代码使用真实业务服务。
 
-| 切片 | 标题 | 依赖 | PRD 用户故事 |
+| 切片 / Issue | 标题 | 依赖 | PRD 用户故事 |
 | --- | --- | --- | --- |
-| S1 | 管理员通过真实密码登录隔离环境 | 无 | 1、26、28；27 的测试部署基础 |
-| S2 | 成员选择临时/持久 MCP 接入，管理员可查看连接调用 | S1 | 24、25、37；38、39 的基础 |
-| S3 | 人物与组织档案的创建、查询和资料维护 | S2 | 2、3、4、7、25、28 |
-| S4 | 状态、负责人、关闭与重新开启 | S3、S9 | 8、9、10、16、17、18、19、25 |
-| S5 | 文字观察记录与可追溯的编辑 | S4 | 5、6、11、12、13、14、15、20、25 |
-| S6 | 网页与 Codex 提交多图记录并查看旧版本 | S5 | 11、13、25 |
-| S7 | 观察记录删除、恢复及历史保留 | S6 | 29、30、14、15、17 |
-| S8 | 搜索筛选与成员各自的未读更新 | S5、S7 | 2、5、6、20、21、25 |
-| S9 | 管理员创建账号、重置密码、冻结和授权 | S2 | 1、22、23、25 |
-| S10 | v0.1.0 正式上线、自动部署与恢复验收 | S8、S9、S13、S14 | 26、27、28、37、39 及上线要求 |
-| S11 | Agent 将聊天材料压缩为观察与标签，成员可查看和维护 | S5 | 31、32、33、35、36；38 的任务上下文 |
-| S12 | 成员筛选标签、查看绑定影响并维护公共定义 | S11、S7、S8 | 31、33、34、35 |
-| S13 | 管理员按任务审阅 Agent 请求、产物与实际使用情况 | S11、S7、S9 | 38、39 |
-| S14 | 管理员合并重复标签并停用或恢复词条 | S12、S9 | 32、33、34、35 |
+| S1 / [#1](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/1) | 管理员通过真实密码登录隔离环境 | 无 | 1、26、28；27 的测试部署基础 |
+| S2 / [#2](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/2) | 成员选择临时/持久 MCP 接入，管理员可查看连接调用 | S1 | 24、25、37；38、39 的基础 |
+| S3 / [#4](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/4) | 人物与组织档案的创建、查询和资料维护 | S2 | 2、3、4、7、25、28 |
+| S4 / [#5](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/5) | 状态、负责人、关闭与重新开启 | S3、S9 | 8、9、10、16、17、18、19、25 |
+| S5 / [#6](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/6) | 文字观察记录与可追溯的编辑 | S4 | 5、6、11、12、13、14、15、20、25 |
+| S6 / [#8](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/8) | 网页与 Codex 提交多图记录并查看旧版本 | S5 | 11、13、25 |
+| S7 / [#9](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/9) | 观察记录删除、恢复及历史保留 | S6 | 29、30、14、15、17 |
+| S8 / [#10](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/10) | 搜索筛选与成员各自的未读更新 | S5、S7 | 2、5、6、20、21、25 |
+| S9 / [#3](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/3) | 管理员创建账号、重置密码、冻结和授权 | S2 | 1、22、23、25 |
+| S10 / [#14](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/14) | v0.1.0 正式上线、自动部署与恢复验收 | S8、S9、S13、S14 | 26、27、28、37、39 及上线要求 |
+| S11 / [#7](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/7) | Agent 将聊天材料压缩为观察与标签，成员可查看和维护 | S5 | 31、32、33、35、36；38 的任务上下文 |
+| S12 / [#11](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/11) | 成员筛选标签、查看绑定影响并维护公共定义 | S11、S7、S8 | 31、33、34、35 |
+| S13 / [#12](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/12) | 管理员按任务审阅 Agent 请求、产物与实际使用情况 | S11、S7、S9 | 38、39 |
+| S14 / [#13](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/13) | 管理员合并重复标签并停用或恢复词条 | S12、S9 | 32、33、34、35 |
 
 建议实施顺序：**S1 → S2 → S9 → S3 → S4 → S5 → S11 → S6 → S7 → S8 → S12 → S13 → S14 → S10**。保留旧编号，避免已引用的任务失去对应关系。S1 私有初始化管理员，S9 提供真实成员管理；后续各项自行验证冻结、降权和删除对本功能的影响。
 
@@ -303,9 +303,9 @@ S12、S9。
 
 ## 发布与执行约定
 
-确认粒度及依赖后，按建议顺序创建 Issues，使用各节的 What to build、Acceptance criteria、Blocked by 作为正文，草稿依赖替换为真实 Issue 引用，附 PRD 文档修订 1.6 与用户故事。全部归入 v0.1.0 里程碑；需求完整的任务标记 ready-for-agent，实施仍须等待阻塞依赖完成。遇到实质未决条件时使用 needs-info 或 ready-for-human。
+用户已确认粒度及依赖，按建议顺序创建了 #1–#14；正文使用可验收路径和真实阻塞 Issue，引用已提交的 PRD 文档修订 1.6 基线及用户故事。全部关联 v0.1.0，标记 ready-for-agent；实施仍须等待阻塞依赖完成，遇到实质未决条件时使用 needs-info 或 ready-for-human。
 
-发布后本页保留顺序及 Issue 映射，状态以 GitHub 为准，不维护第二套完成状态。公开 Issue 不保存凭证、真实材料或请求数据。从 S1 开始逐项实施，各项运行必要验证；本轮只整理文档，不启动正式应用实现或重跑此前暂停的探针。
+本页保留发布时的基线、顺序及 Issue 映射，状态以 GitHub 为准，不维护第二套完成状态；实施中需求或验收变化应先同步对应 Issue，再更新产品基线。公开 Issue 不保存凭证、真实材料或请求数据。从 S1 开始逐项实施，各项运行必要验证；本轮只整理文档，不启动正式应用实现或重跑此前暂停的探针。
 
 ## 共同交付要求
 
