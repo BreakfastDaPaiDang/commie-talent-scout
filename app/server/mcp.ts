@@ -108,7 +108,9 @@ export async function handleMcp(request:Request,env:Env,ctx:ExecutionContext){
         const text=await response.clone().text();
         const dataLines=text.split('\n').filter(x=>x.startsWith('data:'));
         const payload=dataLines.length?dataLines.map(x=>x.slice(5).trim()).join(''):text;
-        try{const body=JSON.parse(payload);if(body.error||body.result?.isError){outcome='rejected';errorCode='INVALID_TOOL_REQUEST';}}catch{/* Unparseable response remains unknown. */}
+        // SSE may finish the tool callback while clone().text() is awaiting its body.
+        // Recheck the callback's outcome before applying a protocol-only fallback.
+        try{const body=JSON.parse(payload);if(outcome==='unknown'&&errorCode===null&&(body.error||body.result?.isError)){outcome='rejected';errorCode='INVALID_TOOL_REQUEST';}}catch{/* Unparseable response remains unknown. */}
       }
     }
   }catch(error){

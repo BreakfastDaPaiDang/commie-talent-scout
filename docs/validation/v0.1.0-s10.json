@@ -1,0 +1,104 @@
+{
+  "date": "2026-09-08T22:03:03.565Z",
+  "issue": 14,
+  "application_version": "0.1.0",
+  "milestone_released": false,
+  "production_origin": "https://scout.dapaidang.org",
+  "checks": {
+    "local_service_tests": 37,
+    "dom_tests": 5,
+    "design_viewports": 4,
+    "simplicity_checks": 25,
+    "card_checks": 18,
+    "attention_checks": 11,
+    "github_checks": {
+      "run": "https://github.com/BreakfastDaPaiDang/commie-talent-scout/actions/runs/34281722887",
+      "status": "success"
+    },
+    "github_deploy": {
+      "status": "blocked",
+      "reason": "CLOUDFLARE_API_TOKEN secret is absent"
+    }
+  },
+  "recovery": {
+    "source_environment": "staging",
+    "isolated": true,
+    "public_worker_created": false,
+    "tables_equal": 33,
+    "table_names": [
+      "archive_bindings",
+      "archive_events",
+      "archive_tag_snapshots",
+      "archive_tags",
+      "archives",
+      "attachments",
+      "auth_events",
+      "auth_rates",
+      "avatar_history",
+      "commands",
+      "credentials",
+      "d1_migrations",
+      "draft_attachments",
+      "event_read_marks",
+      "mcp_calls",
+      "mcp_daily_tasks",
+      "mcp_daily_usage",
+      "mcp_diagnostics",
+      "mcp_tasks",
+      "member_events",
+      "members",
+      "mutation_guards",
+      "observation_drafts",
+      "observation_reads",
+      "observation_versions",
+      "observations",
+      "qq_avatar_cache",
+      "reading_deliveries",
+      "tag_categories",
+      "tag_definition_history",
+      "tag_maintenance_previews",
+      "tags",
+      "version_attachments"
+    ],
+    "image_objects_verified": 31,
+    "retention_rechecked": true,
+    "expiry_checks": [
+      "restored clone fixture aged to 31 days is hidden by the actual task/call read policy before cron",
+      "injected failure in actual Cloudflare D1 batch rolls back earlier cleanup statements",
+      "repeated 30 day cleanup clears source copies without changing business table counts",
+      "181 day metadata folds into anonymous aggregate once and disappears from task reads"
+    ]
+  },
+  "rollback": {
+    "environment": "staging",
+    "code_restored": true,
+    "data_restore_performed": false,
+    "business_counts_unchanged": true,
+    "previous_version": "78c64878-0875-4528-95f6-c3e7b85f3d8c",
+    "attempted_version": "0e07078c-a0bc-46ec-b7ca-28b6326efc8e"
+  },
+  "production_web_sdk": {
+    "passed": true,
+    "checks": [
+      "Production accounts require password change; ordinary members cannot access administration or task review",
+      "Actual production browser login, archive list, draft, PNG upload, publication and mobile original image viewer work with browser proxy disabled",
+      "Production mobile edit creates a new immutable version with the original image retained",
+      "Production author/admin deletion boundaries, hidden historical image access and author restoration preserve record ownership",
+      "Production tag evidence resolves its exact observation version; explicit SDK task and submitted artifact appear in admin-only review",
+      "Resumed actual production mobile browser shows the closed archive read-only; administrator MCP deletion returns ARCHIVE_CLOSED",
+      "Freezing the production test member invalidates its live web session and MCP bearer"
+    ],
+    "browser_proxy_disabled": true,
+    "network_operator_verified": false,
+    "actual_codex": false,
+    "fictional_archives_closed": 2,
+    "test_members_frozen": 2
+  },
+  "remaining": [
+    "CI scoped credential and a successful automatic deployment run",
+    "Mainland carrier and absence of VPN/TUN confirmation",
+    "Real Codex destructive-tool and local-image approvals, then complete the remaining client paths",
+    "Monthly billing notification validation",
+    "Milestone acceptance and v0.1.0 GitHub Release"
+  ]
+}
