@@ -1,0 +1,66 @@
+{
+  "deployment": "f010e451-639b-4966-8c36-3c8cab27a037",
+  "local": {
+    "date": "2026-09-08T14:43:19.505Z",
+    "base": "http://127.0.0.1:8790",
+    "checks": [
+      "admin editing/deletion preserves original author, creation time, content versions and removed historical images; original author retains restoration; repeated and no-change requests emit no duplicate",
+      "HTTP/MCP detail, versions, old image URL, deleted lists, summaries, tag evidence and event history enforce current deleted visibility; reader receives metadata-only deletion",
+      "author restores after admin deletion; state and editing races preserve one winner; same request races replay one commit; different restore requests conflict without duplicated history",
+      "closed archive blocks delete and restore for author/admin while retaining authorized history; frozen tag snapshots stay hidden until explicit reopen and restore"
+    ],
+    "recoveries": []
+  },
+  "cloud": {
+    "date": "2026-09-08T14:47:35.587Z",
+    "base": "https://scout-staging.dapaidang.org",
+    "checks": [
+      "admin editing/deletion preserves original author, creation time, content versions and removed historical images; original author retains restoration; repeated and no-change requests emit no duplicate",
+      "HTTP/MCP detail, versions, old image URL, deleted lists, summaries, tag evidence and event history enforce current deleted visibility; reader receives metadata-only deletion",
+      "author restores after admin deletion; state and editing races preserve one winner; same request races replay one commit; different restore requests conflict without duplicated history",
+      "closed archive blocks delete and restore for author/admin while retaining authorized history; frozen tag snapshots stay hidden until explicit reopen and restore"
+    ],
+    "recoveries": []
+  },
+  "checks": {
+    "types": "pass",
+    "unit_service_tests": 11,
+    "build": "pass",
+    "real_browser": "blocked: Debugger unattached",
+    "real_codex": "blocked: deletion MCP requires approval with policy never",
+    "search_unread": "pending S8"
+  },
+  "codex_rounds": [
+    {
+      "round": "delete",
+      "elapsed_ms": 47368,
+      "tools": [
+        {
+          "tool": "get_archive",
+          "outcome": "success",
+          "error_code": null,
+          "task_id": null
+        },
+        {
+          "tool": "get_usage_guide",
+          "outcome": "success",
+          "error_code": null,
+          "task_id": null
+        },
+        {
+          "tool": "get_observation",
+          "outcome": "success",
+          "error_code": null,
+          "task_id": null
+        },
+        {
+          "tool": "whoami",
+          "outcome": "success",
+          "error_code": null,
+          "task_id": null
+        }
+      ],
+      "final": "已核对人物和观察 ID，记录符合可恢复删除条件，但删除未执行。\n\n系统拦截了删除调用：该操作需要审批，而当前会话审批策略为 `never`，无法发起审批。记录保持未删除状态。"
+    }
+  ]
+}

@@ -89,6 +89,7 @@ app.post('/api/observations/create',async c=>c.json(await new Observations(c.env
 app.get('/api/drafts',async c=>c.json(await new Drafts(c.env,await authenticate(c.req.raw,c.env)).list()));
 app.get('/api/drafts/:id',async c=>c.json(await new Drafts(c.env,await authenticate(c.req.raw,c.env)).get(c.req.param('id'))));
 app.post('/api/drafts/save',async c=>c.json(await new Drafts(c.env,await authenticate(c.req.raw,c.env)).save(await c.req.json())));
+for(const [action,deleted] of [['delete',true],['restore',false]] as const)app.post('/api/observations/'+action,async c=>c.json(await new Observations(c.env,await authenticate(c.req.raw,c.env),'web').setDeleted(await c.req.json(),deleted)));
 app.post('/api/observations/update',async c=>c.json(await new Observations(c.env,await authenticate(c.req.raw,c.env),'web').update(await c.req.json())));
 app.get('/api/observations',async c=>c.json(await new Observations(c.env,await authenticate(c.req.raw,c.env),'web').list(c.req.query())));
 app.get('/api/observations/:id/versions',async c=>c.json(await new Observations(c.env,await authenticate(c.req.raw,c.env),'web').versions({...c.req.query(),id:c.req.param('id')})));
