@@ -27,6 +27,7 @@ async function limit(env: Env, identity: string, seconds: number, max: number) {
     ON CONFLICT(key) DO UPDATE SET count=count+1 RETURNING count`).bind(key,(window+1)*seconds).first<{count:number}>();
   if (!row || row.count>max) throw new Failure(429,'RATE_LIMITED','尝试过于频繁，请稍后重试');
 }
+export async function limitPasswordWork(env:Env,memberId:string){await limit(env,'managed-password:'+memberId,60,20);}
 export async function login(request: Request, env: Env, input: unknown) {
   const a=loginInput.parse(input);
   await limit(env,'ip:'+(request.headers.get('CF-Connecting-IP')??'local'),60,20);

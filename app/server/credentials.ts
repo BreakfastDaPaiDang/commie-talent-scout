@@ -3,11 +3,11 @@ import {digest,Failure,now,uid,type Actor,type Env} from './types.ts';
 
 export const credentialInput=z.object({name:z.string().trim().min(1).max(60),days:z.number().int().min(1).max(365).default(90)}).strict();
 export function assertAdmin(actor:Actor){if(actor.role!=='admin')throw new Failure(403,'ADMIN_REQUIRED','仅管理员可以执行此操作');}
-export function authGuard(env:Env,actor:Actor,key:string){
+export function authGuard(env:Env,actor:Actor,key:string,requireAdmin=false){
   return env.DB.prepare(`INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(
     SELECT 1 FROM members m JOIN credentials c ON c.member_id=m.id
-    WHERE m.id=? AND m.frozen=0 AND m.auth_epoch=? AND c.id=? AND c.auth_epoch=m.auth_epoch AND c.revoked_at IS NULL AND c.expires_at>?
-  ) THEN 1 ELSE 0 END)`).bind(key,actor.id,actor.auth_epoch,actor.credential_id,now());
+    WHERE m.id=? AND m.frozen=0 AND m.auth_epoch=? AND c.id=? AND c.auth_epoch=m.auth_epoch AND c.revoked_at IS NULL AND c.expires_at>? AND (?=0 OR m.role='admin')
+  ) THEN 1 ELSE 0 END)`).bind(key,actor.id,actor.auth_epoch,actor.credential_id,now(),requireAdmin?1:0);
 }
 export async function listCredentials(env:Env,actor:Actor){
   const result=await env.DB.prepare(`SELECT id,name,created_at,expires_at,revoked_at,version,

@@ -1,0 +1,56 @@
+{
+  "members-local": {
+    "date": "2026-09-08T11:08:52.248Z",
+    "base": "http://127.0.0.1:8790",
+    "checks": [
+      "creation retry does not duplicate a member and a different temporary password conflicts",
+      "administrator creates a private password record; member must change the temporary password before working",
+      "password reset immediately invalidates web and MCP credentials and requires a new first-password change",
+      "freeze blocks login and existing credentials, while unfreeze keeps old credentials invalid",
+      "the last active administrator cannot be demoted"
+    ]
+  },
+  "members-cloud": {
+    "date": "2026-09-08T11:28:12.030Z",
+    "base": "https://scout-staging.dapaidang.org",
+    "checks": [
+      "creation retry does not duplicate a member and a different temporary password conflicts",
+      "administrator creates a private password record; member must change the temporary password before working",
+      "password reset immediately invalidates web and MCP credentials and requires a new first-password change",
+      "freeze blocks login and existing credentials, while unfreeze keeps old credentials invalid",
+      "the last active administrator cannot be demoted"
+    ]
+  },
+  "member-concurrency-local": {
+    "date": "2026-09-08T11:16:43.068Z",
+    "base": "http://127.0.0.1:8790",
+    "checks": [
+      "MCP-created administrators can complete their private first-password setup",
+      "saving unchanged access leaves version and management history unchanged",
+      "concurrent self-demotions leave exactly one active administrator and old loser credentials immediately lose admin authority",
+      "management audit and administrator call review retain attribution and omit passwords and hashes"
+    ]
+  },
+  "member-concurrency-cloud": {
+    "date": "2026-09-08T11:30:12.486Z",
+    "base": "https://scout-staging.dapaidang.org",
+    "checks": [
+      "MCP-created administrators can complete their private first-password setup",
+      "saving unchanged access leaves version and management history unchanged",
+      "concurrent self-demotions leave exactly one active administrator and old loser credentials immediately lose admin authority",
+      "management audit and administrator call review retain attribution and omit passwords and hashes"
+    ]
+  },
+  "member-cleanup-local": {
+    "target": "local",
+    "frozen": 5,
+    "replayChecked": true,
+    "rootRole": "admin"
+  },
+  "member-cleanup-remote": {
+    "target": "remote",
+    "frozen": 1,
+    "replayChecked": true,
+    "rootRole": "admin"
+  }
+}

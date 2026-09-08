@@ -7,6 +7,8 @@ import { Failure, now, publicMember, type Env } from './types.ts';
 import {createCredential,listCredentials,revokeCredential} from './credentials.ts';
 import {cleanupJournal,getCall,listCalls} from './mcp-journal.ts';
 import {handleMcp} from './mcp.ts';
+import {Members} from './members.ts';
+import {getRequestResult} from './commands.ts';
 
 const app=new Hono<{Bindings:Env}>();
 app.use('/api/*',bodyLimit({maxSize:1024*1024,onError:c=>c.json({error:{code:'REQUEST_TOO_LARGE',message:'请求内容过大'}},413)}));
@@ -59,6 +61,15 @@ app.post('/api/connections',async c=>c.json(await createCredential(c.env,await a
 app.post('/api/connections/revoke',async c=>c.json(await revokeCredential(c.env,await authenticate(c.req.raw,c.env),await c.req.json())));
 app.get('/api/admin/calls',async c=>c.json(await listCalls(c.env,await authenticate(c.req.raw,c.env),c.req.query())));
 app.get('/api/admin/calls/:id',async c=>c.json(await getCall(c.env,await authenticate(c.req.raw,c.env),c.req.param('id'))));
+app.get('/api/admin/members',async c=>c.json(await new Members(c.env,await authenticate(c.req.raw,c.env),'web').list(c.req.query())));
+app.post('/api/admin/members/create',async c=>c.json(await new Members(c.env,await authenticate(c.req.raw,c.env),'web').create(await c.req.json())));
+app.post('/api/admin/members/reset-password',async c=>c.json(await new Members(c.env,await authenticate(c.req.raw,c.env),'web').resetPassword(await c.req.json())));
+app.post('/api/admin/members/frozen',async c=>c.json(await new Members(c.env,await authenticate(c.req.raw,c.env),'web').setFrozen(await c.req.json())));
+app.post('/api/admin/members/role',async c=>c.json(await new Members(c.env,await authenticate(c.req.raw,c.env),'web').setRole(await c.req.json())));
+app.post('/api/admin/members/profile',async c=>c.json(await new Members(c.env,await authenticate(c.req.raw,c.env),'web').updateProfile(await c.req.json())));
+app.get('/api/admin/members/:id/history',async c=>c.json(await new Members(c.env,await authenticate(c.req.raw,c.env),'web').history(c.req.param('id'))));
+app.get('/api/admin/members/:id',async c=>c.json(await new Members(c.env,await authenticate(c.req.raw,c.env),'web').detail(c.req.param('id'))));
+app.get('/api/commands/:id',async c=>c.json(await getRequestResult(c.env,await authenticate(c.req.raw,c.env),c.req.param('id'))));
 app.all('/api/*',c=>c.json({error:{code:'NOT_FOUND',message:'接口不存在'}},404));
 app.all('/mcp',c=>handleMcp(c.req.raw,c.env,c.executionCtx as ExecutionContext));
 app.all('/images/*',async c=>{await authenticate(c.req.raw,c.env);return c.notFound();});
