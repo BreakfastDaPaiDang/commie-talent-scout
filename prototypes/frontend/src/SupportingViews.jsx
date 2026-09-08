@@ -4,6 +4,7 @@ import { Icon } from "./icons.jsx";
 import { Button, Modal, Images } from "./components.jsx";
 import { EntityForm, StateForm, RecordForm } from "./forms.jsx";
 import { MemberPicker } from "./MemberPicker.jsx";
+import { AvatarEditor } from "./AvatarEditor.jsx";
 import { isWorkState, uuid, canViewRecord } from "./model.js";
 import { protocolText } from "./protocol.js";
 
@@ -31,7 +32,12 @@ export function Accounts({ w }) {
               <tr key={m.id}>
                 <td>
                   <span className="table-member">
-                    <Avatar name={m.name} qq={m.qq} size="tiny" />
+                    <Avatar
+                      name={m.name}
+                      src={m.avatar}
+                      qq={m.qq}
+                      size="tiny"
+                    />
                     <strong>{m.name}</strong>
                     {m.id === w.actorId && <small>你</small>}
                   </span>
@@ -118,7 +124,7 @@ export function Dialogs({ w }) {
     "record-delete": "删除观察记录",
     history: "记录历史",
     image: "图片预览",
-    profile: "个人账号",
+    profile: "猎头账号",
     "member-new": "新建账号",
     "member-edit": "管理账号",
     protocol: "Agent 使用说明",
@@ -267,16 +273,7 @@ export function Dialogs({ w }) {
         )}
       {dialog.type === "profile" && (
         <div className="modal-form">
-          <div className="profile-summary">
-            <Avatar name={actor.name} qq={actor.qq} size="large" />
-            <div>
-              <strong>{actor.name}</strong>
-              <p>
-                {actor.role === "admin" ? "管理员" : "普通成员"} ·{" "}
-                {actor.username}
-              </p>
-            </div>
-          </div>
+          <HunterProfile key={actor.id} actor={actor} w={w} />
           <div className="prototype-switch">
             <label>
               预览身份<small>仅用于验证原型权限</small>
@@ -370,6 +367,8 @@ function BindingForm({ entity, members, onSave, onCancel, notify }) {
   );
 }
 function MemberForm({ member, members, onSave, onCancel, notify }) {
+  const [avatar, setAvatar] = useState(member?.avatar ?? ""),
+    [qqPreview, setQQPreview] = useState(member?.qq ?? "");
   return (
     <form
       className="modal-form"
@@ -405,9 +404,25 @@ function MemberForm({ member, members, onSave, onCancel, notify }) {
           notify("须保留至少一名未冻结的管理员");
           return;
         }
-        onSave({ id: member?.id ?? uuid(), name, username, role, frozen, qq });
+        onSave({
+          id: member?.id ?? uuid(),
+          name,
+          username,
+          role,
+          frozen,
+          qq,
+          avatar,
+        });
       }}
     >
+      <AvatarEditor
+        label="猎头头像"
+        name={member?.name}
+        qq={qqPreview}
+        value={avatar}
+        onChange={setAvatar}
+        notify={notify}
+      />
       <label>
         显示名称
         <input name="name" defaultValue={member?.name ?? ""} required />
@@ -422,8 +437,13 @@ function MemberForm({ member, members, onSave, onCancel, notify }) {
         />
       </label>
       <label>
-        QQ 号<small>可选，用于头像</small>
-        <input name="qq" defaultValue={member?.qq ?? ""} inputMode="numeric" />
+        QQ 号<small>可选，未上传头像时使用</small>
+        <input
+          name="qq"
+          value={qqPreview}
+          onChange={(e) => setQQPreview(e.target.value)}
+          inputMode="numeric"
+        />
       </label>
       <label>
         角色
@@ -450,6 +470,56 @@ function MemberForm({ member, members, onSave, onCancel, notify }) {
           保存
         </Button>
       </div>
+    </form>
+  );
+}
+
+function HunterProfile({ actor, w }) {
+  const [avatar, setAvatar] = useState(actor.avatar ?? ""),
+    [qq, setQQ] = useState(actor.qq ?? "");
+  return (
+    <form
+      className="hunter-profile"
+      onSubmit={(event) => {
+        event.preventDefault();
+        const nextQQ = qq.trim();
+        if (nextQQ && !/^\d{5,12}$/.test(nextQQ)) {
+          w.notify("QQ 号需为 5–12 位数字");
+          return;
+        }
+        w.setMembers((previous) =>
+          previous.map((member) =>
+            member.id === actor.id ? { ...member, avatar, qq: nextQQ } : member,
+          ),
+        );
+        w.notify("猎头头像已保存");
+      }}
+    >
+      <div className="profile-identity">
+        <strong>{actor.name}</strong>
+        <span>
+          {actor.username} · {actor.role === "admin" ? "管理员" : "普通成员"}
+        </span>
+      </div>
+      <AvatarEditor
+        label="我的头像"
+        name={actor.name}
+        qq={qq.trim()}
+        value={avatar}
+        onChange={setAvatar}
+        notify={w.notify}
+      />
+      <label>
+        QQ 号 <small>选填</small>
+        <input
+          value={qq}
+          onChange={(event) => setQQ(event.target.value)}
+          inputMode="numeric"
+        />
+      </label>
+      <Button type="submit" variant="primary">
+        保存头像设置
+      </Button>
     </form>
   );
 }

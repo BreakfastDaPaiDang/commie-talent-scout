@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import App from "./App.jsx";
 import "./app.css";
 import "./workspace.css";
+import "./brand.css";
 const sizes = {
   mobile: [390, 844],
   phone: [375, 812],

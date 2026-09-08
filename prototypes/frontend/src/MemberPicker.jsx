@@ -147,7 +147,7 @@ export function MemberPicker({
                   disabled={m.frozen && !value.includes(m.id)}
                   onClick={() => select(m.id)}
                 >
-                  <Avatar name={m.name} qq={m.qq} size="tiny" />
+                  <Avatar name={m.name} src={m.avatar} qq={m.qq} size="tiny" />
                   <span>
                     {m.name}
                     <small>{m.frozen ? "已冻结" : m.username}</small>

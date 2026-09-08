@@ -14,7 +14,7 @@ const labels = {
   person: "人物",
   org: "组织",
   unread: "未读更新",
-  accounts: "账号管理",
+  accounts: "猎头管理",
   agent: "Agent 接入",
 };
 export default function App() {
@@ -75,7 +75,7 @@ export default function App() {
           {w.actor.role === "admin" && (
             <IconButton
               name="settings"
-              label="账号管理"
+              label="猎头管理"
               onClick={() => w.navigate("accounts")}
             />
           )}
@@ -83,7 +83,12 @@ export default function App() {
             className="current-member"
             onClick={() => w.setDialog({ type: "profile" })}
           >
-            <Avatar name={w.actor.name} qq={w.actor.qq} size="tiny" />
+            <Avatar
+              name={w.actor.name}
+              src={w.actor.avatar}
+              qq={w.actor.qq}
+              size="tiny"
+            />
             <span>{w.actor.name}</span>
             <Icon name="down" size={15} />
           </button>
@@ -102,7 +107,7 @@ export default function App() {
           </Button>
           {w.actor.role === "admin" && (
             <Button icon="settings" onClick={() => w.navigate("accounts")}>
-              账号管理
+              猎头管理
             </Button>
           )}
           <Button
@@ -111,7 +116,7 @@ export default function App() {
               w.setDialog({ type: "profile" });
             }}
           >
-            当前账号：{w.actor.name}
+            猎头账号：{w.actor.name}
           </Button>
         </div>
       )}

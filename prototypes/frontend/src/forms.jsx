@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Button, ImageInput, Images, imageFiles } from "./components.jsx";
 import { MemberPicker } from "./MemberPicker.jsx";
 import { ContactFields } from "./ContactFields.jsx";
-import { Avatar } from "./Avatar.jsx";
+import { AvatarEditor } from "./AvatarEditor.jsx";
 import { isWorkState, isClosed, personStates, orgStates } from "./model.js";
 
 export function EntityForm({
@@ -49,45 +49,15 @@ export function EntityForm({
         onSave({ name: name.trim(), avatar, contacts, state, owners });
       }}
     >
-      <div className="form-avatar">
-        <Avatar
-          type={type}
-          name={name}
-          contacts={entity?.contacts}
-          src={avatar}
-          size="large"
-        />
-        <div>
-          <strong>{type === "org" ? "组织头像" : "人物头像"}</strong>
-          {type === "org" ? (
-            <>
-              <ImageInput
-                multiple={false}
-                label="上传头像"
-                onFiles={(files) => {
-                  const images = imageFiles(files, notify);
-                  if (images[0]) setAvatar(images[0].url);
-                }}
-              />
-              {avatar && (
-                <button
-                  className="text-button"
-                  type="button"
-                  onClick={() => setAvatar("")}
-                >
-                  恢复默认头像
-                </button>
-              )}
-            </>
-          ) : (
-            <p>
-              联系方式填写 QQ 号后自动获取。
-              <br />
-              暂无 QQ 时使用默认形象。
-            </p>
-          )}
-        </div>
-      </div>
+      <AvatarEditor
+        type={type}
+        name={name}
+        contacts={entity?.contacts}
+        value={avatar}
+        onChange={setAvatar}
+        notify={notify}
+        label={type === "org" ? "组织头像" : "人物头像"}
+      />
       <label>
         {type === "org" ? "组织名称" : "人物名称"}
         <input

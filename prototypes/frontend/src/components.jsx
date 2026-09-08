@@ -181,41 +181,26 @@ export function ReadBoundary({
 export function Login({ onLogin }) {
   return (
     <div className="login-page">
-      <a href="/" className="login-brand">
-        <Mark />
-        <span>
-          康米巨星<small>猎头系统</small>
-        </span>
-      </a>
       <section className="login-scene" aria-hidden="true">
-        <span className="scene-axis" />
-        <span className="scene-red-plane" />
-        <div className="scene-observer">
-          <Placeholder />
-        </div>
-        <div className="scene-house">
-          <Placeholder type="org" />
-        </div>
-        <span className="scene-cross">+</span>
+        <img src="/art/login-observatory-v4.png" alt="" />
       </section>
       <main className="login-form">
-        <span className="eyebrow">MEMBER ACCESS</span>
-        <h1>登录</h1>
-        <p>使用管理员提供的账号。</p>
+        <a href="/" className="login-brand">
+          <Mark />
+          <span>
+            康米巨星<small>猎头系统</small>
+          </span>
+        </a>
         <form
+          aria-label="登录"
           onSubmit={(e) => {
             e.preventDefault();
             onLogin();
           }}
         >
           <label>
-            账号
-            <input
-              name="username"
-              autoComplete="username"
-              placeholder="输入账号"
-              required
-            />
+            猎头账号
+            <input name="username" autoComplete="username" required />
           </label>
           <label>
             密码
@@ -223,25 +208,16 @@ export function Login({ onLogin }) {
               type="password"
               name="password"
               autoComplete="current-password"
-              placeholder="输入密码"
               required
             />
           </label>
           <Button type="submit" variant="primary">
-            进入工作台
+            登录
             <Icon name="arrow" />
           </Button>
         </form>
-        <p className="prototype-note">
-          前端原型 · 虚构数据
-          <br />
-          任意非空演示账号和密码均可进入。
-        </p>
+        <p className="prototype-note">原型预览，任意非空账号和密码可进入。</p>
       </main>
-      <footer className="login-footer">
-        <span>康米巨星猎头系统</span>
-        <span>PROTOTYPE / 02</span>
-      </footer>
     </div>
   );
 }

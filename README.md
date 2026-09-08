@@ -7,7 +7,7 @@
 本地查看：在 `prototypes/frontend` 执行 `npm ci`、`npm run dev`，打开 http://127.0.0.1:5181/ 。原型仅含虚构数据，刷新复位。
 
 - [前端原型](./prototypes/frontend/)：人物、组织、记录、登录、账号与 Agent 接入页面。
-- [第三版设计与资产](./docs/design/README.md)：Assembly 排版、连续工作体验、探索图和可复用图形。
+- [第四版设计与资产](./docs/design/README.md)：品牌与登录、阅读字号、头像优先级、Assembly 排版和连续工作体验。
 - [技术验证](./docs/technical-validation.md) / [技术方案](./docs/technical-design.md)：云端、真实 Codex 和大陆网络证据及实施边界。
 - [任务拆解草稿](./docs/implementation-issues.md)：按可验收业务路径组织的后续工作。
 - [PRD](./docs/PRD.md)：首版范围、业务规则、默认值与验收要求。
@@ -32,4 +32,4 @@
 
 `.gitignore` 提供常见文件的排除规则，提交前仍需检查暂存内容。配置示例只能使用占位值，演示数据只能使用虚构内容。
 
-2026-09-08 第三版原型：吸收 Assembly 的横向排版、紧凑索引和折角结构；支持当前负责范围、搜索旧观察并定位、跨档案草稿与阅读位置保留、连续未读阅读。Agent 页精简为使用说明和复制按钮；两张透明插画与两件可编辑 SVG 已实际用于界面。详见 [本轮设计](./docs/design/README.md)及[资产说明](./docs/design/v3/README.md)。数据仍为虚构内存演示；任务草稿已同步 PRD v1.3。
+2026-09-08 第四版原型：新星形 Logo 与登录插画，登录只保留必要内容；列表区分上方负责人/关联和下方观察条数；人物与猎头账号头像按上传图、QQ、默认图回退，正文及辅助字号整体提高。入口改称“猎头账号”和“猎头管理”。详见 [本轮设计](./docs/design/README.md)及[品牌资产](./docs/design/v4/README.md)。数据仍为虚构内存演示；任务草稿已同步 PRD v1.4。

@@ -74,7 +74,7 @@ export function ArchiveSearch({ w }) {
       <input
         ref={searchRef}
         aria-label="搜索档案"
-        placeholder="搜索名称、QQ、观察"
+        placeholder="搜索档案、观察"
         value={w.search}
         onChange={(e) => w.setSearch(e.target.value)}
       />
@@ -226,6 +226,16 @@ export function ArchiveList({ w }) {
                       <span className="draft-tag">草稿</span>
                     )}
                   </div>
+                  <div className="row-binding">
+                    <span>{working ? "负责人" : "关联"}</span>
+                    <span title={bound.map(w.memberName).join("、")}>
+                      {bound.length
+                        ? bound.map(w.memberName).join("、")
+                        : working
+                          ? "未指定"
+                          : "暂无"}
+                    </span>
+                  </div>
                   <p className="record-excerpt">
                     <Highlight
                       text={excerpt(
@@ -239,9 +249,7 @@ export function ArchiveList({ w }) {
                   </p>
                   <div className="row-foot">
                     <span>
-                      {bound.length
-                        ? `${working ? "负责" : "关联"} · ${bound.map(w.memberName).join("、")}`
-                        : `${e.records.filter((r) => !r.deleted).length} 条观察`}
+                      {e.records.filter((r) => !r.deleted).length} 条观察记录
                     </span>
                     <time>{e.updated}</time>
                   </div>
@@ -435,7 +443,12 @@ export function Detail({ w }) {
                     const m = w.members.find((member) => member.id === id);
                     return (
                       <span className="member-chip" key={id}>
-                        <Avatar name={m?.name} qq={m?.qq} size="micro" />
+                        <Avatar
+                          name={m?.name}
+                          src={m?.avatar}
+                          qq={m?.qq}
+                          size="micro"
+                        />
                         {memberName(id)}
                         {m?.frozen && <small>已冻结</small>}
                       </span>
@@ -639,6 +652,9 @@ export function Detail({ w }) {
                         <Avatar
                           name={memberName(item.author)}
                           qq={w.members.find((m) => m.id === item.author)?.qq}
+                          src={
+                            w.members.find((m) => m.id === item.author)?.avatar
+                          }
                           size="tiny"
                         />
                         <strong>{memberName(item.author)}</strong>

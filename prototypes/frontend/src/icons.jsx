@@ -124,12 +124,12 @@ export function Mark({ className = "" }) {
   return (
     <svg
       className={className}
-      width="27"
-      height="29"
-      viewBox="0 0 27 29"
+      width="40"
+      height="40"
+      viewBox="0 0 100 100"
       aria-hidden="true"
     >
-      <path fill="currentColor" d="M1 1h17v8H9v10H1zM26 10H9v8h9v10h8z" />
+      <image href="/art/brand-star-v4.svg" width="100" height="100" />
     </svg>
   );
 }

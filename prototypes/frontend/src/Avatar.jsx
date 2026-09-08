@@ -55,23 +55,26 @@ export function Avatar({
   name = "",
   size = "normal",
 }) {
-  const source =
-    src ||
-    (type === "person" && (qq || qqSource(contacts))
-      ? `/__prototype/avatar/qq/${qq || qqSource(contacts)}`
-      : "");
-  const [failed, setFailed] = useState("");
+  const qqNumber = qq || qqSource(contacts);
+  const qqUrl =
+    type === "person" && /^\d{5,12}$/.test(qqNumber ?? "")
+      ? `/__prototype/avatar/qq/${qqNumber}`
+      : "";
+  const [failed, setFailed] = useState([]);
+  const source = [src, qqUrl].find((value) => value && !failed.includes(value));
   return (
     <span
       className={`avatar avatar-${type} avatar-${size}`}
       title={name ? `${name}${source ? "的头像" : " · 默认头像"}` : undefined}
     >
-      {source && failed !== source ? (
+      {source ? (
         <img
           key={source}
           src={source}
           alt={`${name}头像`}
-          onError={() => setFailed(source)}
+          onError={() =>
+            setFailed((previous) => [...new Set([...previous, source])])
+          }
         />
       ) : (
         <Placeholder type={type} />
