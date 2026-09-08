@@ -10,7 +10,7 @@ try{
  const context=await browser.newContext({viewport:{width:1440,height:1080},timezoneId:'America/Los_Angeles'}),page=await context.newPage();
  page.on('pageerror',e=>failures.push(e.message));
  await page.route('**/api/**',fixture);await page.route('**/avatars/**',r=>r.fulfill({status:404,body:''}));
- await page.goto('http://127.0.0.1:8790/?archive='+uuid('p1'));await page.locator('.record-body').first().waitFor();await page.evaluate(()=>document.fonts.ready);
+ await page.goto((process.env.CTS_UI_BASE??'http://127.0.0.1:8790')+'/?archive='+uuid('p1'));await page.locator('.record-body').first().waitFor();await page.evaluate(()=>document.fonts.ready);
  check('范围按钮显示服务端总数',await page.locator('.scope-tabs button small').count()===3);
  check('档案常态只有统一编辑入口，状态为展示',await page.locator('.entity-header button:not(.contact-pill)').count()===1 && await page.locator('button.state-badge').count()===0 && await page.locator('.archive-tags>header button').count()===0);
  await page.screenshot({path:out+'/detail.png'});
@@ -22,9 +22,9 @@ try{
  const fonts=await page.evaluate(()=>Object.fromEntries(['body','.record-body','.record-byline time','.row-foot time','.scope-tabs small','.composer textarea','.tag-chip'].map(s=>[s,getComputedStyle(document.querySelector(s)).fontFamily])));
  check('正文、辅助信息、控件使用统一字体',new Set(Object.values(fonts)).size===1);
  check('范围计数不是当前页条数',(await page.locator('.scope-tabs small').allTextContents()).join(',')==='137,42,11');
- check('标签保留类别与名称，移除框和底色',await page.locator('.archive-tags .tag-chip').first().evaluate(e=>{const s=getComputedStyle(e);return s.borderWidth==='0px'&&s.backgroundColor==='rgba(0, 0, 0, 0)'&&!!e.querySelector('.tag-category')&&!!e.querySelector('.tag-name');}));
+ check('标签只显示名称，按类别着色且不显示星号',await page.locator('.archive-tags .tag-chip').first().evaluate(e=>{const s=getComputedStyle(e);return s.borderWidth==='0px'&&s.backgroundColor!=='rgba(0, 0, 0, 0)'&&!e.querySelector('.tag-category')&&!e.querySelector('.tag-focus')&&!!e.querySelector('.tag-name');}));
  const cdp=await context.newCDPSession(page);await cdp.send('DOM.enable');await cdp.send('CSS.enable');const {root}=await cdp.send('DOM.getDocument');const glyphFonts={};
- for(const selector of ['.record-body p','.entity-heading h1','.row-foot time','.assignment-label','.tag-name']){const {nodeId}=await cdp.send('DOM.querySelector',{nodeId:root.nodeId,selector});glyphFonts[selector]=(await cdp.send('CSS.getPlatformFontsForNode',{nodeId})).fonts;}
+ for(const selector of ['.record-body p','.entity-heading h1','.row-foot time','.assigned-members .member-chip','.tag-name']){const {nodeId}=await cdp.send('DOM.querySelector',{nodeId:root.nodeId,selector});glyphFonts[selector]=(await cdp.send('CSS.getPlatformFontsForNode',{nodeId})).fonts;}
  check('实际中文与数字字形使用本地统一字体',Object.values(glyphFonts).flat().every(f=>f.isCustomFont&&f.postScriptName.startsWith('NotoSansSC')));await cdp.detach();
  const shownTime=await page.locator('.record-byline time').first().textContent();
  check('浏览器设为洛杉矶时仍显示东八区',shownTime.includes('14:32'));

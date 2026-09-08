@@ -58,68 +58,16 @@ body {
 .filter-row .member-trigger {
   font-size: 16px;
 }
-.entity-row {
-  padding-top: 24px;
-  padding-bottom: 24px;
-}
-.row-title h2 {
-  font-size: 30px;
-  font-weight: 720;
-  line-height: 1.35;
-  letter-spacing: 0;
-}
-.row-meta {
-  gap: 9px;
-  margin-top: 9px;
-  min-height: 26px;
-}
+
 .state-badge.small {
   font-size: 16px;
   line-height: 1.6;
 }
-.row-binding {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  margin-top: 8px;
-  font-size: 16px;
-  line-height: 1.65;
-  color: #555;
-}
-.row-binding > span:first-child {
-  color: var(--muted);
-  flex-shrink: 0;
-}
-.row-binding > span:last-child {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.record-excerpt {
-  font-size: 19px;
-  line-height: 1.8;
-  color: #505050;
-  margin-top: 13px;
-  margin-bottom: 17px;
-  font-weight: 420;
-}
-.row-foot {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 4px 12px;
-  font-size: 15px;
-  color: #686868;
-}
+
 .row-foot > span {
   max-width: none;
 }
-.row-foot time {
-  font: 13px var(--font);
-  margin-left: auto;
-}
+
 .draft-tag {
   font-size: 14px;
 }
@@ -443,15 +391,8 @@ body {
   .filter-toggle {
     font-size: 14px;
   }
-  .row-title h2 {
-    font-size: 28px;
-  }
-  .record-excerpt {
-    font-size: 18px;
-  }
-  .row-binding {
-    font-size: 15px;
-  }
+
+
   .state-badge.small {
     font-size: 15px;
   }
@@ -534,38 +475,11 @@ body {
   .filter-row .member-trigger {
     font-size: 15px;
   }
-  .entity-row {
-    padding: 23px 22px;
-    gap: 17px;
-  }
-  .entity-row > .avatar {
-    width: 66px;
-    height: 66px;
-  }
-  .row-title h2 {
-    font-size: 27px;
-  }
-  .row-meta {
-    margin-top: 8px;
-  }
+
   .state-badge.small {
     font-size: 15px;
   }
-  .row-binding {
-    gap: 8px;
-    font-size: 15px;
-    margin-top: 7px;
-  }
-  .record-excerpt {
-    font-size: 18px;
-    line-height: 1.8;
-  }
-  .row-foot {
-    font-size: 14px;
-  }
-  .row-foot time {
-    font-size: 13px;
-  }
+
   .detail-top,
   .next-unread {
     font-size: 14px;
@@ -713,20 +627,7 @@ body {
     max-width: 40em;
     text-wrap: pretty;
   }
-  .entity-row {
-    padding-top: 21px;
-    padding-bottom: 21px;
-  }
-  .row-meta {
-    margin-top: 6px;
-  }
-  .row-binding {
-    margin-top: 5px;
-  }
-  .record-excerpt {
-    margin-top: 11px;
-    margin-bottom: 13px;
-  }
+
   .detail-top {
     min-height: 48px;
   }
@@ -820,4 +721,31 @@ a:focus-visible {
 }
 .toast.error {
   border-left-color: var(--red);
+}
+
+/* Completed archives are crossed or checked out over their faded content. */
+.list-toolbar { padding-bottom:12px; }
+.entity-row { position:relative; gap:16px; padding:22px 28px; min-height:0; background:white; align-items:flex-start; }
+.entity-row > .avatar { width:56px; height:56px; flex-shrink:0; }
+.row-content { min-width:0; }
+.row-title h2 { font-size:24px; font-weight:690; line-height:1.35; overflow-wrap:anywhere; }
+.row-meta { margin-top:4px; min-height:0; gap:8px; }
+.row-meta .state-badge.small { font-size:13px; line-height:1.6; }
+.row-binding { display:flex; align-items:center; flex-wrap:wrap; gap:6px 12px; margin-top:8px; font-size:14px; }
+.row-binding .member-chip { padding:0; background:transparent; gap:5px; color:#555; font-size:14px; white-space:normal; }
+.row-binding .member-chip .avatar { width:20px; height:20px; flex-shrink:0; }
+.record-excerpt { font-size:15px; line-height:1.65; margin:10px 0 9px; color:#626262; }
+.row-foot { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:4px 12px; font-size:12px; color:#888; line-height:1.5; }
+.row-foot time { font-size:12px; margin:0; width:auto; }
+.completed > .avatar, .completed .row-content { opacity:.3; }
+.completion-stamp { position:absolute; left:50%; top:50%; width:160px; height:160px; pointer-events:none; transform:translate(-50%,-50%) rotate(-8deg); }
+.completion-stamp svg { display:block; width:100%; height:100%; }
+.completion-stamp.joined { color:#38765c; }
+.completion-stamp.discarded { color:#a15c53; }
+@media(max-width:600px) {
+ .entity-row { gap:12px; padding:20px; }
+ .entity-row > .avatar { width:44px; height:44px; }
+ .row-title h2 { font-size:22px; }
+ .record-excerpt { font-size:14px; }
+ .completion-stamp { width:144px; height:144px; }
 }

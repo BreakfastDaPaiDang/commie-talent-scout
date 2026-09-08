@@ -93,8 +93,8 @@ export function ArchiveSearch({ w }) {
 }
 export function ArchiveList({w}) {
  const states=w.page==='org'?orgStates:personStates,activeFilters=w.stateFilter!=='all'||w.lifeFilter!=='open'||w.ownerFilter.length>0;
- return <><ScopeToolbar scope={w.scope} counts={w.scopeCounts} onScope={key=>{w.setScope(key);if(key==='unread')w.setLifeFilter('all');else if(w.scope==='unread')w.setLifeFilter('open');}} filtersOpen={w.filtersOpen} onFilters={()=>w.setFiltersOpen(!w.filtersOpen)} activeFilters={activeFilters} caption={<>{w.filtered.length} 个档案{w.scope==='mine'&&' · 当前工作负责'}</>} onReset={activeFilters||w.search?w.resetFilters:undefined} filters={<><select aria-label="筛选业务状态" value={w.stateFilter} onChange={e=>w.setStateFilter(e.target.value)}><option value="all">全部状态</option>{states.map(state=><option key={state}>{state}</option>)}</select><MemberPicker members={w.members} value={w.ownerFilter} onChange={w.setOwnerFilter} multiple={false} label="筛选绑定成员" placeholder="全部成员"/><select aria-label="筛选开启关闭" value={w.lifeFilter} onChange={e=>w.setLifeFilter(e.target.value)}><option value="open">开启中</option><option value="closed">已关闭</option><option value="all">全部档案</option></select></>}/>
- <div className="entity-list">{w.filtered.length?w.filtered.map(e=>{const matching=w.search?e.records.find(r=>!r.deleted&&r.body.toLowerCase().includes(w.search.toLowerCase())):null,latest=matching??e.records.find(r=>!r.deleted),bound=e.owners[e.state]??[],working=isWorkState(e.type,e.state),contactMatch=w.search?e.contacts.find(c=>c.value.toLowerCase().includes(w.search.toLowerCase())):null;return <ArchiveRow key={e.id} selected={w.selected===e.id} onClick={()=>w.pick(e.id,matching?.id)} avatar={<Avatar type={e.type} name={e.name} src={e.avatar} contacts={e.contacts}/>} name={<Highlight text={e.name} query={w.search}/>} unread={w.unreadItems(e).length>0} state={<StateBadge entity={e} small/>} working={working} draft={w.hasDraft(e.id)} binding={bound.length?bound.map(w.memberName).join('、'):working?'未指定':'暂无'} excerpt={<Highlight text={excerpt(contactMatch&&!matching?`${contactMatch.type} ${contactMatch.value}`:latest?.body??'还没有观察记录',w.search)} query={w.search}/>} footer={<><span>{e.records.filter(r=>!r.deleted).length} 条观察记录</span><time>{e.updated}</time></>}/>;}):<Empty type={w.page} title="没有找到对应档案" action={<Button variant="outline" onClick={w.resetFilters}>查看全部档案</Button>}>换个关键词，或清除筛选条件。</Empty>}</div></>;
+ return <><ScopeToolbar scope={w.scope} counts={w.scopeCounts} onScope={key=>{w.setScope(key);if(key==='unread')w.setLifeFilter('all');else if(w.scope==='unread')w.setLifeFilter('open');}} filtersOpen={w.filtersOpen} onFilters={()=>w.setFiltersOpen(!w.filtersOpen)} activeFilters={activeFilters} onReset={activeFilters||w.search?w.resetFilters:undefined} filters={<><select aria-label="筛选业务状态" value={w.stateFilter} onChange={e=>w.setStateFilter(e.target.value)}><option value="all">全部状态</option>{states.map(state=><option key={state}>{state}</option>)}</select><MemberPicker members={w.members} value={w.ownerFilter} onChange={w.setOwnerFilter} multiple={false} label="筛选绑定成员" placeholder="全部成员"/><select aria-label="筛选开启关闭" value={w.lifeFilter} onChange={e=>w.setLifeFilter(e.target.value)}><option value="open">开启中</option><option value="closed">已关闭</option><option value="all">全部档案</option></select></>}/>
+ <div className="entity-list">{w.filtered.length?w.filtered.map(e=>{const matching=w.search?e.records.find(r=>!r.deleted&&r.body.toLowerCase().includes(w.search.toLowerCase())):null,latest=matching??e.records.find(r=>!r.deleted),bound=e.owners[e.state]??[],working=isWorkState(e.type,e.state),contactMatch=w.search?e.contacts.find(c=>c.value.toLowerCase().includes(w.search.toLowerCase())):null;return <ArchiveRow key={e.id} selected={w.selected===e.id} onClick={()=>w.pick(e.id,matching?.id)} avatar={<Avatar type={e.type} name={e.name} src={e.avatar} contacts={e.contacts}/>} name={<Highlight text={e.name} query={w.search}/>} unread={w.unreadItems(e).length>0} state={<StateBadge entity={e} small/>} status={e.state} draft={w.hasDraft(e.id)} binding={bound.length?bound.map(id=>{const m=w.members.find(m=>m.id===id);return <span className="member-chip" key={id}><Avatar name={m?.name} src={m?.avatar} size="micro"/>{w.memberName(id)}</span>}):null} excerpt={<Highlight text={excerpt(contactMatch&&!matching?`${contactMatch.type} ${contactMatch.value}`:latest?.body??'还没有观察记录',w.search)} query={w.search}/>} footer={<><span>{e.records.filter(r=>!r.deleted).length} 条观察记录</span><time>{e.updated}</time></>}/>;}):<Empty type={w.page} title="没有找到对应档案" action={<Button variant="outline" onClick={w.resetFilters}>查看全部档案</Button>}>换个关键词，或清除筛选条件。</Empty>}</div></>;
 }
 export function Updates({w}){return <section className="updates-list"><p className="section-description">从变化的地方读起。</p>{w.unreadEntities.length?w.sessionUpdates.map(e=>{const pending=w.unreadItems(e),latest=[...(pending.length?pending:[...e.records.filter(r=>!r.deleted),...e.events])].sort((a,b)=>timelineOrder(b)-timelineOrder(a))[0];return <UpdateRow key={e.id} selected={w.selected===e.id} read={!pending.length} onClick={()=>w.openUnread(e)} avatar={<Avatar type={e.type} name={e.name} contacts={e.contacts} src={e.avatar}/>} label={<>{e.type==='person'?'人物':'组织'} · {pending.length?`${pending.length} 项更新`:'已阅'}</>} name={e.name} excerpt={latest?.kind==='system'?latest.text:latest?.body} time={latest?.time}/>;}):<CaughtUp action={<Button variant="outline" onClick={()=>w.navigate('person')}>回到人物档案</Button>}/>}</section>;}
 
@@ -127,46 +127,7 @@ export function Detail({ w }) {
   }
   return (
     <DetailFrame label={entity.type==='person'?'人物档案':'组织档案'} code={entity.id.toUpperCase().slice(0,6)} expanded={w.detailWide} onExpand={()=>w.setDetailWide(!w.detailWide)} onClose={w.closeDetail} onNextUnread={w.unreadEntities.length?w.nextUnread:undefined} scrollRef={scroll} onScroll={event=>{w.readingPositions.current[`${w.actorId}:${entity.id}`]=event.currentTarget.scrollTop;}}>
-          <EntityHeader name={entity.name} state={<StateBadge entity={entity} onClick={locked?undefined:()=>w.setDialog({type:'state',nextState:entity.state})}/>} avatar={<Avatar type={entity.type} name={entity.name} contacts={entity.contacts} src={entity.avatar} size="hero"/>} actions={<IconButton name="more" label="档案操作" onClick={()=>w.setDialog({type:'entity-actions'})}/>} assignment={            <div className={`assignment-row ${work ? "is-work" : ""}`}>
-              <span className="assignment-label">
-                {work && <span className="assignment-flag">◆</span>}
-                {work
-                  ? entity.type === "person"
-                    ? "人事负责"
-                    : "工作负责"
-                  : "关联成员"}
-              </span>
-              <div className="assigned-members">
-                {owners.length ? (
-                  owners.map((id) => {
-                    const m = w.members.find((member) => member.id === id);
-                    return (
-                      <span className="member-chip" key={id}>
-                        <Avatar
-                          name={m?.name}
-                          src={m?.avatar}
-                          qq={m?.qq}
-                          size="micro"
-                        />
-                        {memberName(id)}
-                        {m?.frozen && <small>已冻结</small>}
-                      </span>
-                    );
-                  })
-                ) : (
-                  <span className="optional-label">暂未关联</span>
-                )}
-              </div>
-              {!locked && (
-                <button
-                  className="text-button"
-                  onClick={() => w.setDialog({ type: "bindings" })}
-                >
-                  {owners.length ? "调整" : "关联"}
-                </button>
-              )}
-            </div>
-} contacts={<>
+          <EntityHeader name={entity.name} state={<StateBadge entity={entity} onClick={locked?undefined:()=>w.setDialog({type:'state',nextState:entity.state})}/>} avatar={<Avatar type={entity.type} name={entity.name} contacts={entity.contacts} src={entity.avatar} size="hero"/>} actions={<IconButton name="more" label="档案操作" onClick={()=>w.setDialog({type:'entity-actions'})}/>} assignment={owners.length>0&&<div className="assignment-row"><div className="assigned-members">{owners.map(id=>{const m=w.members.find(m=>m.id===id);return <span className="member-chip" key={id}><Avatar name={m?.name} src={m?.avatar} qq={m?.qq} size="micro"/>{memberName(id)}{m?.frozen&&<small>已冻结</small>}</span>})}</div></div>} contacts={<>
               {entity.contacts.map((contact, i) => (
                 <button
                   className="contact-pill"
