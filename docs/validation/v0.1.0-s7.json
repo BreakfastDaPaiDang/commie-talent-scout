@@ -62,5 +62,10 @@
       ],
       "final": "已核对人物和观察 ID，记录符合可恢复删除条件，但删除未执行。\n\n系统拦截了删除调用：该操作需要审批，而当前会话审批策略为 `never`，无法发起审批。记录保持未删除状态。"
     }
-  ]
+  ],
+  "search_unread_followup": {
+    "local": "pass",
+    "cloud": "pass",
+    "evidence": "v0.1.0-s8.json"
+  }
 }

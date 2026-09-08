@@ -79,5 +79,14 @@
       "real cloud MCP image response returns the complete 10 MiB original as standard image content"
     ],
     "recoveries": []
+  },
+  "cloud_scheduled_cleanup": {
+    "date": "2026-09-08T15:17:57.384Z",
+    "fixture_date": "2026-09-08T14:33:38.751Z",
+    "archive_id": "f897a990-21d8-4f77-8cb4-541bb159dd10",
+    "checks": [
+      "real cloud MCP image response returns the complete 10 MiB original as standard image content",
+      "actual cloud cron removes old orphan/pending uploads and retains all record history, active draft and removed-avatar history references"
+    ]
   }
 }

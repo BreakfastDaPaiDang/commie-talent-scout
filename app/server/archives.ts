@@ -3,6 +3,7 @@ import {command,requestId,expectedVersion,type Source} from './commands.ts';
 import {Failure,now,uid,type Actor,type Env} from './types.ts';
 import {statesFor,isClosedState,isWorkState,personStates,orgStates} from '../shared/archive-states.ts';
 import {TagState,type TagBinding,type TagLabel} from './tag-state.ts';
+import {Reading,eventVisibility,unreadPredicate} from './reading.ts';
 
 export const archiveType=z.enum(['person','org']);
 const contact=z.object({type:z.string().trim().min(1).max(40),value:z.string().trim().min(1).max(500),note:z.string().trim().max(500).default('')}).strict().refine(c=>c.type.toUpperCase()!=='QQ'||/^\d{5,20}$/.test(c.value),{message:'QQ 使用 5–20 位数字字符串',path:['value']});
@@ -13,7 +14,7 @@ const memberIds=z.array(z.uuid()).max(50).transform(ids=>[...new Set(ids)].sort(
 export const archiveCreateInput=z.object({type:archiveType,...profile,status:statusInput.default('视奸观察'),member_ids:memberIds.default([]),request_id:requestId}).strict();
 export const archiveUpdateInput=z.object({id:z.uuid(),expected_version:expectedVersion,...profile,contacts:z.array(contact).max(20),links:z.array(link).max(20),request_id:requestId}).strict();
 export const archiveStateInput=z.object({id:z.uuid(),expected_version:expectedVersion,status:statusInput,member_ids:memberIds,request_id:requestId}).strict();
-export const archiveListInput=z.object({type:archiveType,query:z.string().trim().max(200).default(''),limit:z.coerce.number().int().min(1).max(100).default(30),before:z.string().max(150).optional()});
+export const archiveListInput=z.object({type:archiveType,query:z.string().trim().max(200).default(''),scope:z.enum(['all','mine','unread']).default('all'),status:z.string().max(80).default(''),member_id:z.union([z.uuid(),z.literal('')]).default(''),closed:z.enum(['all','open','closed']).default('all'),limit:z.coerce.number().int().min(1).max(100).default(30),before:z.string().max(150).optional()});
 type Row={id:string;type:'person'|'org';name:string;contacts_json:string;links_json:string;status:string;closed:number;last_open_status:string|null;avatar_id:string|null;created_by:string;created_at:string;updated_at:string;version:number;tag_snapshot_version:number|null};
 export type BoundMember={id:string;name:string;frozen:boolean};
 export type Archive=Omit<Row,'contacts_json'|'links_json'|'closed'>&{contacts:z.infer<typeof contact>[];links:z.infer<typeof link>[];closed:boolean;observation_count:number;latest_observation:string|null;members:BoundMember[];bindings:Record<string,BoundMember[]>;tags:TagBinding[];tag_summary?:{tags:TagLabel[];total:number}};
@@ -39,12 +40,18 @@ export class Archives{
  event(id:string,kind:string,before:unknown,after:unknown,at=now(),observationId:string|null=null){return this.stmt('INSERT INTO archive_events(id,archive_id,actor_id,source,kind,before_json,after_json,observation_id,created_at) VALUES(?,?,?,?,?,?,?,?,?)',uid(),id,this.actor.id,this.source,kind,JSON.stringify(before),JSON.stringify(after),observationId,at);}
  async detail(id:string){const archive=await this.get(id);return {archive:{...archive,url:this.url(archive),tags:await new TagState(this.env,this.actor).list(id,archive.closed,archive.tag_snapshot_version)}};}
  async list(input:unknown){
-  const a=archiveListInput.parse(input),where=['type=?'],args:unknown[]=[a.type];
-  if(a.query){where.push("(name LIKE ? ESCAPE '\\' OR contacts_json LIKE ? ESCAPE '\\')");const value='%'+a.query.replace(/[\\%_]/g,'\\$&')+'%';args.push(value,value);}
-  if(a.before){const [time,id]=a.before.split('|');if(!time||!id)throw new Failure(400,'INVALID_CURSOR','分页位置无效');where.push('(updated_at<? OR (updated_at=? AND id<?))');args.push(time,time,id);}
-  const rows=await this.stmt(`SELECT a.*,${currentMembers},${observationSummary} FROM archives a WHERE ${where.join(' AND ')} ORDER BY updated_at DESC,id DESC LIMIT ?`,...args,a.limit+1).all<Row>();
-  const items=rows.results.slice(0,a.limit).map(present),last=items.at(-1);
-  const state=new TagState(this.env,this.actor);return {archives:await Promise.all(items.map(async item=>{const {tags:_,...summary}=item;return {...summary,url:this.url(item),tag_summary:await state.summary(item.id,item.closed,item.tag_snapshot_version)};})),next_cursor:rows.results.length>a.limit&&last?`${last.updated_at}|${last.id}`:null};
+  const a=archiveListInput.parse(input),where=['a.type=?'],args:unknown[]=[a.type],unread=unreadPredicate(this.actor);
+  const value='%'+a.query.replace(/[\\%_]/g,'\\$&')+'%',match=`SELECT json_object('observation_id',o.id,'excerpt',substr(v.body,max(1,instr(lower(v.body),lower(?))-60),240)) FROM observations o JOIN observation_versions v ON v.observation_id=o.id AND v.version=o.content_version WHERE o.archive_id=a.id AND o.deleted=0 AND v.body LIKE ? ESCAPE '\\' ORDER BY o.updated_at DESC,o.id DESC LIMIT 1`;
+  if(a.query){where.push(`(a.name LIKE ? ESCAPE '\\' OR a.contacts_json LIKE ? ESCAPE '\\' OR EXISTS(SELECT 1 FROM observations o JOIN observation_versions v ON v.observation_id=o.id AND v.version=o.content_version WHERE o.archive_id=a.id AND o.deleted=0 AND v.body LIKE ? ESCAPE '\\'))`);args.push(value,value,value);}
+  if(a.scope==='mine'){where.push("a.closed=0 AND a.status IN ('引荐中（待人事组接触）','人事审核','已加入待对接','组织交流') AND EXISTS(SELECT 1 FROM archive_bindings b WHERE b.archive_id=a.id AND b.status=a.status AND b.member_id=?)");args.push(this.actor.id);}
+  if(a.scope==='unread'){where.push(`EXISTS(SELECT 1 FROM archive_events e WHERE e.archive_id=a.id AND ${unread.sql})`);args.push(...unread.args);}
+  if(a.status){where.push('a.status=?');args.push(a.status);}
+  if(a.member_id){where.push('EXISTS(SELECT 1 FROM archive_bindings b WHERE b.archive_id=a.id AND b.status=a.status AND b.member_id=?)');args.push(a.member_id);}
+  if(a.closed!=='all')where.push(`a.closed=${a.closed==='closed'?1:0}`);
+  if(a.before){const [time,id]=a.before.split('|');if(!time||!z.uuid().safeParse(id).success||!Number.isFinite(Date.parse(time)))throw new Failure(400,'INVALID_CURSOR','分页位置无效');where.push('(a.updated_at<? OR (a.updated_at=? AND a.id<?))');args.push(time,time,id);}
+  const rows=await this.stmt(`SELECT a.*,${currentMembers},${observationSummary},(SELECT count(*) FROM archive_events e WHERE e.archive_id=a.id AND ${unread.sql}) unread_count,${a.query?'('+match+')':'NULL'} search_match_json FROM archives a WHERE ${where.join(' AND ')} ORDER BY a.updated_at DESC,a.id DESC LIMIT ?`,...unread.args,...(a.query?[a.query,value]:[]),...args,a.limit+1).all<Row&{unread_count:number;search_match_json:string|null}>();
+  const items=rows.results.slice(0,a.limit).map(({search_match_json,...row})=>({...present(row),unread_count:row.unread_count,search_match:search_match_json?JSON.parse(search_match_json):null})),last=items.at(-1),summaries=await new TagState(this.env,this.actor).summaries(items.map(i=>i.id));
+  return {archives:items.map(item=>{const {tags:_,...summary}=item;return {...summary,url:this.url(item),tag_summary:summaries.get(item.id)??{tags:[],total:0}};}),next_cursor:rows.results.length>a.limit&&last?`${last.updated_at}|${last.id}`:null};
  }
  async create(input:unknown){const a=archiveCreateInput.parse(input);return command(this.env,this.actor,{requestId:a.request_id,operation:'archive.create',parameters:{...a,request_id:undefined}},async()=>{
   const id=uid(),at=now(),plan=await this.planBindings(id,a.type,a.status,a.member_ids),closed=isClosedState(a.status);
@@ -93,8 +100,9 @@ export class Archives{
  });}
  async events(input:unknown){
   const a=z.object({id:z.uuid(),before:z.coerce.number().int().positive().optional(),limit:z.coerce.number().int().min(1).max(100).default(30)}).parse(input);await this.get(a.id);
-  const rows=await this.stmt(`SELECT e.*,(SELECT name FROM members WHERE id=e.actor_id) actor_name FROM archive_events e WHERE archive_id=? ${a.before?'AND seq<?':''} ORDER BY seq DESC LIMIT ?`,a.id,...(a.before?[a.before]:[]),a.limit+1).all<Record<string,unknown>>();
+  const visibility=eventVisibility(this.actor);
+  const rows=await this.stmt(`SELECT e.*,(SELECT name FROM members WHERE id=e.actor_id) actor_name FROM archive_events e WHERE archive_id=? AND ${visibility.sql} ${a.before?'AND seq<?':''} ORDER BY seq DESC LIMIT ?`,a.id,...visibility.args,...(a.before?[a.before]:[]),a.limit+1).all<Record<string,unknown>>();
   const events:Record<string,unknown>[]=rows.results.slice(0,a.limit).map(({before_json,after_json,...e})=>({...e,before:before_json?JSON.parse(String(before_json)):null,after:after_json?JSON.parse(String(after_json)):null}));
-  const state=new TagState(this.env,this.actor),visible=[];for(const e of events){if(e.kind==='archive.tags_changed'){e.before=await state.filterEvent(e.before);e.after=await state.filterEvent(e.after);if(!(e.before as unknown[]).length&&!(e.after as unknown[]).length)continue;}visible.push(e);}return {events:visible,next_cursor:rows.results.length>a.limit?String(events.at(-1)?.seq):null};
+  const state=new TagState(this.env,this.actor),visible=[];for(const e of events){if(e.kind==='archive.tags_changed'){e.before=await state.filterEvent(e.before);e.after=await state.filterEvent(e.after);if(!(e.before as unknown[]).length&&!(e.after as unknown[]).length)continue;}visible.push(e);}const deliveries=await new Reading(this.env,this.actor).deliver(visible.filter(e=>!e.observation_id).map(e=>({id:String(e.id)})));return {events:visible.map(e=>({...e,reading:deliveries.get(String(e.id))??null})),next_cursor:rows.results.length>a.limit?String(events.at(-1)?.seq):null};
  }
 }

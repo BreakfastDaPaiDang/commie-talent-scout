@@ -1,0 +1,199 @@
+{
+  "deployment": "cd282045-cdb8-4645-a2a6-f702cea5752b",
+  "local": {
+    "date": "2026-09-08T15:06:40.118Z",
+    "base": "http://127.0.0.1:8790",
+    "checks": [
+      "HTTP/MCP search finds old current observation with escaped wildcard and snippet; summaries and queues do not confirm; event receipts bind member and credential, replay safely and preserve archive activity",
+      "new edit remains unread until its own body is confirmed; stale tickets cannot clear it; web/MCP share marks while other members remain independent; own/pre-account updates excluded and mine uses only current work bindings",
+      "deleted content and dependent tags are absent from search/unread; deletion and closed contexts remain directly readable; cross-library snapshot pagination does not mix later events or duplicate boundaries",
+      {
+        "behavior": "real D1 HTTP/MCP maximum limit and combined unread search",
+        "elapsed_ms": 61,
+        "timings": [
+          {
+            "type": "person",
+            "elapsed_ms": 31,
+            "count": 1
+          },
+          {
+            "type": "org",
+            "elapsed_ms": 30,
+            "count": 1
+          }
+        ]
+      }
+    ],
+    "recoveries": []
+  },
+  "cloud": {
+    "date": "2026-09-08T15:13:17.399Z",
+    "base": "https://scout-staging.dapaidang.org",
+    "checks": [
+      "HTTP/MCP search finds old current observation with escaped wildcard and snippet; summaries and queues do not confirm; event receipts bind member and credential, replay safely and preserve archive activity",
+      "new edit remains unread until its own body is confirmed; stale tickets cannot clear it; web/MCP share marks while other members remain independent; own/pre-account updates excluded and mine uses only current work bindings",
+      "deleted content and dependent tags are absent from search/unread; deletion and closed contexts remain directly readable; cross-library snapshot pagination does not mix later events or duplicate boundaries",
+      {
+        "behavior": "real D1 HTTP/MCP maximum limit and combined unread search",
+        "elapsed_ms": 5076,
+        "timings": [
+          {
+            "type": "person",
+            "elapsed_ms": 1842,
+            "count": 1
+          },
+          {
+            "type": "org",
+            "elapsed_ms": 3234,
+            "count": 1
+          }
+        ]
+      }
+    ],
+    "recoveries": []
+  },
+  "real_codex": {
+    "date": "2026-09-08T15:16:54.688Z",
+    "rounds": [
+      {
+        "round": "cross-library",
+        "elapsed_ms": 74007,
+        "tools": [
+          {
+            "tool": "confirm_reading",
+            "outcome": "success",
+            "error_code": null
+          },
+          {
+            "tool": "get_archive_event",
+            "outcome": "success",
+            "error_code": null
+          },
+          {
+            "tool": "get_archive_event",
+            "outcome": "success",
+            "error_code": null
+          },
+          {
+            "tool": "get_archive_event",
+            "outcome": "success",
+            "error_code": null
+          },
+          {
+            "tool": "get_archive_event",
+            "outcome": "success",
+            "error_code": null
+          },
+          {
+            "tool": "list_unread_events",
+            "outcome": "success",
+            "error_code": null
+          },
+          {
+            "tool": "list_unread_events",
+            "outcome": "success",
+            "error_code": null
+          },
+          {
+            "tool": "list_archives",
+            "outcome": "success",
+            "error_code": null
+          },
+          {
+            "tool": "list_archives",
+            "outcome": "success",
+            "error_code": null
+          },
+          {
+            "tool": "get_usage_guide",
+            "outcome": "success",
+            "error_code": null
+          },
+          {
+            "tool": "whoami",
+            "outcome": "success",
+            "error_code": null
+          },
+          {
+            "tool": "get_unread_summary",
+            "outcome": "success",
+            "error_code": null
+          }
+        ],
+        "final": "已按正常流程读完，并确认本次共 4 条更新为已读。\n\n- **虚构阅读阿霁 9029af8b**：本人确认本周三晚可做两小时访谈字幕校对，但具体素材尚未收到。\n- **虚构阅读青灯组 9029af8b**：该组织本次仅能提供录音场地，不提供摄影设备。"
+      },
+      {
+        "round": "new-version",
+        "elapsed_ms": 44573,
+        "tools": [
+          {
+            "tool": "confirm_reading",
+            "outcome": "success",
+            "error_code": null
+          },
+          {
+            "tool": "list_observations",
+            "outcome": "success",
+            "error_code": null
+          },
+          {
+            "tool": "list_archives",
+            "outcome": "success",
+            "error_code": null
+          },
+          {
+            "tool": "list_archives",
+            "outcome": "rejected",
+            "error_code": "INVALID_TOOL_REQUEST"
+          },
+          {
+            "tool": "get_usage_guide",
+            "outcome": "success",
+            "error_code": null
+          },
+          {
+            "tool": "whoami",
+            "outcome": "success",
+            "error_code": null
+          },
+          {
+            "tool": "get_unread_summary",
+            "outcome": "success",
+            "error_code": null
+          }
+        ],
+        "final": "最新更新约定为 **本周四（9 月 10 日）晚上，持续两小时**，仅做访谈字幕校对；原定周三的安排已取消。具体几点开始尚未注明。\n\n来源：[人物最新记录](https://scout-staging.dapaidang.org/?archive=22f0132b-a7e7-441d-a05e-added9665210)。"
+      }
+    ],
+    "checks": [
+      "real cold Codex reads actual events across person/org and confirms all four delivered events through the product reading tool",
+      "independent cold session sees the edited version as new unread content and confirms that event after receiving the new time"
+    ]
+  },
+  "validation": {
+    "types": "pass",
+    "unit_service_tests": 15,
+    "build": "pass",
+    "real_browser": "blocked: Debugger unattached; no scroll, foreground/background, highlight or queue UI acceptance claimed"
+  },
+  "representative_data": {
+    "archives": 150,
+    "observations": 1200,
+    "body_characters_approx": 6000000,
+    "pages": 5,
+    "db_reads_per_page": 2,
+    "measured_total_ms_range": [
+      58,
+      82
+    ],
+    "environment": "isolated SQLite service test; not cloud latency percentile"
+  },
+  "final_state_projection": {
+    "date": "2026-09-08T15:19:21.508Z",
+    "base": "https://scout-staging.dapaidang.org",
+    "checks": [
+      "final deployed event/timeline response exposes personal already-read state for queue reconciliation"
+    ],
+    "recoveries": []
+  }
+}

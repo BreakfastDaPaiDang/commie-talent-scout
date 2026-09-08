@@ -1,3 +1,4 @@
+import {Reading} from './reading.ts';
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { ZodError } from 'zod';
@@ -91,6 +92,10 @@ app.get('/api/drafts/:id',async c=>c.json(await new Drafts(c.env,await authentic
 app.post('/api/drafts/save',async c=>c.json(await new Drafts(c.env,await authenticate(c.req.raw,c.env)).save(await c.req.json())));
 for(const [action,deleted] of [['delete',true],['restore',false]] as const)app.post('/api/observations/'+action,async c=>c.json(await new Observations(c.env,await authenticate(c.req.raw,c.env),'web').setDeleted(await c.req.json(),deleted)));
 app.post('/api/observations/update',async c=>c.json(await new Observations(c.env,await authenticate(c.req.raw,c.env),'web').update(await c.req.json())));
+app.get('/api/reading',async c=>c.json(await new Reading(c.env,await authenticate(c.req.raw,c.env)).summary()));
+app.get('/api/reading/events',async c=>c.json(await new Reading(c.env,await authenticate(c.req.raw,c.env)).list(c.req.query())));
+app.post('/api/reading/confirm',async c=>c.json(await new Reading(c.env,await authenticate(c.req.raw,c.env)).confirm(await c.req.json())));
+app.get('/api/events/:id',async c=>c.json(await new Observations(c.env,await authenticate(c.req.raw,c.env),'web').event(c.req.param('id'))));
 app.get('/api/observations',async c=>c.json(await new Observations(c.env,await authenticate(c.req.raw,c.env),'web').list(c.req.query())));
 app.get('/api/observations/:id/versions',async c=>c.json(await new Observations(c.env,await authenticate(c.req.raw,c.env),'web').versions({...c.req.query(),id:c.req.param('id')})));
 app.get('/api/observations/:id',async c=>c.json(await new Observations(c.env,await authenticate(c.req.raw,c.env),'web').detail(c.req.param('id'))));
@@ -120,6 +125,7 @@ export default {
     await cleanupJournal(env);
     await env.DB.batch([
       env.DB.prepare('DELETE FROM observation_drafts WHERE updated_at<?').bind(new Date(Date.now()-30*86400000).toISOString()),
+      env.DB.prepare('DELETE FROM reading_deliveries WHERE expires_at<?').bind(new Date().toISOString()),
       env.DB.prepare('DELETE FROM auth_rates WHERE expires_at<?').bind(Math.floor(Date.now()/1000)),
       env.DB.prepare('DELETE FROM credentials WHERE expires_at<? OR revoked_at<?').bind(new Date(Date.now()-86400000).toISOString(),new Date(Date.now()-86400000).toISOString()),
     ]);

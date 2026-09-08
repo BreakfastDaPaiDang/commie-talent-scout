@@ -31,6 +31,16 @@ export class TagState {
   const rows=await this.env.DB.prepare(`WITH source AS (${source}), visible AS (SELECT data_json FROM source WHERE ${evidenceVisibilitySql("json_extract(data_json,'$.evidence')")}), ranked AS (SELECT data_json,count(*) OVER() total,max(json_extract(data_json,'$.focus')) OVER() any_focus FROM visible) SELECT json_extract(data_json,'$.tag_id') tag_id,json_extract(data_json,'$.category_name') category_name,json_extract(data_json,'$.name') name,json_extract(data_json,'$.color') color,json_extract(data_json,'$.focus') focus,total FROM ranked WHERE any_focus=0 OR json_extract(data_json,'$.focus')>0 ORDER BY focus,category_name,name,tag_id LIMIT 3`).bind(archiveId,...(closed?[snapshotVersion??0]:[]),this.actor.id,this.actor.role).all<TagLabel&{total:number}>();
   return {tags:rows.results.map(({total:_,...t})=>t),total:rows.results[0]?.total??0};
  }
+ async summaries(ids:string[]){
+  const result=new Map<string,{tags:TagLabel[];total:number}>();if(!ids.length)return result;
+  const rows=await this.env.DB.prepare(`WITH selected AS (SELECT * FROM archives WHERE id IN (SELECT value FROM json_each(?))), source AS (
+   SELECT b.archive_id,${bindingJson} data_json FROM selected a JOIN archive_tags b ON b.archive_id=a.id JOIN tags t ON t.id=b.tag_id JOIN tag_categories c ON c.id=t.category_id WHERE a.closed=0
+   UNION ALL SELECT s.archive_id,json_set(s.data_json,'$.color',c.color) FROM selected a JOIN archive_tag_snapshots s ON s.archive_id=a.id AND s.close_version=a.tag_snapshot_version JOIN tags t ON t.id=s.tag_id JOIN tag_categories c ON c.id=t.category_id WHERE a.closed=1
+  ), visible AS (SELECT * FROM source WHERE ${evidenceVisibilitySql("json_extract(data_json,'$.evidence')")}), ranked AS (SELECT *,count(*) OVER(PARTITION BY archive_id) total,max(json_extract(data_json,'$.focus')) OVER(PARTITION BY archive_id) any_focus FROM visible), limited AS (
+   SELECT *,row_number() OVER(PARTITION BY archive_id ORDER BY json_extract(data_json,'$.focus'),json_extract(data_json,'$.category_name'),json_extract(data_json,'$.name'),json_extract(data_json,'$.tag_id')) rank FROM ranked WHERE any_focus=0 OR json_extract(data_json,'$.focus')>0
+  ) SELECT archive_id,total,json_extract(data_json,'$.tag_id') tag_id,json_extract(data_json,'$.category_name') category_name,json_extract(data_json,'$.name') name,json_extract(data_json,'$.color') color,json_extract(data_json,'$.focus') focus FROM limited WHERE rank<=3 ORDER BY archive_id,rank`).bind(JSON.stringify(ids),this.actor.id,this.actor.role).all<TagLabel&{archive_id:string;total:number}>();
+  for(const {archive_id,total,...tag} of rows.results){const entry=result.get(archive_id)??{tags:[],total};entry.tags.push(tag);result.set(archive_id,entry);}return result;
+ }
  snapshot(archiveId:string,version:number){return this.env.DB.prepare(`INSERT INTO archive_tag_snapshots(archive_id,close_version,tag_id,data_json) SELECT b.archive_id,?,b.tag_id,${bindingJson} FROM archive_tags b JOIN tags t ON t.id=b.tag_id JOIN tag_categories c ON c.id=t.category_id WHERE b.archive_id=?`).bind(version,archiveId);}
  async validateEvidence(evidence:Evidence[],archiveId:string,requireRead:boolean){
   for(const e of evidence){if(!e.observation_id)continue;
