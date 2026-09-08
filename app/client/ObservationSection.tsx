@@ -1,3 +1,4 @@
+import {ActivityStream} from './ActivityStream';
 import {ReadBoundary,Highlight} from './Reading';
 import type {ReadDelivery} from '../server/reading';
 import {pasteImages,ImagePicker,ImageGallery,type AttachmentInfo} from './Images';
@@ -14,7 +15,7 @@ import {TagChip,TagEvidence} from './TagsSection';
 import type {TagBinding} from '../server/tag-state';
 
 export type ObservationFocus={event_id?:string;observation_id?:string;query?:string;key:string};
-type TimelineEvent={is_read?:boolean;reading?:ReadDelivery|null;id:string;seq:number;kind:string;actor_name:string;source:string;created_at:string;observation_id:string|null;observation:Observation|null;before:Record<string,unknown>|null;after:Record<string,unknown>|null};
+type TimelineEvent={is_read?:boolean;reading?:ReadDelivery|null;id:string;archive_id:string;actor_id:string;seq:number;kind:string;actor_name:string;source:string;created_at:string;observation_id:string|null;observation:Observation|null;before:Record<string,unknown>|null;after:Record<string,unknown>|null};
 const time=(value:string)=>new Date(value).toLocaleString('zh-CN');
 function localTime(value:string|null){if(!value)return '';const date=new Date(value);return new Date(date.getTime()-date.getTimezoneOffset()*60000).toISOString().slice(0,16);}
 function isoTime(value:string){return value?new Date(value).toISOString():null;}
@@ -42,10 +43,11 @@ export function ObservationSection({actor,archive,onChanged,focus}:{actor:Member
  function changeMode(next:'all'|'observations'|'deleted'){restored.current=true;setMode(next);}
  async function saved(){setEdit(null);setNotice('观察已保存');onChanged();}
  function renderRecord(record:Observation,highlight?:string){return <ObservationCard key={record.id} record={record} highlight={highlight} onEdit={()=>setEdit(record)} onHistory={()=>setHistory(record)} onState={()=>setStateTarget(record)}/>;}
- return <>{focus&&<section className="focused-content" id="focused-content"><p className="eyebrow">{focus.query?'搜索命中':'指定更新'} · {archive.closed?'档案已关闭':'当前档案'}</p><PageError error={focusError} retry={()=>setFocusRetry(n=>n+1)}/>{!focused&&!focusError?<p role="status">正在定位内容…</p>:focused&&('kind' in focused?(focused.observation?renderRecord(focused.observation,focus.query):<EventCard event={focused} expanded/>):renderRecord(focused,focus.query))}</section>}<ObservationComposer actor={actor} archive={archive} onPublished={()=>{setNotice('观察已发布');onChanged();}}/>
+ return <>{focus&&<section className="focused-content" id="focused-content"><p className="eyebrow">{focus.query?'搜索命中':'指定更新'} · {archive.closed?'档案已关闭':'当前档案'}</p><PageError error={focusError} retry={()=>setFocusRetry(n=>n+1)}/>{!focused&&!focusError?<p role="status">正在定位内容…</p>:focused&&('kind' in focused?(focused.observation?renderRecord(focused.observation,focus.query):<EventCard event={focused} expanded/>):renderRecord(focused,focus.query))}</section>}
   <div className="observation-toolbar"><div className="observation-tabs" aria-label="历史内容筛选"><button aria-pressed={mode==='all'} onClick={()=>changeMode('all')}>全部动态</button><button aria-pressed={mode==='observations'} onClick={()=>changeMode('observations')}>仅观察记录</button><button aria-pressed={mode==='deleted'} onClick={()=>changeMode('deleted')}>已删除</button></div><span>{archive.observation_count} 条观察</span></div>
+  {mode!=='deleted'&&<ObservationComposer actor={actor} archive={archive} onPublished={()=>{setNotice('观察已发布');onChanged();}}/>}
   <div className="observation-stream"><PageError error={error} retry={()=>void load()}/>{notice&&<p className="form-notice" role="status">{notice}</p>}
-   {mode!=='all'?records.map(r=>renderRecord(r)):events.map(e=>e.observation?renderRecord(e.observation):<EventCard key={e.id} event={e}/>)}
+   {mode!=='all'?records.map(r=>renderRecord(r)):<ActivityStream events={events} renderRecord={e=>renderRecord(e.observation!)} renderEvent={e=><EventCard key={e.id} event={e}/>}/>}
    {loading?<p className="stream-status" role="status">正在读取观察与动态…</p>:error?null:cursor?<button className="button" onClick={()=>void load(cursor)}>更早的{mode==='all'?'动态':'观察'}</button>:<p className="stream-status">{mode==='deleted'&&!records.length?'没有你可查看的已删除观察。':mode==='observations'&&!records.length?'还没有观察记录，写下第一条吧。':'已到历史起点'}</p>}
   </div>
   {edit&&<Modal title="编辑观察" busy={busy} onClose={()=>setEdit(null)}><ObservationEdit actorId={actor.id} key={edit.id+edit.version} record={edit} busy={busy} setBusy={setBusy} onSaved={saved} onReload={async()=>setEdit((await api<{observation:Observation}>('/observations/'+edit.id)).observation)}/></Modal>}

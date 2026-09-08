@@ -13,7 +13,8 @@
     "test:auth": "node --experimental-strip-types --test tests/password.test.ts",
     "bootstrap": "node scripts/bootstrap.mjs",
     "deploy:staging": "npm run build && wrangler deploy --env staging",
-    "deploy": "npm run build && wrangler deploy --env production"
+    "deploy": "npm run build && wrangler deploy --env production",
+    "test:dom": "node --import ./tests/dom-register.mjs --import tsx --test tests/*.dom.test.tsx"
   },
   "dependencies": {
     "@modelcontextprotocol/client": "2.0.0",
@@ -26,9 +27,12 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "5.20260907.1",
+    "@types/jsdom": "30.0.0",
     "@types/node": "24.13.3",
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.7",
+    "jsdom": "30.0.1",
+    "tsx": "4.23.13",
     "typescript": "7.0.2",
     "vite": "8.2.2",
     "wrangler": "4.129.1"

@@ -44,7 +44,7 @@ export class Reading{
  async list(input:unknown){
   const a=unreadListInput.parse(input),u=unreadPredicate(this.actor),snapshot=a.snapshot??Number((await this.stmt('SELECT coalesce(max(seq),0) seq FROM archive_events').first<{seq:number}>())!.seq);
   if(a.before&&a.before>snapshot+1)throw new Failure(400,'INVALID_CURSOR','分页位置超出本次队列');
-  const rows=await this.stmt(`SELECT e.id,e.seq,e.archive_id,e.kind,e.observation_id,e.created_at,m.name actor_name,a.name archive_name,a.type,a.closed FROM archive_events e JOIN archives a ON a.id=e.archive_id JOIN members m ON m.id=e.actor_id WHERE e.seq<=? ${a.before?'AND e.seq<?':''} ${a.archive_id?'AND e.archive_id=?':''} ${a.exclude_event_id?'AND e.id<>?':''} AND ${u.sql} ORDER BY e.seq DESC LIMIT ?`,snapshot,...(a.before?[a.before]:[]),...(a.archive_id?[a.archive_id]:[]),...(a.exclude_event_id?[a.exclude_event_id]:[]),...u.args,a.limit+1).all<Record<string,unknown>>();
+  const rows=await this.stmt(`SELECT e.id,e.seq,e.archive_id,e.actor_id,e.kind,e.observation_id,e.created_at,m.name actor_name,a.name archive_name,a.type,a.closed FROM archive_events e JOIN archives a ON a.id=e.archive_id JOIN members m ON m.id=e.actor_id WHERE e.seq<=? ${a.before?'AND e.seq<?':''} ${a.archive_id?'AND e.archive_id=?':''} ${a.exclude_event_id?'AND e.id<>?':''} AND ${u.sql} ORDER BY e.seq DESC LIMIT ?`,snapshot,...(a.before?[a.before]:[]),...(a.archive_id?[a.archive_id]:[]),...(a.exclude_event_id?[a.exclude_event_id]:[]),...u.args,a.limit+1).all<Record<string,unknown>>();
   return {events:rows.results.slice(0,a.limit),snapshot,next_cursor:rows.results.length>a.limit?String(rows.results[a.limit-1].seq):null};
  }
 }

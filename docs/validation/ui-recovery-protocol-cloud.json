@@ -1,0 +1,27 @@
+{
+  "date": "2026-09-08T15:57:14.909Z",
+  "base": "https://scout-staging.dapaidang.org",
+  "checks": [
+    "HTTP/MCP five-minute groups agree, retain every event and its actor, and never confirm reading from group metadata or delivery alone",
+    "HTTP/MCP search finds old current observation with escaped wildcard and snippet; summaries and queues do not confirm; event receipts bind member and credential, replay safely and preserve archive activity",
+    "new edit remains unread until its own body is confirmed; stale tickets cannot clear it; web/MCP share marks while other members remain independent; own/pre-account updates excluded and mine uses only current work bindings",
+    "deleted content and dependent tags are absent from search/unread and group metadata; deletion and closed contexts remain directly readable; cross-library snapshot pagination does not mix later events or duplicate boundaries",
+    {
+      "behavior": "real D1 HTTP/MCP maximum limit and combined unread search",
+      "elapsed_ms": 3049,
+      "timings": [
+        {
+          "type": "person",
+          "elapsed_ms": 1585,
+          "count": 1
+        },
+        {
+          "type": "org",
+          "elapsed_ms": 1464,
+          "count": 1
+        }
+      ]
+    }
+  ],
+  "recoveries": []
+}
