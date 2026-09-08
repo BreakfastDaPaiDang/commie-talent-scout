@@ -44,7 +44,7 @@
   "unit_tests": 11,
   "r2_public_access": "disabled, verified using wrangler r2 bucket dev-url get",
   "pending": [
-    "real cloud large-image/cleanup follow-up",
+    "actual cloud scheduled orphan cleanup",
     "actual desktop/mobile browser interaction",
     "real Codex file upload and history flow"
   ],
@@ -60,5 +60,24 @@
   "browser_attempt": {
     "result": "Debugger unattached",
     "actual_page_verification": false
+  },
+  "cloud_boundaries": {
+    "date": "2026-09-08T14:33:43.138Z",
+    "base": "https://scout-staging.dapaidang.org",
+    "checks": [
+      "exact 10 MiB valid PNG and ten ordered images succeed; eleven images fail; concurrent same-ticket upload has one winner; removing all current images preserves ten historical references",
+      "concurrent publication cannot claim one uploaded image for two records; revoking the original MCP credential invalidates its otherwise unexpired upload ticket",
+      "cloud cleanup fixtures prepared for the next scheduled run; completion must be verified separately"
+    ],
+    "recoveries": []
+  },
+  "maximum_cloud_upload_ms": 8350,
+  "cloud_maximum_read": {
+    "date": "2026-09-08T14:35:35.049Z",
+    "base": "https://scout-staging.dapaidang.org",
+    "checks": [
+      "real cloud MCP image response returns the complete 10 MiB original as standard image content"
+    ],
+    "recoveries": []
   }
 }
