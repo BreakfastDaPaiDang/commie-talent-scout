@@ -1,0 +1,49 @@
+{
+  "deployment": "741ee506-bc8e-4c2d-aba3-b76c51ddeb11",
+  "local": {
+    "date": "2026-09-08T20:54:05.370Z",
+    "base": "http://127.0.0.1:8790",
+    "checks": [
+      "real SDK task retries keep one task, attempts remain distinct, service receipts deduplicate new observations, source secrets are redacted and current artifact version changes are factual",
+      "actual admin task dialog renders original versus Agent summary, expands source copy and bounded call results, and exposes links to current artifacts",
+      "expanded mobile dialog and statistic cards fit the viewport; separate unlinked calls stay ungrouped and all three views run without browser errors",
+      "live HTTP rejects ordinary members, permits a newly authenticated admin and immediately rejects the old admin session after demotion"
+    ],
+    "recoveries": []
+  },
+  "cloud": {
+    "date": "2026-09-08T20:50:28.060Z",
+    "base": "https://scout-staging.dapaidang.org",
+    "checks": [
+      "real SDK task retries keep one task, attempts remain distinct, service receipts deduplicate new observations, source secrets are redacted and current artifact version changes are factual",
+      "actual admin task dialog renders original versus Agent summary, expands source copy and bounded call results, and exposes links to current artifacts",
+      "expanded mobile dialog and statistic cards fit the viewport; separate unlinked calls stay ungrouped and all three views run without browser errors",
+      "live HTTP rejects ordinary members, permits a newly authenticated admin and immediately rejects the old admin session after demotion"
+    ],
+    "recoveries": []
+  },
+  "validation": {
+    "sqlite_service_tests": 4,
+    "types": "pass",
+    "build": "pass",
+    "historical_prototype_widths": [
+      1920,
+      1440,
+      1024,
+      390
+    ],
+    "screenshots_reviewed": [
+      "task-review-local-mobile.png",
+      "task-review-local-statistics-mobile.png",
+      "task-review-cloud-mobile.png",
+      "task-review-cloud-statistics-mobile.png"
+    ],
+    "dom_tests": 5,
+    "ui_simplicity_checks": 25,
+    "real_workspace_groups": 6,
+    "timezone": "Los Angeles browser still displays and filters Beijing time; local actual browser verified",
+    "final_ui_polish": "timezone, request detail retry and pagination artifact version aggregation; type/build and local browser passed"
+  },
+  "real_codex": "not newly run; this issue was verified using SDK plus actual HTTP/browser, not relabeled as Codex",
+  "cloud_verification_deployment": "3b7032dd-a1c9-4ce7-91e3-05b25896f5a3"
+}

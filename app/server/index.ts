@@ -9,6 +9,7 @@ import { PasswordBusy } from './password.ts';
 import { Failure, now, publicMember, type Env } from './types.ts';
 import {createCredential,listCredentials,revokeCredential} from './credentials.ts';
 import {cleanupJournal,getCall,listCalls} from './mcp-journal.ts';
+import {TaskReview} from './task-review.ts';
 import {handleMcp} from './mcp.ts';
 import {Members} from './members.ts';
 import {getRequestResult} from './commands.ts';
@@ -71,6 +72,9 @@ app.post('/api/connections',async c=>c.json(await createCredential(c.env,await a
 app.post('/api/connections/revoke',async c=>c.json(await revokeCredential(c.env,await authenticate(c.req.raw,c.env),await c.req.json())));
 app.get('/api/admin/calls',async c=>c.json(await listCalls(c.env,await authenticate(c.req.raw,c.env),c.req.query())));
 app.get('/api/admin/calls/:id',async c=>c.json(await getCall(c.env,await authenticate(c.req.raw,c.env),c.req.param('id'))));
+app.get('/api/admin/tasks',async c=>c.json(await new TaskReview(c.env,await authenticate(c.req.raw,c.env)).list(c.req.query())));
+app.get('/api/admin/tasks/:id',async c=>c.json(await new TaskReview(c.env,await authenticate(c.req.raw,c.env)).detail({...c.req.query(),id:c.req.param('id')})));
+app.get('/api/admin/usage',async c=>c.json(await new TaskReview(c.env,await authenticate(c.req.raw,c.env)).statistics(c.req.query())));
 app.get('/api/admin/members',async c=>c.json(await new Members(c.env,await authenticate(c.req.raw,c.env),'web').list(c.req.query())));
 app.post('/api/admin/members/create',async c=>c.json(await new Members(c.env,await authenticate(c.req.raw,c.env),'web').create(await c.req.json())));
 app.post('/api/admin/members/reset-password',async c=>c.json(await new Members(c.env,await authenticate(c.req.raw,c.env),'web').resetPassword(await c.req.json())));
