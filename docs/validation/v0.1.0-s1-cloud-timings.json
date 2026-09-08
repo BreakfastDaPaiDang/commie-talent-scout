@@ -1,0 +1,91 @@
+{
+  "date": "2026-09-08T10:20:25.229Z",
+  "base": "https://scout-staging.dapaidang.org",
+  "checks": [
+    {
+      "mode": "single",
+      "results": [
+        {
+          "status": 200,
+          "elapsedMs": 2222
+        }
+      ]
+    },
+    {
+      "mode": "concurrent-three",
+      "results": [
+        {
+          "status": 200,
+          "elapsedMs": 1068
+        },
+        {
+          "status": 200,
+          "elapsedMs": 1806
+        },
+        {
+          "status": 200,
+          "elapsedMs": 1715
+        }
+      ]
+    }
+  ],
+  "events": [
+    {
+      "path": "/api/auth/login",
+      "cpuMs": 220,
+      "wallMs": 1555,
+      "outcome": "ok"
+    },
+    {
+      "path": "/api/auth/logout",
+      "cpuMs": 5,
+      "wallMs": 247,
+      "outcome": "ok"
+    },
+    {
+      "path": "/api/auth/login",
+      "cpuMs": 195,
+      "wallMs": 823,
+      "outcome": "ok"
+    },
+    {
+      "path": "/api/auth/logout",
+      "cpuMs": 2,
+      "wallMs": 249,
+      "outcome": "ok"
+    },
+    {
+      "path": "/api/auth/login",
+      "cpuMs": 304,
+      "wallMs": 964,
+      "outcome": "ok"
+    },
+    {
+      "path": "/api/auth/login",
+      "cpuMs": 364,
+      "wallMs": 1006,
+      "outcome": "ok"
+    },
+    {
+      "path": "/api/auth/logout",
+      "cpuMs": 1,
+      "wallMs": 244,
+      "outcome": "ok"
+    },
+    {
+      "path": "/api/auth/logout",
+      "cpuMs": 1,
+      "wallMs": 1178,
+      "outcome": "ok"
+    }
+  ],
+  "kdf": {
+    "perIsolateConcurrency": 1,
+    "N": 32768,
+    "r": 8,
+    "p": 3,
+    "maxmemBytes": 67108864,
+    "approxWorkingMemoryBytes": 33554432
+  },
+  "memoryObservation": "No Worker memory-exhaustion outcome in this bounded load. Tail does not expose measured peak heap; maxmem is the KDF allocation limit, not measured total Worker memory."
+}

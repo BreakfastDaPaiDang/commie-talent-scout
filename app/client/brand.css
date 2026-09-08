@@ -1,0 +1,830 @@
+/* Readable work surfaces and a star/observer identity. */
+:root {
+  --red: #ef3328;
+  --muted: #626262;
+  --ui-size: 18px;
+  --reading-size: 21px;
+  --secondary-size: 16px;
+}
+body {
+  font-size: var(--ui-size);
+  font-weight: 420;
+}
+.brand > svg {
+  width: 43px;
+  height: 43px;
+}
+.brand > span {
+  font-size: 28px;
+  letter-spacing: -0.02em;
+  font-weight: 760;
+}
+.primary-nav > button {
+  font-size: 20px;
+}
+.current-member,
+.topbar-tools .tool-link {
+  font-size: 17px;
+}
+.archive-head .search-field {
+  height: 48px;
+}
+.archive-head .search-field input {
+  font-size: 17px;
+}
+.archive-head .button,
+.page-head .button {
+  font-size: 17px;
+  min-height: 46px;
+}
+.scope-tabs {
+  gap: 8px;
+}
+.scope-tabs button {
+  font-size: 17px;
+  padding: 7px 9px;
+}
+.scope-tabs small {
+  font: 14px var(--font);
+}
+.filter-toggle,
+.list-caption {
+  font-size: 15px;
+}
+.filter-toggle {
+  min-height: 44px;
+}
+.filter-row select,
+.filter-row .member-trigger {
+  font-size: 16px;
+}
+.entity-row {
+  padding-top: 24px;
+  padding-bottom: 24px;
+}
+.row-title h2 {
+  font-size: 30px;
+  font-weight: 720;
+  line-height: 1.35;
+  letter-spacing: 0;
+}
+.row-meta {
+  gap: 9px;
+  margin-top: 9px;
+  min-height: 26px;
+}
+.state-badge.small {
+  font-size: 16px;
+  line-height: 1.6;
+}
+.row-binding {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-top: 8px;
+  font-size: 16px;
+  line-height: 1.65;
+  color: #555;
+}
+.row-binding > span:first-child {
+  color: var(--muted);
+  flex-shrink: 0;
+}
+.row-binding > span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.record-excerpt {
+  font-size: 19px;
+  line-height: 1.8;
+  color: #505050;
+  margin-top: 13px;
+  margin-bottom: 17px;
+  font-weight: 420;
+}
+.row-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  font-size: 15px;
+  color: #686868;
+}
+.row-foot > span {
+  max-width: none;
+}
+.row-foot time {
+  font: 13px var(--font);
+  margin-left: auto;
+}
+.draft-tag {
+  font-size: 14px;
+}
+.detail-top,
+.next-unread {
+  font-size: 15px;
+}
+.detail-number {
+  font-size: 13px;
+}
+.entity-heading h1 {
+  letter-spacing: -0.02em;
+}
+.entity-heading > .state-badge {
+  font-size: 19px;
+}
+.assignment-label,
+.member-chip,
+.contacts-bar .contact-pill {
+  font-size: 17px;
+}
+.assignment-row .text-button,
+.contacts-bar .button,
+.optional-label {
+  font-size: 16px;
+}
+.contact-pill small,
+.member-chip small {
+  font-size: 15px;
+}
+.timeline-tabs button {
+  font-size: 19px;
+}
+.timeline-tabs small {
+  font-size: 15px;
+}
+.composer textarea {
+  font-size: 20px;
+  line-height: 1.8;
+}
+.draft-note {
+  font-size: 15px;
+}
+.composer-foot .button {
+  font-size: 18px;
+}
+.record-byline strong {
+  font-size: 19px;
+}
+.record-byline time,
+.record-byline small {
+  font-size: 14px;
+}
+.record-body {
+  font-size: var(--reading-size);
+  line-height: 1.9;
+  letter-spacing: 0;
+  font-weight: 420;
+}
+.record-actions button {
+  font-size: 16px;
+  min-height: 36px;
+}
+.system-event {
+  font-size: 16px;
+  line-height: 1.85;
+}
+.system-event time {
+  font-size: 13px;
+}
+.locked-notice,
+.deleted-explanation,
+.field-hint {
+  font-size: 16px;
+}
+.button {
+  font-size: 18px;
+}
+.modal {
+  width: min(740px, calc(100vw - 40px));
+}
+.modal-head h2 {
+  font-size: 29px;
+}
+.modal-form,
+.hunter-profile {
+  font-size: 18px;
+}
+.modal-form > label,
+.form-field > label,
+.modal-form legend,
+.hunter-profile label {
+  font-size: 18px;
+}
+.modal-form input,
+.modal-form textarea,
+.modal-form select,
+.hunter-profile input {
+  font-size: 18px;
+  min-height: 48px;
+}
+.modal-form label small,
+.form-field label small,
+.hunter-profile label small {
+  font-size: 15px;
+}
+.modal-form p,
+.form-avatar p {
+  font-size: 16px;
+  line-height: 1.75;
+}
+.form-avatar {
+  gap: 22px;
+  align-items: flex-start;
+}
+.form-avatar strong {
+  font-size: 19px;
+}
+.avatar-editor-actions {
+  display: flex;
+  gap: 10px 18px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin: 6px 0;
+}
+.avatar-editor-actions .button,
+.avatar-editor-actions .text-button {
+  font-size: 16px;
+}
+.avatar-editor-controls {
+  flex: 1;
+  min-width: 0;
+}
+.hunter-profile {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 28px;
+}
+.hunter-profile label {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: baseline;
+}
+.hunter-profile label input {
+  width: 100%;
+}
+.hunter-profile > .button {
+  align-self: flex-start;
+}
+.profile-identity {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  align-items: baseline;
+}
+.profile-identity strong {
+  font-size: 26px;
+}
+.profile-identity span {
+  font-size: 16px;
+  color: var(--muted);
+}
+.member-trigger,
+.member-option {
+  font-size: 17px;
+}
+.member-option small,
+.member-menu-foot {
+  font-size: 14px;
+}
+.member-menu input {
+  font-size: 17px;
+}
+.accounts-content th,
+.accounts-content td {
+  font-size: 18px;
+}
+.section-description {
+  font-size: 18px;
+}
+.update-row p {
+  font-size: 19px;
+}
+.update-row time,
+.kind-label {
+  font-size: 15px;
+}
+.agent-copy > p {
+  font-size: 20px;
+}
+.agent-copy .agent-examples {
+  font-size: 18px;
+}
+.agent-copy .eyebrow {
+  font-size: 16px;
+}
+
+/* Full artwork on desktop; a concise, form-first entry on small screens. */
+.login-page {
+  min-height: 100dvh;
+  grid-template-columns: 54% 46%;
+  background: #fff;
+  align-items: center;
+  overflow: auto;
+}
+.login-brand {
+  position: static;
+  gap: 16px;
+  padding: 0;
+  margin: 0 0 48px;
+}
+.login-brand > svg {
+  width: 58px;
+  height: 58px;
+}
+.login-brand > span {
+  font-size: 32px;
+}
+.login-brand small {
+  font-size: 14px;
+  letter-spacing: 0.14em;
+}
+.login-scene {
+  grid-column: 1;
+  width: 100%;
+  height: 100dvh;
+  min-height: 660px;
+  margin: 0;
+  align-self: stretch;
+  overflow: hidden;
+  background: #f4f4f2;
+}
+.login-scene img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center;
+  mix-blend-mode: multiply;
+}
+.login-form {
+  grid-column: 2;
+  width: min(100%, 620px);
+  max-width: none;
+  margin: 0;
+  padding: 65px 70px;
+  justify-self: center;
+}
+.login-form .eyebrow {
+  font-size: 16px;
+  color: var(--muted);
+  letter-spacing: 0.12em;
+}
+.login-form h1 {
+  font-size: 58px;
+  line-height: 1.25;
+  letter-spacing: -0.03em;
+  margin: 18px 0;
+}
+.login-form > p {
+  font-size: 19px;
+  color: #626262;
+}
+.login-form form {
+  gap: 26px;
+  margin-top: 0;
+}
+.login-form label {
+  font-size: 18px;
+  font-weight: 500;
+  gap: 12px;
+}
+.login-form input {
+  height: 60px;
+  font-size: 19px;
+  border-color: #b8b8b8;
+}
+.login-form .button {
+  height: 60px;
+  font-size: 20px;
+  margin-top: 8px;
+}
+.login-form .prototype-note {
+  font-size: 15px;
+  color: #737373;
+  line-height: 1.85;
+}
+.login-footer {
+  left: calc(54% + 7%);
+  right: 6%;
+  bottom: 24px;
+  font-size: 13px;
+}
+.login-footer span:last-child {
+  font-size: 13px;
+}
+.login-footer span:last-child:after {
+  content: none;
+}
+@media (max-width: 1250px) {
+  .topbar {
+    gap: 30px;
+  }
+  .primary-nav {
+    gap: 25px;
+  }
+  .scope-tabs {
+    gap: 3px;
+  }
+  .scope-tabs button {
+    font-size: 15px;
+    padding: 7px 5px;
+    gap: 4px;
+  }
+  .scope-tabs small {
+    font-size: 13px;
+  }
+  .filter-toggle {
+    font-size: 14px;
+  }
+  .row-title h2 {
+    font-size: 28px;
+  }
+  .record-excerpt {
+    font-size: 18px;
+  }
+  .row-binding {
+    font-size: 15px;
+  }
+  .state-badge.small {
+    font-size: 15px;
+  }
+  .login-form {
+    padding-left: 40px;
+    padding-right: 40px;
+  }
+  .login-brand,
+  .login-footer {
+    left: calc(54% + 4%);
+  }
+  .login-form h1 {
+    font-size: 48px;
+  }
+}
+@media (max-width: 850px) {
+  .login-page {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: center;
+  }
+  .login-brand {
+    position: static;
+    padding: 0;
+    margin-bottom: 44px;
+  }
+  .login-scene {
+    display: none;
+  }
+  .login-form {
+    width: min(100%, 580px);
+    padding: 48px 28px;
+    margin: 0 auto;
+  }
+  .login-form h1 {
+    font-size: 46px;
+  }
+  .login-footer {
+    position: relative;
+    left: auto;
+    right: auto;
+    bottom: auto;
+    margin: auto 28px 24px;
+  }
+}
+@media (max-width: 600px) {
+  :root {
+    --ui-size: 18px;
+    --reading-size: 19px;
+  }
+  .brand > svg {
+    width: 36px;
+    height: 36px;
+  }
+  .brand > span {
+    font-size: 25px;
+  }
+  .primary-nav > button {
+    font-size: 18px;
+  }
+  .archive-head .search-field input {
+    font-size: 16px;
+  }
+  .archive-head .button {
+    font-size: 16px;
+  }
+  .scope-tabs button {
+    font-size: 15px;
+    padding: 7px 5px;
+  }
+  .scope-tabs small {
+    font-size: 13px;
+  }
+  .list-caption,
+  .filter-toggle {
+    font-size: 14px;
+  }
+  .filter-row select,
+  .filter-row .member-trigger {
+    font-size: 15px;
+  }
+  .entity-row {
+    padding: 23px 22px;
+    gap: 17px;
+  }
+  .entity-row > .avatar {
+    width: 66px;
+    height: 66px;
+  }
+  .row-title h2 {
+    font-size: 27px;
+  }
+  .row-meta {
+    margin-top: 8px;
+  }
+  .state-badge.small {
+    font-size: 15px;
+  }
+  .row-binding {
+    gap: 8px;
+    font-size: 15px;
+    margin-top: 7px;
+  }
+  .record-excerpt {
+    font-size: 18px;
+    line-height: 1.8;
+  }
+  .row-foot {
+    font-size: 14px;
+  }
+  .row-foot time {
+    font-size: 13px;
+  }
+  .detail-top,
+  .next-unread {
+    font-size: 14px;
+  }
+  .detail-number {
+    font-size: 12px;
+  }
+  .entity-heading h1 {
+    font-size: 42px;
+  }
+  .entity-heading > .state-badge {
+    font-size: 16px;
+  }
+  .assignment-label,
+  .member-chip {
+    font-size: 16px;
+  }
+  .assignment-row .text-button,
+  .optional-label {
+    font-size: 15px;
+  }
+  .contact-pill small,
+  .member-chip small {
+    font-size: 14px;
+  }
+  .contacts-bar .contact-pill,
+  .contacts-bar .button {
+    font-size: 16px;
+  }
+  .timeline-tabs button {
+    font-size: 17px;
+  }
+  .timeline-tabs small {
+    font-size: 14px;
+  }
+  .composer textarea {
+    font-size: 18px;
+  }
+  .draft-note {
+    font-size: 14px;
+  }
+  .record-byline strong {
+    font-size: 17px;
+  }
+  .record-byline time,
+  .record-byline small {
+    font-size: 13px;
+  }
+  .record-actions button {
+    font-size: 15px;
+  }
+  .system-event {
+    font-size: 15px;
+  }
+  .system-event time {
+    font-size: 13px;
+  }
+  .modal {
+    width: calc(100vw - 24px);
+  }
+  .modal-head h2 {
+    font-size: 25px;
+  }
+  .form-avatar {
+    gap: 14px;
+  }
+  .form-avatar .avatar {
+    width: 70px;
+    height: 70px;
+  }
+  .avatar-editor-actions {
+    gap: 8px 12px;
+  }
+  .avatar-editor-actions .button,
+  .avatar-editor-actions .text-button {
+    font-size: 15px;
+  }
+  .form-avatar p {
+    font-size: 15px;
+  }
+  .modal-form input,
+  .modal-form textarea,
+  .modal-form select {
+    font-size: 17px;
+  }
+  .modal-form > label,
+  .form-field > label,
+  .modal-form legend {
+    font-size: 17px;
+  }
+  .agent-copy > p {
+    font-size: 19px;
+  }
+  .agent-copy .agent-examples {
+    font-size: 17px;
+  }
+  .login-form {
+    padding-top: 32px;
+  }
+  .login-brand {
+    padding: 0;
+  }
+  .login-brand > span {
+    font-size: 27px;
+  }
+  .login-brand > svg {
+    width: 46px;
+    height: 46px;
+  }
+  .login-form h1 {
+    font-size: 44px;
+  }
+  .login-form > p {
+    font-size: 18px;
+  }
+  .login-form .eyebrow {
+    font-size: 14px;
+  }
+  .login-form form {
+    margin-top: 0;
+    gap: 22px;
+  }
+  .login-form input,
+  .login-form .button {
+    height: 56px;
+  }
+  .login-form .prototype-note {
+    font-size: 14px;
+  }
+}
+
+/* Desktop refinement: retain type sizes, shorten reading lines and clarify controls. */
+@media (min-width: 851px) {
+  .detail-inner,
+  .expanded-detail .detail-inner {
+    max-width: 1040px;
+  }
+  .detail-inner {
+    padding-top: 20px;
+  }
+  .entity-header {
+    margin-bottom: 19px;
+  }
+  .record-body {
+    max-width: 40em;
+    text-wrap: pretty;
+  }
+  .entity-row {
+    padding-top: 21px;
+    padding-bottom: 21px;
+  }
+  .row-meta {
+    margin-top: 6px;
+  }
+  .row-binding {
+    margin-top: 5px;
+  }
+  .record-excerpt {
+    margin-top: 11px;
+    margin-bottom: 13px;
+  }
+  .detail-top {
+    min-height: 48px;
+  }
+  .detail-top .icon-button,
+  .entity-identity > .icon-button,
+  .record-byline .icon-button {
+    width: 38px;
+    height: 38px;
+    flex-shrink: 0;
+  }
+  .entity-identity > .icon-button {
+    align-self: center;
+    margin-top: 0;
+  }
+  .assignment-row > .text-button,
+  .contacts-bar .contact-pill,
+  .contacts-bar > .button {
+    min-height: 40px;
+  }
+  .composer:not(.open) textarea,
+  .composer.open textarea {
+    font-size: 20px;
+  }
+  .modal-actions {
+    position: sticky;
+    bottom: -28px;
+    z-index: 3;
+    background: white;
+    margin: 4px -28px -28px;
+    padding: 18px 28px 24px;
+  }
+}
+.record-byline .icon-button {
+  opacity: 1;
+  color: #747474;
+}
+.record-byline .icon-button:hover,
+.entity-identity > .icon-button:hover {
+  color: var(--ink);
+  background: #ededed;
+}
+button,
+a,
+input,
+select,
+textarea {
+  scroll-margin-block: 110px;
+}
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--red);
+  outline-offset: 3px;
+}
+.search-field:focus-within {
+  border-color: var(--red);
+  box-shadow: 0 0 0 1px var(--red);
+}
+.search-field input:focus-visible {
+  outline: none;
+}
+.composer.open:focus-within {
+  border-color: var(--red);
+}
+.modal-chrome {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: white;
+}
+.modal-chrome .modal-head {
+  position: static;
+}
+.dialog-feedback {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 14px 28px;
+  background: #f3f3f3;
+  color: var(--ink);
+  border-bottom: 1px solid var(--line);
+  font-size: 17px;
+  line-height: 1.6;
+}
+.dialog-feedback.error {
+  background: #fff2ef;
+  color: #a3241c;
+}
+.dialog-feedback > svg,
+.toast > svg {
+  flex-shrink: 0;
+  margin-top: 4px;
+}
+.toast {
+  font-size: 17px;
+}
+.toast.error {
+  border-left-color: var(--red);
+}

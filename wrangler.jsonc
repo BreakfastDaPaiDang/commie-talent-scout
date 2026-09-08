@@ -1,0 +1,19 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "cts-web",
+  "main": "app/server/index.ts",
+  "compatibility_date": "2026-09-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": { "directory": "dist", "binding": "ASSETS", "not_found_handling": "single-page-application", "run_worker_first": ["/api/*", "/mcp", "/images/*", "/uploads/*"] },
+  "limits": { "cpu_ms": 2000 },
+  "observability": { "enabled": true, "head_sampling_rate": 0.1, "redact_query_string": true },
+  "env": {
+    "staging": {
+      "name": "cts-web-staging",
+      "vars": { "ENVIRONMENT": "staging", "APP_ORIGIN": "https://scout-staging.dapaidang.org" },
+      "d1_databases": [{ "binding": "DB", "database_name": "cts-staging", "database_id": "b43ac6eb-d724-416a-b62e-3433fe072560", "migrations_dir": "migrations" }],
+      "routes": [{ "pattern": "scout-staging.dapaidang.org", "custom_domain": true }],
+      "triggers": { "crons": ["17 * * * *"] }
+    }
+  }
+}

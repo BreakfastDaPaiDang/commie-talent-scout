@@ -1,0 +1,35 @@
+{
+  "name": "commie-talent-scout",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 5190 --strictPort",
+    "dev:worker": "wrangler dev --env staging --port 8790",
+    "build": "vite build",
+    "check": "tsc --noEmit",
+    "test": "node --experimental-strip-types --test tests/*.test.ts",
+    "test:auth": "node --experimental-strip-types --test tests/password.test.ts",
+    "bootstrap": "node scripts/bootstrap.mjs",
+    "deploy:staging": "npm run build && wrangler deploy --env staging",
+    "deploy": "npm run build && wrangler deploy --env production"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/client": "2.0.0",
+    "@modelcontextprotocol/server": "2.0.0",
+    "agents": "0.22.0",
+    "hono": "4.13.7",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "zod": "4.5.4"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20260907.1",
+    "@types/node": "24.13.3",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.7",
+    "typescript": "7.0.2",
+    "vite": "8.2.2",
+    "wrangler": "4.129.1"
+  }
+}
