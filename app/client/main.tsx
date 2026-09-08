@@ -4,6 +4,7 @@ import {api,ApiError,type Member} from './api';
 import {AgentPage,ConnectionsPage,CallsPage} from './ConnectionPages';
 import {MembersPage} from './MembersPage';
 import {ArchivesPage} from './ArchivesPage';
+import {flushDrafts,clearDraftMemory} from './draft-store';
 import './app.css';
 import './workspace.css';
 import './brand.css';
@@ -27,7 +28,7 @@ function App(){
     setBusy(true);
     try{await api('/auth/password',{current_password:data.get('current_password'),new_password:data.get('new_password')});navigate('/');setMember(null);setNotice('密码已更新，请使用新密码登录');}catch(e){setError((e as Error).message);}finally{setBusy(false);}
   }
-  async function logout(){setBusy(true);try{await api('/auth/logout',{});setMember(null);setError('');}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
+  async function logout(){setBusy(true);try{if(member)await flushDrafts(member.id);await api('/auth/logout',{});if(member)clearDraftMemory(member.id);setMember(null);setError('');}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
   async function refreshActor(message?:string){try{const r=await api<{member:Member}>('/auth/me');setMember(r.member);if(r.member.role!=='admin'&&path.startsWith('/admin/')){navigate('/');setNotice(message??'权限已更新');}return r.member;}catch(e){if(e instanceof ApiError&&e.status===401){setMember(null);setNotice(message??'登录已失效，请重新登录');return null;}throw e;}}
   if(loading)return <main className="initial-loading" role="status">正在打开工作台…</main>;
   if(!member||member.must_change_password||path==='/account/password')return <div className="login-page"><section className="login-scene" aria-hidden="true"><img src="/art/login-observatory-v4.png" alt=""/></section><main className="login-form"><Brand/>
@@ -39,7 +40,7 @@ function App(){
     </form>{!member.must_change_password&&<button className="button quiet" onClick={()=>navigate('/')} disabled={busy}>返回工作台</button>}<button className="button quiet" onClick={logout} disabled={busy}>退出登录</button></>:<form aria-label="登录" onSubmit={login}><label>猎头账号<input name="username" autoComplete="username" required maxLength={80} autoFocus/></label><label>密码<input type="password" name="password" autoComplete="current-password" required maxLength={128}/></label><button className="button primary" disabled={busy}>{busy?'正在登录…':'登录'}<span aria-hidden="true">→</span></button></form>}
     {error&&<p className="form-error" role="alert">{error}</p>}{notice&&<p className="form-notice" role="status">{notice}</p>}
   </main></div>;
-  return <div className="app"><header className="topbar"><Brand/><nav className="primary-nav" aria-label="主要导航"><button className={path==='/'?'active':''} onClick={()=>navigate('/')}>人物</button><button className={path==='/organizations'?'active':''} onClick={()=>navigate('/organizations')}>组织</button><button className={path==='/agent'?'active':''} onClick={()=>navigate('/agent')}>Agent 接入</button></nav><div className="topbar-tools"><details className="account-menu"><summary>{member.name}<span aria-hidden="true"> ▾</span></summary><div><button onClick={()=>navigate('/account/connections')}>我的连接</button><button onClick={()=>navigate('/account/password')}>修改密码</button>{member.role==='admin'&&<><button onClick={()=>navigate('/admin/members')}>猎头管理</button><button onClick={()=>navigate('/admin/calls')}>Agent 调用</button></>}<button disabled={busy} onClick={logout}>退出登录</button></div></details></div></header>{notice&&<p className="site-notice" role="status">{notice}</p>}
+  return <div className="app"><header className="topbar"><Brand/><nav className="primary-nav" aria-label="主要导航"><button className={path==='/'?'active':''} onClick={()=>navigate('/')}>人物</button><button className={path==='/organizations'?'active':''} onClick={()=>navigate('/organizations')}>组织</button><button className={path==='/agent'?'active':''} onClick={()=>navigate('/agent')}>Agent 接入</button></nav><div className="topbar-tools"><details className="account-menu"><summary>{member.name}<span aria-hidden="true"> ▾</span></summary><div><button onClick={()=>navigate('/account/connections')}>我的连接</button><button onClick={()=>navigate('/account/password')}>修改密码</button>{member.role==='admin'&&<><button onClick={()=>navigate('/admin/members')}>猎头管理</button><button onClick={()=>navigate('/admin/calls')}>Agent 调用</button></>}<button disabled={busy} onClick={logout}>退出登录</button></div></details></div></header>{notice&&<p className="site-notice" role="status">{notice}</p>}{error&&<p className="form-error" role="alert">{error}</p>}
     {path==='/agent'?<AgentPage/>:path==='/account/connections'?<ConnectionsPage/>:path.startsWith('/admin/')?(member.role==='admin'?(path==='/admin/members'?<MembersPage actor={member} refreshActor={refreshActor}/>:<CallsPage/>):<main className="account-content"><p role="alert">仅管理员可以进入此页面。</p></main>):<ArchivesPage key={member.id+path} actor={member} type={path==='/organizations'?'org':'person'}/>}
   </div>;
 }

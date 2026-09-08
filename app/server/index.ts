@@ -10,6 +10,8 @@ import {handleMcp} from './mcp.ts';
 import {Members} from './members.ts';
 import {getRequestResult} from './commands.ts';
 import {Archives} from './archives.ts';
+import {Observations} from './observations.ts';
+import {Drafts} from './drafts.ts';
 
 const app=new Hono<{Bindings:Env}>();
 app.use('/api/*',bodyLimit({maxSize:1024*1024,onError:c=>c.json({error:{code:'REQUEST_TOO_LARGE',message:'请求内容过大'}},413)}));
@@ -79,6 +81,15 @@ app.post('/api/archives/create',async c=>c.json(await new Archives(c.env,await a
 app.post('/api/archives/update',async c=>c.json(await new Archives(c.env,await authenticate(c.req.raw,c.env),'web').update(await c.req.json())));
 app.get('/api/archives/:id/events',async c=>c.json(await new Archives(c.env,await authenticate(c.req.raw,c.env),'web').events({...c.req.query(),id:c.req.param('id')})));
 app.get('/api/archives/:id',async c=>c.json(await new Archives(c.env,await authenticate(c.req.raw,c.env),'web').detail(c.req.param('id'))));
+app.post('/api/observations/create',async c=>c.json(await new Observations(c.env,await authenticate(c.req.raw,c.env),'web').create(await c.req.json())));
+app.get('/api/drafts',async c=>c.json(await new Drafts(c.env,await authenticate(c.req.raw,c.env)).list()));
+app.get('/api/drafts/:id',async c=>c.json(await new Drafts(c.env,await authenticate(c.req.raw,c.env)).get(c.req.param('id'))));
+app.post('/api/drafts/save',async c=>c.json(await new Drafts(c.env,await authenticate(c.req.raw,c.env)).save(await c.req.json())));
+app.post('/api/observations/update',async c=>c.json(await new Observations(c.env,await authenticate(c.req.raw,c.env),'web').update(await c.req.json())));
+app.get('/api/observations',async c=>c.json(await new Observations(c.env,await authenticate(c.req.raw,c.env),'web').list(c.req.query())));
+app.get('/api/observations/:id/versions',async c=>c.json(await new Observations(c.env,await authenticate(c.req.raw,c.env),'web').versions({...c.req.query(),id:c.req.param('id')})));
+app.get('/api/observations/:id',async c=>c.json(await new Observations(c.env,await authenticate(c.req.raw,c.env),'web').detail(c.req.param('id'))));
+app.get('/api/archives/:id/timeline',async c=>c.json(await new Observations(c.env,await authenticate(c.req.raw,c.env),'web').timeline({...c.req.query(),id:c.req.param('id')})));
 app.all('/api/*',c=>c.json({error:{code:'NOT_FOUND',message:'接口不存在'}},404));
 app.all('/mcp',c=>handleMcp(c.req.raw,c.env,c.executionCtx as ExecutionContext));
 app.all('/images/*',async c=>{await authenticate(c.req.raw,c.env);return c.notFound();});
@@ -90,6 +101,7 @@ export default {
   async scheduled(_event:ScheduledController,env:Env) {
     await cleanupJournal(env);
     await env.DB.batch([
+      env.DB.prepare('DELETE FROM observation_drafts WHERE updated_at<?').bind(new Date(Date.now()-30*86400000).toISOString()),
       env.DB.prepare('DELETE FROM auth_rates WHERE expires_at<?').bind(Math.floor(Date.now()/1000)),
       env.DB.prepare('DELETE FROM credentials WHERE expires_at<? OR revoked_at<?').bind(new Date(Date.now()-86400000).toISOString(),new Date(Date.now()-86400000).toISOString()),
     ]);

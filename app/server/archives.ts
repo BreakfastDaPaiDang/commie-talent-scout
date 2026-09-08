@@ -15,8 +15,9 @@ export const archiveStateInput=z.object({id:z.uuid(),expected_version:expectedVe
 export const archiveListInput=z.object({type:archiveType,query:z.string().trim().max(200).default(''),limit:z.coerce.number().int().min(1).max(100).default(30),before:z.string().max(150).optional()});
 type Row={id:string;type:'person'|'org';name:string;contacts_json:string;links_json:string;status:string;closed:number;last_open_status:string|null;avatar_id:string|null;created_by:string;created_at:string;updated_at:string;version:number};
 export type BoundMember={id:string;name:string;frozen:boolean};
-export type Archive=Omit<Row,'contacts_json'|'links_json'|'closed'>&{contacts:z.infer<typeof contact>[];links:z.infer<typeof link>[];closed:boolean;observation_count:number;members:BoundMember[];bindings:Record<string,BoundMember[]>};
-function present(row:Row&{members_json?:string}):Archive{const {contacts_json,links_json,members_json,...rest}=row;return {...rest,closed:!!row.closed,contacts:JSON.parse(contacts_json),links:JSON.parse(links_json),observation_count:0,members:JSON.parse(members_json??'[]').map((m:BoundMember)=>({...m,frozen:!!m.frozen})),bindings:{}};}
+export type Archive=Omit<Row,'contacts_json'|'links_json'|'closed'>&{contacts:z.infer<typeof contact>[];links:z.infer<typeof link>[];closed:boolean;observation_count:number;latest_observation:string|null;members:BoundMember[];bindings:Record<string,BoundMember[]>};
+function present(row:Row&{members_json?:string;observation_count?:number;latest_observation?:string|null}):Archive{const {contacts_json,links_json,members_json,...rest}=row;return {...rest,closed:!!row.closed,contacts:JSON.parse(contacts_json),links:JSON.parse(links_json),observation_count:row.observation_count??0,latest_observation:row.latest_observation??null,members:JSON.parse(members_json??'[]').map((m:BoundMember)=>({...m,frozen:!!m.frozen})),bindings:{}};}
+const observationSummary="(SELECT count(*) FROM observations o WHERE o.archive_id=a.id AND o.deleted=0) observation_count,(SELECT substr(v.body,1,240) FROM observations o JOIN observation_versions v ON v.observation_id=o.id AND v.version=o.content_version WHERE o.archive_id=a.id AND o.deleted=0 ORDER BY o.updated_at DESC,o.id DESC LIMIT 1) latest_observation";
 const currentMembers="(SELECT json_group_array(json_object('id',m.id,'name',m.name,'frozen',m.frozen)) FROM archive_bindings b JOIN members m ON m.id=b.member_id WHERE b.archive_id=a.id AND b.status=a.status) members_json";
 
 // Archives owns the version/closed transaction boundary used by profile and future content changes.
@@ -24,7 +25,7 @@ export class Archives{
  constructor(readonly env:Env,readonly actor:Actor,readonly source:Source){}
  stmt(sql:string,...args:unknown[]){return this.env.DB.prepare(sql).bind(...args);}
  async get(id:string,version?:number,open=false){
-  z.uuid().parse(id);const row=await this.stmt(`SELECT a.*,${currentMembers} FROM archives a WHERE a.id=?`,id).first<Row>();
+  z.uuid().parse(id);const row=await this.stmt(`SELECT a.*,${currentMembers},${observationSummary} FROM archives a WHERE a.id=?`,id).first<Row>();
   if(!row)throw new Failure(404,'NOT_FOUND','档案不存在');
   if(open&&row.closed)throw new Failure(409,'ARCHIVE_CLOSED','档案已关闭，请先核对；修改不能替代显式重新开启');
   if(version!==undefined&&row.version!==version)throw new Failure(409,'VERSION_CONFLICT','档案已被更新，请重新读取后核对');
@@ -39,7 +40,7 @@ export class Archives{
   const a=archiveListInput.parse(input),where=['type=?'],args:unknown[]=[a.type];
   if(a.query){where.push("(name LIKE ? ESCAPE '\\' OR contacts_json LIKE ? ESCAPE '\\')");const value='%'+a.query.replace(/[\\%_]/g,'\\$&')+'%';args.push(value,value);}
   if(a.before){const [time,id]=a.before.split('|');if(!time||!id)throw new Failure(400,'INVALID_CURSOR','分页位置无效');where.push('(updated_at<? OR (updated_at=? AND id<?))');args.push(time,time,id);}
-  const rows=await this.stmt(`SELECT a.*,${currentMembers} FROM archives a WHERE ${where.join(' AND ')} ORDER BY updated_at DESC,id DESC LIMIT ?`,...args,a.limit+1).all<Row>();
+  const rows=await this.stmt(`SELECT a.*,${currentMembers},${observationSummary} FROM archives a WHERE ${where.join(' AND ')} ORDER BY updated_at DESC,id DESC LIMIT ?`,...args,a.limit+1).all<Row>();
   const items=rows.results.slice(0,a.limit).map(present),last=items.at(-1);
   return {archives:items,next_cursor:rows.results.length>a.limit&&last?`${last.updated_at}|${last.id}`:null};
  }
