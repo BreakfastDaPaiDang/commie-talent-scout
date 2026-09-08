@@ -4,6 +4,7 @@
 
 | 文件 | 内容 |
 | --- | --- |
+| local-v1.2-deleted-visibility.json | v1.2 本地 16 项通过，新增删除读取权限断言；不代表新增规则已上云 |
 | local-results.json | 本地行为套件，16 项通过 |
 | cloud-results.json | 实际 Cloudflare 行为套件，16 项通过 |
 | cloud-password-algorithms.json | 云端 PBKDF2 限制与 scrypt 成功响应 |

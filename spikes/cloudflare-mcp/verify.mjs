@@ -86,10 +86,25 @@ try {
     assert.equal((await call('/api/records/change','bob',{record_id:record,operation:'delete',expected_version:1,request_id:uuid()})).status,403);
     assert.equal((await tool(bobClient,'change_record',{record_id:record,operation:'delete',expected_version:1,request_id:uuid()})).isError,true);
     ok(await call('/api/records/change','admin',{record_id:record,operation:'delete',expected_version:1,request_id:uuid()}));
+    // v1.2: deletion hides body, every revision and images from other ordinary members.
+    for(const snapshot of [ok(await call(`/api/entities/${entity}`,'bob')),(await tool(bobClient,'get_entity',{entity_id:entity})).body]) {
+      assert(!snapshot.records.some(r=>r.id===record));
+      assert(!snapshot.revisions.some(r=>r.record_id===record));
+      assert(!snapshot.attachments.some(a=>a.record_id===record));
+    }
+    assert.equal((await fetch(base+`/images/${imageId}`,{headers:{Authorization:`Bearer ${tokens.bob}`},signal:signal()})).status,404);
+    for(const reader of ['alice','admin']) {
+      const deleted=ok(await call(`/api/entities/${entity}`,reader));
+      assert(deleted.records.some(r=>r.id===record&&r.deleted===1));
+      assert(deleted.revisions.some(r=>r.record_id===record));
+      assert.equal((await fetch(base+`/images/${imageId}`,{headers:{Authorization:`Bearer ${tokens[reader]}`},signal:signal()})).status,200);
+    }
     assert.equal((await call('/api/records/change','bob',{record_id:record,operation:'restore',expected_version:2,request_id:uuid()})).status,403);
     assert.equal((await tool(aliceClient,'change_record',{record_id:record,operation:'restore',expected_version:2,request_id:uuid()})).isError,false);
     const snapshot=ok(await call(`/api/entities/${entity}`));
     assert.equal(snapshot.records[0].author_id,'alice');assert.equal(snapshot.records[0].deleted,0);assert.equal(snapshot.revisions.length,3);assert.equal(snapshot.attachments[0].record_id,record);
+    assert(ok(await call(`/api/entities/${entity}`,'bob')).records.some(r=>r.id===record));
+    assert.equal((await fetch(base+`/images/${imageId}`,{headers:{Authorization:`Bearer ${tokens.bob}`},signal:signal()})).status,200);
   });
   await test('closed archive rejects authors and admins; reopen restores writing',async()=>{
     ok(await call('/api/state','alice',{entity_id:entity,state:'discarded',expected_version:1,request_id:uuid()}));

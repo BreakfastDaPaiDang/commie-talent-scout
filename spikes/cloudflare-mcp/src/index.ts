@@ -72,10 +72,11 @@ class Archive {
   async get(entityId: string) {
     const entity = await this.stmt('SELECT * FROM entities WHERE id=?', entityId).first();
     if (!entity) throw new Failure(404, 'NOT_FOUND');
-    const records = await this.stmt('SELECT * FROM records WHERE entity_id=?', entityId).all();
+    const records = await this.stmt('SELECT * FROM records WHERE entity_id=? AND (deleted=0 OR author_id=? OR ?=1)', entityId,this.actor.id,this.actor.role==='admin'?1:0).all();
     const events = await this.stmt('SELECT * FROM events WHERE entity_id=? ORDER BY seq', entityId).all();
-    const revisions = await this.stmt('SELECT v.* FROM revisions v JOIN records r ON r.id=v.record_id WHERE r.entity_id=? ORDER BY v.version', entityId).all();
-    const attachments = await this.stmt('SELECT id,record_id,bytes,sha256,uploaded FROM attachments WHERE entity_id=?', entityId).all();
+    const revisions = await this.stmt('SELECT v.* FROM revisions v JOIN records r ON r.id=v.record_id WHERE r.entity_id=? AND (r.deleted=0 OR r.author_id=? OR ?=1) ORDER BY v.version', entityId,this.actor.id,this.actor.role==='admin'?1:0).all();
+    const attachments = await this.stmt(`SELECT a.id,a.record_id,a.bytes,a.sha256,a.uploaded FROM attachments a LEFT JOIN records r ON r.id=a.record_id
+      WHERE a.entity_id=? AND (r.deleted=0 OR r.author_id=? OR ?=1 OR (a.record_id IS NULL AND a.uploader_id=?))`, entityId,this.actor.id,this.actor.role==='admin'?1:0,this.actor.id).all();
     return { entity, records: records.results, events: events.results, revisions: revisions.results, attachments: attachments.results };
   }
   async createEntity(name: string, commandId: string) {
@@ -250,8 +251,10 @@ app.post('/probe/scrypt',async(c)=>{
 });
 app.put('/uploads/:id',(c)=>putImage(c.req.raw,c.env,c.req.param('id')));
 app.get('/images/:id',async(c)=>{
-  await actorFrom(c.req.raw,c.env);
-  const attachment=await c.env.DB.prepare('SELECT object_key,mime FROM attachments WHERE id=? AND uploaded=1').bind(c.req.param('id')).first<{object_key:string;mime:string}>();
+  const actor=await actorFrom(c.req.raw,c.env);
+  const attachment=await c.env.DB.prepare(`SELECT a.object_key,a.mime FROM attachments a LEFT JOIN records r ON r.id=a.record_id
+    WHERE a.id=? AND a.uploaded=1 AND (r.deleted=0 OR r.author_id=? OR ?=1 OR (a.record_id IS NULL AND a.uploader_id=?))`)
+    .bind(c.req.param('id'),actor.id,actor.role==='admin'?1:0,actor.id).first<{object_key:string;mime:string}>();
   if(!attachment)throw new Failure(404,'NOT_FOUND');
   const object=await c.env.IMAGES.get(attachment.object_key);
   if(!object)throw new Failure(404,'NOT_FOUND');
