@@ -1,4 +1,4 @@
-import bootstrapPrompt from "./bootstrap-prompt.txt?raw";
+import bootstrapPrompt from "../../../app/shared/bootstrap-prompt.txt?raw";
 
 // The prototype fills environment facts only; business guidance belongs to MCP.
 export const protocolText = bootstrapPrompt

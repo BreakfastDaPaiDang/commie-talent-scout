@@ -1,0 +1,82 @@
+{
+  "date": "2026-09-08T10:57:43.992Z",
+  "localProtocol": {
+    "date": "2026-09-08T10:33:00.956Z",
+    "base": "http://127.0.0.1:8790",
+    "checks": [
+      "public MCP rejects missing authentication",
+      "credential creation shows a one-time secret and listing omits hashes and secrets",
+      "cold initialized client discovers real capabilities and guides without resources or prior chat",
+      "schema rejection and successful tool calls are journaled as distinct attempts without secrets",
+      "ordinary member cannot review calls or access administrator credentials",
+      "revocation takes effect on the already connected client and retains its final successful action"
+    ]
+  },
+  "cloudProtocol": {
+    "date": "2026-09-08T10:37:51.697Z",
+    "base": "https://scout-staging.dapaidang.org",
+    "checks": [
+      "public MCP rejects missing authentication",
+      "credential creation shows a one-time secret and listing omits hashes and secrets",
+      "cold initialized client discovers real capabilities and guides without resources or prior chat",
+      "schema rejection and successful tool calls are journaled as distinct attempts without secrets",
+      "ordinary member cannot review calls or access administrator credentials",
+      "revocation takes effect on the already connected client and retains its final successful action"
+    ]
+  },
+  "retentionAndFault": {
+    "date": "2026-09-08T10:40:55.940Z",
+    "base": "http://127.0.0.1:8792",
+    "checks": [
+      "actual scheduled Worker clears 31-day bodies and 181-day metadata, retaining recent data and members",
+      "authenticated tool success survives unavailable journal storage and emits a body-free diagnostic"
+    ]
+  },
+  "codex": [
+    {
+      "mode": "temporary",
+      "client": "Codex CLI 0.153.0",
+      "configurationUnchanged": true,
+      "temporaryBearerProvided": true,
+      "newIndependentProcessVerified": false,
+      "persistenceChoiceAsked": false,
+      "rounds": [
+        {
+          "round": "first",
+          "elapsedMs": 34333
+        }
+      ]
+    },
+    {
+      "mode": "persistent",
+      "client": "Codex CLI 0.153.0",
+      "configurationUnchanged": true,
+      "temporaryBearerProvided": false,
+      "newIndependentProcessVerified": true,
+      "persistenceChoiceAsked": false,
+      "rounds": [
+        {
+          "round": "first",
+          "elapsedMs": 52500
+        },
+        {
+          "round": "fresh",
+          "elapsedMs": 45112
+        }
+      ]
+    },
+    {
+      "mode": "unselected",
+      "client": "Codex CLI 0.153.0",
+      "configurationUnchanged": true,
+      "temporaryBearerProvided": false,
+      "newIndependentProcessVerified": false,
+      "persistenceChoiceAsked": true
+    }
+  ],
+  "limits": [
+    "Real Codex used only service tools for identity and guidance. Isolated read-only CLI policy denied local shell inspection; configuration/source checks were performed by the harness.",
+    "Browser screenshot capture timed out during S2; DOM interaction and actual CSS viewport geometry were checked.",
+    "No guarantee is made for untested third-party clients or model behavior in every conversation."
+  ]
+}

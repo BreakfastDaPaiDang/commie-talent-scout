@@ -4,9 +4,13 @@ import { ZodError } from 'zod';
 import { authenticate, changePassword, login, sessionCookie } from './auth.ts';
 import { PasswordBusy } from './password.ts';
 import { Failure, now, publicMember, type Env } from './types.ts';
+import {createCredential,listCredentials,revokeCredential} from './credentials.ts';
+import {cleanupJournal,getCall,listCalls} from './mcp-journal.ts';
+import {handleMcp} from './mcp.ts';
 
 const app=new Hono<{Bindings:Env}>();
 app.use('/api/*',bodyLimit({maxSize:1024*1024,onError:c=>c.json({error:{code:'REQUEST_TOO_LARGE',message:'请求内容过大'}},413)}));
+app.use('/mcp',bodyLimit({maxSize:1024*1024,onError:c=>c.json({error:{code:'REQUEST_TOO_LARGE',message:'请求内容过大'}},413)}));
 app.use('*',async(c,next)=>{
   c.header('X-Content-Type-Options','nosniff');
   c.header('Referrer-Policy','same-origin');
@@ -50,8 +54,13 @@ app.post('/api/auth/logout',async c=>{
   return c.json({ok:true});
 });
 app.get('/api/workspace',async c=>{const actor=await authenticate(c.req.raw,c.env);return c.json({member:publicMember(actor)});});
+app.get('/api/connections',async c=>c.json(await listCredentials(c.env,await authenticate(c.req.raw,c.env))));
+app.post('/api/connections',async c=>c.json(await createCredential(c.env,await authenticate(c.req.raw,c.env),await c.req.json())));
+app.post('/api/connections/revoke',async c=>c.json(await revokeCredential(c.env,await authenticate(c.req.raw,c.env),await c.req.json())));
+app.get('/api/admin/calls',async c=>c.json(await listCalls(c.env,await authenticate(c.req.raw,c.env),c.req.query())));
+app.get('/api/admin/calls/:id',async c=>c.json(await getCall(c.env,await authenticate(c.req.raw,c.env),c.req.param('id'))));
 app.all('/api/*',c=>c.json({error:{code:'NOT_FOUND',message:'接口不存在'}},404));
-app.all('/mcp',c=>c.json({error:{code:'NOT_AVAILABLE',message:'MCP 接入将在下一项交付'}},503));
+app.all('/mcp',c=>handleMcp(c.req.raw,c.env,c.executionCtx as ExecutionContext));
 app.all('/images/*',async c=>{await authenticate(c.req.raw,c.env);return c.notFound();});
 app.all('/uploads/*',c=>c.notFound());
 app.get('*',c=>c.env.ASSETS.fetch(c.req.raw));
@@ -59,6 +68,7 @@ app.get('*',c=>c.env.ASSETS.fetch(c.req.raw));
 export default {
   fetch:app.fetch,
   async scheduled(_event:ScheduledController,env:Env) {
+    await cleanupJournal(env);
     await env.DB.batch([
       env.DB.prepare('DELETE FROM auth_rates WHERE expires_at<?').bind(Math.floor(Date.now()/1000)),
       env.DB.prepare('DELETE FROM credentials WHERE expires_at<? OR revoked_at<?').bind(new Date(Date.now()-86400000).toISOString(),new Date(Date.now()-86400000).toISOString()),

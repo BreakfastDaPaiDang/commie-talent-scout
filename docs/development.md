@@ -17,3 +17,7 @@ npm run dev:worker
 检查使用 `npm run check`、`npm test`、`npm run build`。测试环境部署使用 `npx wrangler d1 migrations apply cts-staging --env staging --remote` 后运行 `npm run deploy:staging`。Wrangler 需要本机 Cloudflare 管理授权。生产与 CI 配置在上线切片完成，不能把 staging 数据库绑定到生产。
 
 `scripts/verify-auth.mjs` 接受明确的测试 URL 和私有凭证路径，会轮换测试密码并更新私有文件。`verify-auth-boundaries.mjs` 默认本地，加 `--remote` 检查隔离云端；`verify-auth-load.mjs` 仅检查 staging。它们会产生限流计数，避免连续重复运行。报告写入 `tmp/verification`；只将审核后的脱敏证据复制到 `docs/validation`。
+
+MCP 行为检查：`node scripts/verify-mcp.mjs`（本地）或加 `--remote`（staging）。定时任务验证先另开 `npm run dev:scheduled`，再运行 `node scripts/verify-journal.mjs`；专用本地入口使 scheduled 测试中间件优先于 SPA 静态资源，生产未开放测试触发接口。
+
+`node scripts/verify-codex-onboarding.mjs temporary|persistent|unselected` 使用本机已登录的 Codex CLI，在 `secrets/` 中建立隔离的私有客户端目录，验证后撤销应用测试凭证并删除复制的 ChatGPT 登录文件。它不改维护者真正的客户端配置。执行日志只保存到私有目录，不上传完整对话或配置。

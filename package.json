@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 5190 --strictPort",
     "dev:worker": "wrangler dev --env staging --port 8790",
+    "dev:scheduled": "node scripts/dev-scheduled.mjs",
     "build": "vite build",
     "check": "tsc --noEmit",
     "test": "node --experimental-strip-types --test tests/*.test.ts",
