@@ -26,10 +26,10 @@ export class Tags{
   const a=tagListInput.parse(input),where=['c.type=?'],args:unknown[]=[a.type];
   if(!a.include_disabled)where.push('t.enabled=1','c.enabled=1');
   if(a.category_id){where.push('c.id=?');args.push(a.category_id);}
-  if(a.query){const q='%'+nameKey(a.query).replace(/[\\%_]/g,'\\$&')+'%';where.push("(t.name_key LIKE ? ESCAPE '\\' OR c.name_key LIKE ? ESCAPE '\\' OR t.description LIKE ? ESCAPE '\\' OR (c.name_key||':'||t.name_key) LIKE ? ESCAPE '\\')");args.push(q,q,q,q);}
+  if(a.query){const q='%'+nameKey(a.query).replace(/[\\%_]/g,'\\$&')+'%';where.push("(t.name_key LIKE ? ESCAPE '\\' OR c.name_key LIKE ? ESCAPE '\\' OR t.description LIKE ? ESCAPE '\\' OR c.description LIKE ? ESCAPE '\\' OR (c.name_key||':'||t.name_key) LIKE ? ESCAPE '\\')");args.push(q,q,q,q,q);}
   if(a.before){where.push('t.id>?');args.push(a.before);}
-  const rows=(await this.stmt(`SELECT ${definitionColumns} FROM tags t JOIN tag_categories c ON c.id=t.category_id WHERE ${where.join(' AND ')} ORDER BY t.id LIMIT ?`,...args,a.limit+1).all<TagDefinition>()).results;
-  const tags=await Promise.all(rows.slice(0,a.limit).map(async t=>({...t,binding_count:await this.count(t.id)})));
+  const rows=(await this.stmt(`SELECT ${definitionColumns},(SELECT count(*) FROM archive_tags b WHERE b.tag_id=t.id AND ${evidenceVisibilitySql('b.evidence_json')}) binding_count FROM tags t JOIN tag_categories c ON c.id=t.category_id WHERE ${where.join(' AND ')} ORDER BY t.id LIMIT ?`,this.actor.id,this.actor.role,...args,a.limit+1).all<TagDefinition&{binding_count:number}>()).results;
+  const tags=rows.slice(0,a.limit);
   return {tags,next_cursor:rows.length>a.limit?tags.at(-1)!.id:null};
  }
  async count(tagId:string){

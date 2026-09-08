@@ -1,3 +1,4 @@
+import {TagFilter} from './TagMaintenance';
 import {ProfileFields} from '../ui/ArchiveFields';
 import {MemberPicker as DirectoryPicker} from '../ui/MemberPicker';
 import {ArchiveHead,ArchiveRow,DetailFrame,EntityHeader,IconButton,ScopeToolbar,TabList,WorkspaceFrame} from '../ui/Workspace';
@@ -19,8 +20,8 @@ import {TagsSection,TagSummary} from './TagsSection';
 import {ObservationSection} from './ObservationSection';
 
 type Kind='person'|'org';
-type Preference={query:string;selected:string|null;scope:'all'|'mine'|'unread';status:string;member_id:string;closed:'all'|'open'|'closed'};
-const defaults:Preference={query:'',selected:null,scope:'all',status:'',member_id:'',closed:'all'};
+type Preference={query:string;selected:string|null;scope:'all'|'mine'|'unread';status:string;member_id:string;closed:'all'|'open'|'closed';tag_ids:string[]};
+const defaults:Preference={query:'',selected:null,scope:'all',status:'',member_id:'',closed:'all',tag_ids:[]};
 type ListArchive=Archive&{unread_count?:number;search_match?:{observation_id:string;excerpt:string}|null};
 function preferences(key:string):Preference{try{return {...defaults,...JSON.parse(localStorage.getItem(key)??'{}')};}catch{return {...defaults};}}
 const date=(value:string)=>new Date(value).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
@@ -39,9 +40,9 @@ export function ArchivesPage({actor,type,linked,detailOnly=false,onNextUnread,on
  useEffect(()=>{const timer=setTimeout(()=>setPref(p=>({...p,query})),250);return()=>clearTimeout(timer);},[query]);
  async function load(before?:string){
   const sequence=++request.current;setLoading(true);setError('');
-  try{const r=await api<{archives:ListArchive[];next_cursor:string|null;counts?:Record<string,number>}>('/archives?'+new URLSearchParams({type,query:pref.query,scope:pref.scope,status:pref.status,member_id:pref.member_id,closed:pref.closed,...(before?{before}:{})}));if(sequence!==request.current)return;setItems(old=>before?[...old,...r.archives]:r.archives);setCursor(r.next_cursor);if(r.counts)setCounts(r.counts);}catch(e){if(sequence===request.current)setError((e as Error).message);}finally{if(sequence===request.current)setLoading(false);}
+  try{const r=await api<{archives:ListArchive[];next_cursor:string|null;counts?:Record<string,number>}>('/archives?'+new URLSearchParams({type,query:pref.query,scope:pref.scope,status:pref.status,member_id:pref.member_id,closed:pref.closed,tag_ids:pref.tag_ids.join(','),...(before?{before}:{})}));if(sequence!==request.current)return;setItems(old=>before?[...old,...r.archives]:r.archives);setCursor(r.next_cursor);if(r.counts)setCounts(r.counts);}catch(e){if(sequence===request.current)setError((e as Error).message);}finally{if(sequence===request.current)setLoading(false);}
  }
- useEffect(()=>{if(!detailOnly)void load();return()=>{request.current++;};},[type,pref.query,pref.scope,pref.status,pref.member_id,pref.closed,revision,detailOnly]);
+ useEffect(()=>{if(!detailOnly)void load();return()=>{request.current++;};},[type,pref.query,pref.scope,pref.status,pref.member_id,pref.closed,pref.tag_ids.join(','),revision,detailOnly]);
  function choose(id:string|null,match?:ListArchive['search_match']){setNotice('');setExpanded(false);if(pref.selected!==id)setSelected(null);setPref(p=>({...p,selected:id}));const next=match?{observation_id:match.observation_id,query:pref.query,key:crypto.randomUUID()}:undefined;setFocus(next);if(!detailOnly){const params=new URLSearchParams();if(id)params.set('archive',id);if(next){params.set('observation',next.observation_id);params.set('highlight',next.query);}history.replaceState(null,'',location.pathname+(params.size?'?'+params:''));}}
  useEffect(()=>{let timer:ReturnType<typeof setTimeout>|undefined;const refresh=()=>{clearTimeout(timer);timer=setTimeout(()=>{api<{drafts:{archive_id:string}[]}>('/drafts').then(r=>setDraftIds(r.drafts.map(d=>d.archive_id))).catch(()=>{});},500);};refresh();window.addEventListener('cts-drafts-changed',refresh);return()=>{clearTimeout(timer);window.removeEventListener('cts-drafts-changed',refresh);};},[]);
  async function saved(id:string,changed:boolean,message?:string){setDialog(null);setStateDialog(null);choose(id);setRevision(v=>v+1);setNotice(message??(changed?'档案已保存':'资料没有变化'));}
@@ -49,14 +50,14 @@ export function ArchivesPage({actor,type,linked,detailOnly=false,onNextUnread,on
  useEffect(()=>{if(!['档案已保存','资料没有变化'].includes(notice))return;const timer=setTimeout(()=>setNotice(''),2800);return()=>clearTimeout(timer);},[notice]);
  async function refreshEditor(id:string){const r=await api<{archive:Archive}>('/archives/'+id);setDialog(current=>current&&current!=='create'&&current.id===id&&current.version<=r.archive.version?r.archive:current);setRevision(n=>n+1);}
 
- const activeFilters=!!(pref.status||pref.member_id||pref.closed!=='all');
+ const activeFilters=!!(pref.status||pref.member_id||pref.closed!=='all'||pref.tag_ids.length);
  return <><WorkspaceFrame selected={!!pref.selected} expanded={expanded} detailOnly={detailOnly} list={<>
   <ArchiveHead label={label} count={String(items.length).padStart(2,'0')+(cursor?'＋':'')} query={query} onQuery={setQuery} onCreate={()=>{setEditTab('profile');setDialog('create');}} searchRef={searchRef}/>
   <ScopeToolbar counts={counts} scope={pref.scope} onScope={scope=>setPref(p=>({...p,scope:scope as Preference['scope']}))} filtersOpen={filtersOpen} onFilters={()=>setFiltersOpen(v=>!v)} activeFilters={activeFilters} onReset={query||activeFilters||pref.scope!=='all'?()=>{setQuery('');setPref(p=>({...defaults,selected:p.selected}));}:undefined} filters={<>
    <select aria-label="筛选业务状态" value={pref.status} onChange={e=>setPref(p=>({...p,status:e.target.value}))}><option value="">全部状态</option>{statesFor(type).map(v=><option key={v}>{v}</option>)}</select>
    <DirectoryPicker label="筛选绑定成员" placeholder="全部成员" multiple={false} members={directory} value={pref.member_id?[pref.member_id]:[]} onChange={ids=>setPref(p=>({...p,member_id:ids[0]??''}))} renderAvatar={m=><Avatar name={m.name} src={avatarUrl('member',m.id,0)} size="tiny"/>}/>
 
-   <select aria-label="筛选开启关闭" value={pref.closed} onChange={e=>setPref(p=>({...p,closed:e.target.value as Preference['closed']}))}><option value="all">全部档案</option><option value="open">开启中</option><option value="closed">已关闭</option></select><PageError error={directoryError} retry={()=>setDirectoryRetry(n=>n+1)}/>
+   <TagFilter type={type} ids={pref.tag_ids} onChange={tag_ids=>setPref(p=>({...p,tag_ids}))}/><select aria-label="筛选开启关闭" value={pref.closed} onChange={e=>setPref(p=>({...p,closed:e.target.value as Preference['closed']}))}><option value="all">全部档案</option><option value="open">开启中</option><option value="closed">已关闭</option></select><PageError error={directoryError} retry={()=>setDirectoryRetry(n=>n+1)}/>
   </>}/>
   <PageError error={error} retry={()=>void load()}/>
   <div className="entity-list">{items.map(a=><ArchiveRow key={a.id} selected={pref.selected===a.id} onClick={()=>choose(a.id,a.search_match)} label={`查看${a.name}`} avatar={<Avatar name={a.name} type={a.type} src={avatarUrl('archive',a.id,a.version)}/>} name={<Highlight text={a.name} query={pref.query}/>} unread={!!a.unread_count} state={<span className={'state-badge small '+(isWorkState(a.type,a.status)?'work ':'')+(a.closed?'closed':'')}>{a.status}</span>} status={a.status} binding={a.members.length?a.members.map(m=><span className="member-chip" key={m.id}><Avatar name={m.name} src={avatarUrl('member',m.id,0)} size="micro"/>{m.name}{m.frozen&&<small>已冻结</small>}</span>):null} tags={<TagSummary tags={a.tag_summary?.tags??[]} total={a.tag_summary?.total??0}/>} draft={draftIds.includes(a.id)} excerpt={a.search_match?<><small>观察命中 · </small><Highlight text={a.search_match.excerpt} query={pref.query}/></>:a.latest_observation??'还没有观察记录'} footer={<><span>{a.observation_count} 条观察</span><time>{date(a.updated_at)}</time></>}/>)}</div>

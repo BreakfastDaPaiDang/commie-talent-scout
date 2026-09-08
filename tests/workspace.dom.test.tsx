@@ -5,6 +5,7 @@ import {JSDOM} from 'jsdom';
 import React,{act} from 'react';
 import {createRoot} from 'react-dom/client';
 import {ReadBoundary} from '../app/client/Reading';
+import {Modal} from '../app/ui/Modal';
 const id='b880c0af-ddb4-4005-9e7e-8e9b0e48dac1',actor={id:'00863713-2463-471a-925f-ad9c2f5eeb91',username:'fixture',name:'虚构测试成员',role:'member' as const,must_change_password:false,version:1,qq:null,avatar_id:null};
 function environment(){
  const dom=new JSDOM('<!doctype html><div id="root"></div>',{url:'http://localhost/?archive='+id,pretendToBeVisual:true}),w=dom.window;
@@ -17,6 +18,14 @@ function environment(){
  return {w,dom,root,observers,async close(){await act(async()=>root.unmount());dom.window.close();}};
 }
 const archive={id,type:'person',name:'虚构对齐档案',status:'视奸观察',closed:false,version:1,contacts:[],links:[],members:[],bindings:{},tags:[],avatar_id:null,observation_count:1,latest_observation:'正文',updated_at:'2026-09-08T12:00:00Z'};
+test('cancelling a nested dialog closes only its own layer and respects busy state',async()=>{
+ const f=environment(),closed:string[]=[];
+ f.w.HTMLDialogElement.prototype.showModal=function(){this.open=true;};f.w.HTMLDialogElement.prototype.close=function(){this.open=false;};
+ try{await act(async()=>{f.root.render(<Modal title="上一层详情" onClose={()=>closed.push('parent')}><Modal title="合并去向" onClose={()=>closed.push('child')}>查看目标词义</Modal></Modal>);});
+  await act(async()=>{f.w.document.querySelector('dialog[aria-label="合并去向"]')!.dispatchEvent(new f.w.Event('cancel',{cancelable:true}));});assert.deepEqual(closed,['child']);
+  await act(async()=>{f.root.render(<Modal title="上一层详情" onClose={()=>closed.push('parent')}><Modal title="合并去向" busy onClose={()=>closed.push('child')}>提交中</Modal></Modal>);});await act(async()=>{f.w.document.querySelector('dialog[aria-label="合并去向"]')!.dispatchEvent(new f.w.Event('cancel',{cancelable:true}));});assert.deepEqual(closed,['child']);
+ }finally{await f.close();}
+});
 test('approved workspace keeps name and state together, compact header, and tabs above composer',async()=>{
  const f=environment();const {ArchivesPage}=await import('../app/client/ArchivesPage');globalThis.fetch=async url=>Response.json(String(url).includes('/timeline')?{events:[],next_cursor:null}:String(url).includes('/members')?{members:[],next_cursor:null}:String(url).includes('/drafts')?{drafts:[]}:String(url).includes('/draft/')?{draft:null}:String(url).includes('/archives?')?{archives:[archive],next_cursor:null}:{archive});
  try{await act(async()=>{f.root.render(<ArchivesPage actor={actor} type="person"/>);});await act(async()=>{await new Promise(r=>setTimeout(r,300));});

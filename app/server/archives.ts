@@ -2,7 +2,7 @@ import {z} from 'zod';
 import {command,requestId,expectedVersion,type Source} from './commands.ts';
 import {Failure,now,uid,type Actor,type Env} from './types.ts';
 import {statesFor,isClosedState,isWorkState,personStates,orgStates} from '../shared/archive-states.ts';
-import {TagState,type TagBinding,type TagLabel} from './tag-state.ts';
+import {TagState,evidenceVisibilitySql,type TagBinding,type TagLabel} from './tag-state.ts';
 import {Reading,eventVisibility,unreadPredicate} from './reading.ts';
 
 export const archiveType=z.enum(['person','org']);
@@ -14,7 +14,7 @@ const memberIds=z.array(z.uuid()).max(50).transform(ids=>[...new Set(ids)].sort(
 export const archiveCreateInput=z.object({type:archiveType,...profile,status:statusInput.default('视奸观察'),member_ids:memberIds.default([]),request_id:requestId}).strict();
 export const archiveUpdateInput=z.object({id:z.uuid(),expected_version:expectedVersion,...profile,contacts:z.array(contact).max(20),links:z.array(link).max(20),request_id:requestId}).strict();
 export const archiveStateInput=z.object({id:z.uuid(),expected_version:expectedVersion,status:statusInput,member_ids:memberIds,request_id:requestId}).strict();
-export const archiveListInput=z.object({type:archiveType,query:z.string().trim().max(200).default(''),scope:z.enum(['all','mine','unread']).default('all'),status:z.string().max(80).default(''),member_id:z.union([z.uuid(),z.literal('')]).default(''),closed:z.enum(['all','open','closed']).default('all'),limit:z.coerce.number().int().min(1).max(100).default(30),before:z.string().max(150).optional()});
+export const archiveListInput=z.object({type:archiveType,query:z.string().trim().max(200).default(''),scope:z.enum(['all','mine','unread']).default('all'),status:z.string().max(80).default(''),member_id:z.union([z.uuid(),z.literal('')]).default(''),closed:z.enum(['all','open','closed']).default('all'),tag_ids:z.array(z.uuid()).max(30).default([]).describe('按当前词库类别分组：同类别任一标签匹配、不同类别同时匹配。关闭档案按冻结绑定匹配稳定标签 ID；仅计入当前成员可见的来源。'),limit:z.coerce.number().int().min(1).max(100).default(30),before:z.string().max(150).optional()});
 type Row={id:string;type:'person'|'org';name:string;contacts_json:string;links_json:string;status:string;closed:number;last_open_status:string|null;avatar_id:string|null;created_by:string;created_at:string;updated_at:string;version:number;tag_snapshot_version:number|null};
 export type BoundMember={id:string;name:string;frozen:boolean};
 export type Archive=Omit<Row,'contacts_json'|'links_json'|'closed'>&{contacts:z.infer<typeof contact>[];links:z.infer<typeof link>[];closed:boolean;observation_count:number;latest_observation:string|null;members:BoundMember[];bindings:Record<string,BoundMember[]>;tags:TagBinding[];tag_summary?:{tags:TagLabel[];total:number}};
@@ -46,6 +46,14 @@ export class Archives{
   if(a.status){where.push('a.status=?');args.push(a.status);}
   if(a.member_id){where.push('EXISTS(SELECT 1 FROM archive_bindings b WHERE b.archive_id=a.id AND b.status=a.status AND b.member_id=?)');args.push(a.member_id);}
   if(a.closed!=='all')where.push(`a.closed=${a.closed==='closed'?1:0}`);
+  if(a.tag_ids.length){
+   const ids=[...new Set(a.tag_ids)],definitions=(await this.stmt('SELECT t.id,t.category_id,c.type FROM tags t JOIN tag_categories c ON c.id=t.category_id WHERE t.id IN (SELECT value FROM json_each(?))',JSON.stringify(ids)).all<{id:string;category_id:string;type:string}>()).results;
+   if(definitions.length!==ids.length||definitions.some(t=>t.type!==a.type))throw new Failure(400,'TAG_NOT_FOUND','筛选标签不存在或不属于当前档案类型，请重新选择');
+   const groups=[...new Set(definitions.map(t=>t.category_id))].map(category=>definitions.filter(t=>t.category_id===category).map(t=>t.id));
+   // One JSON parameter also supports 30 independent categories without exceeding D1 bind limits.
+   where.push(`NOT EXISTS(SELECT 1 FROM json_each(?) wanted WHERE NOT ((a.closed=0 AND EXISTS(SELECT 1 FROM archive_tags b WHERE b.archive_id=a.id AND b.tag_id IN (SELECT value FROM json_each(wanted.value)) AND ${evidenceVisibilitySql('b.evidence_json')})) OR (a.closed=1 AND EXISTS(SELECT 1 FROM archive_tag_snapshots s WHERE s.archive_id=a.id AND s.close_version=a.tag_snapshot_version AND s.tag_id IN (SELECT value FROM json_each(wanted.value)) AND ${evidenceVisibilitySql("json_extract(s.data_json,'$.evidence')")}))))`);
+   args.push(JSON.stringify(groups),this.actor.id,this.actor.role,this.actor.id,this.actor.role);
+  }
   const mine="a.closed=0 AND a.status IN ('引荐中（待人事组接触）','人事审核','已加入待对接','组织交流') AND EXISTS(SELECT 1 FROM archive_bindings b WHERE b.archive_id=a.id AND b.status=a.status AND b.member_id=?)";
   const counts=a.before?undefined:await this.stmt(`SELECT count(*) AS 'all',coalesce(sum(CASE WHEN ${mine} THEN 1 ELSE 0 END),0) mine,coalesce(sum(CASE WHEN EXISTS(SELECT 1 FROM archive_events e WHERE e.archive_id=a.id AND ${unread.sql}) THEN 1 ELSE 0 END),0) unread FROM archives a WHERE ${where.join(' AND ')}`,this.actor.id,...unread.args,...args).first<{all:number;mine:number;unread:number}>();
   if(a.scope==='mine'){where.push(mine);args.push(this.actor.id);}

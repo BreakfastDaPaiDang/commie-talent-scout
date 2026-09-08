@@ -1,3 +1,5 @@
+import {TagMaintenance} from './tag-maintenance.ts';
+import {TagMigration} from './tag-migration.ts';
 import {Reading} from './reading.ts';
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
@@ -78,7 +80,7 @@ app.post('/api/admin/members/profile',async c=>c.json(await new Members(c.env,aw
 app.get('/api/admin/members/:id/history',async c=>c.json(await new Members(c.env,await authenticate(c.req.raw,c.env),'web').history(c.req.param('id'))));
 app.get('/api/admin/members/:id',async c=>c.json(await new Members(c.env,await authenticate(c.req.raw,c.env),'web').detail(c.req.param('id'))));
 app.get('/api/commands/:id',async c=>c.json(await getRequestResult(c.env,await authenticate(c.req.raw,c.env),c.req.param('id'))));
-app.get('/api/archives',async c=>c.json(await new Archives(c.env,await authenticate(c.req.raw,c.env),'web').list(c.req.query())));
+app.get('/api/archives',async c=>c.json(await new Archives(c.env,await authenticate(c.req.raw,c.env),'web').list({...c.req.query(),tag_ids:c.req.query('tag_ids')?.split(',').filter(Boolean)??[]})));
 app.get('/api/members',async c=>c.json(await new Members(c.env,await authenticate(c.req.raw,c.env),'web').directory(c.req.query())));
 app.post('/api/archives/state',async c=>c.json(await new Archives(c.env,await authenticate(c.req.raw,c.env),'web').setState(await c.req.json())));
 app.post('/api/archives/reopen',async c=>c.json(await new Archives(c.env,await authenticate(c.req.raw,c.env),'web').reopen(await c.req.json())));
@@ -101,6 +103,14 @@ app.get('/api/observations/:id/versions',async c=>c.json(await new Observations(
 app.get('/api/observations/:id',async c=>c.json(await new Observations(c.env,await authenticate(c.req.raw,c.env),'web').detail(c.req.param('id'))));
 app.get('/api/archives/:id/timeline',async c=>c.json(await new Observations(c.env,await authenticate(c.req.raw,c.env),'web').timeline({...c.req.query(),id:c.req.param('id')})));
 app.get('/api/tag-categories',async c=>c.json(await new Tags(c.env,await authenticate(c.req.raw,c.env),'web').categories(c.req.query('type'))));
+app.get('/api/tag-definitions/:entity_type/:id',async c=>c.json(await new TagMaintenance(c.env,await authenticate(c.req.raw,c.env),'web').detail({...c.req.query(),entity_type:c.req.param('entity_type'),id:c.req.param('id')})));
+app.get('/api/tag-bindings/:entity_type/:id',async c=>c.json(await new TagMaintenance(c.env,await authenticate(c.req.raw,c.env),'web').bindings({...c.req.query(),entity_type:c.req.param('entity_type'),id:c.req.param('id')})));
+app.post('/api/tag-definitions/preview',async c=>c.json(await new TagMaintenance(c.env,await authenticate(c.req.raw,c.env),'web').preview(await c.req.json())));
+app.post('/api/tag-definitions/apply',async c=>c.json(await new TagMaintenance(c.env,await authenticate(c.req.raw,c.env),'web').apply(await c.req.json())));
+app.post('/api/tag-availability/preview',async c=>c.json(await new TagMaintenance(c.env,await authenticate(c.req.raw,c.env),'web').previewAvailability(await c.req.json())));
+app.post('/api/tag-availability/apply',async c=>c.json(await new TagMaintenance(c.env,await authenticate(c.req.raw,c.env),'web').applyAvailability(await c.req.json())));
+app.post('/api/tag-migration/preview',async c=>c.json(await new TagMigration(c.env,await authenticate(c.req.raw,c.env),'web').preview(await c.req.json())));
+app.post('/api/tag-migration/apply',async c=>c.json(await new TagMigration(c.env,await authenticate(c.req.raw,c.env),'web').apply(await c.req.json())));
 app.get('/api/tags',async c=>c.json(await new Tags(c.env,await authenticate(c.req.raw,c.env),'web').list({...c.req.query(),include_disabled:c.req.query('include_disabled')==='true'})));
 app.post('/api/tag-categories/create',async c=>c.json(await new Tags(c.env,await authenticate(c.req.raw,c.env),'web').createCategory(await c.req.json())));
 app.post('/api/tags/create',async c=>c.json(await new Tags(c.env,await authenticate(c.req.raw,c.env),'web').create(await c.req.json())));
@@ -126,6 +136,7 @@ export default {
     await env.DB.batch([
       env.DB.prepare('DELETE FROM observation_drafts WHERE updated_at<?').bind(new Date(Date.now()-30*86400000).toISOString()),
       env.DB.prepare('DELETE FROM reading_deliveries WHERE expires_at<?').bind(new Date().toISOString()),
+      env.DB.prepare('DELETE FROM tag_maintenance_previews WHERE expires_at<?').bind(new Date().toISOString()),
       env.DB.prepare('DELETE FROM auth_rates WHERE expires_at<?').bind(Math.floor(Date.now()/1000)),
       env.DB.prepare('DELETE FROM credentials WHERE expires_at<? OR revoked_at<?').bind(new Date(Date.now()-86400000).toISOString(),new Date(Date.now()-86400000).toISOString()),
     ]);
