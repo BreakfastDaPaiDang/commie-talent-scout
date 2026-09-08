@@ -750,14 +750,7 @@ body {
   .composer.open textarea {
     font-size: 20px;
   }
-  .modal-actions {
-    position: sticky;
-    bottom: -28px;
-    z-index: 3;
-    background: white;
-    margin: 4px -28px -28px;
-    padding: 18px 28px 24px;
-  }
+
 }
 .record-byline .icon-button {
   opacity: 1;

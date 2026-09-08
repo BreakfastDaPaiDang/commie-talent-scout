@@ -1,0 +1,157 @@
+{
+  "checks": [
+    {
+      "name": "范围按钮显示服务端总数",
+      "ok": true
+    },
+    {
+      "name": "档案常态只有统一编辑入口，状态为展示",
+      "ok": true
+    },
+    {
+      "name": "观察发布无需手动填写时间",
+      "ok": true
+    },
+    {
+      "name": "上传只显示设计后的图片按钮",
+      "ok": true
+    },
+    {
+      "name": "不在发布区展示保留周期和内部流程",
+      "ok": true
+    },
+    {
+      "name": "正文、辅助信息、控件使用统一字体",
+      "ok": true
+    },
+    {
+      "name": "范围计数不是当前页条数",
+      "ok": true
+    },
+    {
+      "name": "标签保留类别与名称，移除框和底色",
+      "ok": true
+    },
+    {
+      "name": "实际中文与数字字形使用本地统一字体",
+      "ok": true
+    },
+    {
+      "name": "浏览器设为洛杉矶时仍显示东八区",
+      "ok": true
+    },
+    {
+      "name": "编辑页签切换保留未提交的资料",
+      "ok": true
+    },
+    {
+      "name": "资料表单 1920 无横向溢出",
+      "ok": true
+    },
+    {
+      "name": "资料表单 1920 保存按钮始终可见",
+      "ok": true
+    },
+    {
+      "name": "资料表单 1440 无横向溢出",
+      "ok": true
+    },
+    {
+      "name": "资料表单 1440 保存按钮始终可见",
+      "ok": true
+    },
+    {
+      "name": "资料表单 1024 无横向溢出",
+      "ok": true
+    },
+    {
+      "name": "资料表单 1024 保存按钮始终可见",
+      "ok": true
+    },
+    {
+      "name": "资料表单 390 无横向溢出",
+      "ok": true
+    },
+    {
+      "name": "资料表单 390 保存按钮始终可见",
+      "ok": true
+    },
+    {
+      "name": "展开发布区 1920 无横向溢出",
+      "ok": true
+    },
+    {
+      "name": "展开发布区 1440 无横向溢出",
+      "ok": true
+    },
+    {
+      "name": "展开发布区 1024 无横向溢出",
+      "ok": true
+    },
+    {
+      "name": "展开发布区 390 无横向溢出",
+      "ok": true
+    },
+    {
+      "name": "迟到的标签刷新不能重新打开已关闭编辑窗",
+      "ok": true
+    },
+    {
+      "name": "Agent 接入直述用途，移除内部保留策略",
+      "ok": true
+    }
+  ],
+  "fonts": {
+    "body": "\"CTS Sans\", \"Microsoft YaHei UI\", sans-serif",
+    ".record-body": "\"CTS Sans\", \"Microsoft YaHei UI\", sans-serif",
+    ".record-byline time": "\"CTS Sans\", \"Microsoft YaHei UI\", sans-serif",
+    ".row-foot time": "\"CTS Sans\", \"Microsoft YaHei UI\", sans-serif",
+    ".scope-tabs small": "\"CTS Sans\", \"Microsoft YaHei UI\", sans-serif",
+    ".composer textarea": "\"CTS Sans\", \"Microsoft YaHei UI\", sans-serif",
+    ".tag-chip": "\"CTS Sans\", \"Microsoft YaHei UI\", sans-serif"
+  },
+  "glyphFonts": {
+    ".record-body p": [
+      {
+        "familyName": "Noto Sans SC Thin",
+        "postScriptName": "NotoSansSC",
+        "isCustomFont": true,
+        "glyphCount": 55
+      }
+    ],
+    ".entity-heading h1": [
+      {
+        "familyName": "Noto Sans SC Thin",
+        "postScriptName": "NotoSansSC-Bold",
+        "isCustomFont": true,
+        "glyphCount": 2
+      }
+    ],
+    ".row-foot time": [
+      {
+        "familyName": "Noto Sans SC Thin",
+        "postScriptName": "NotoSansSC",
+        "isCustomFont": true,
+        "glyphCount": 9
+      }
+    ],
+    ".assignment-label": [
+      {
+        "familyName": "Noto Sans SC Thin",
+        "postScriptName": "NotoSansSC-SemiBold",
+        "isCustomFont": true,
+        "glyphCount": 4
+      }
+    ],
+    ".tag-name": [
+      {
+        "familyName": "Noto Sans SC Thin",
+        "postScriptName": "NotoSansSC-Medium",
+        "isCustomFont": true,
+        "glyphCount": 4
+      }
+    ]
+  },
+  "shownTime": "2026/9/7 14:32",
+  "failures": []
+}

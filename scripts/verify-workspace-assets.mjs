@@ -12,6 +12,6 @@ assert.equal(await fetch(base+cssPath).then(r=>r.text()),css);
 const dom=new JSDOM('<style>'+css+'</style><span class="tag-chip tag-teal">测试标签</span>',{virtualConsole:new VirtualConsole()});
 try{
  const style=dom.window.getComputedStyle(dom.window.document.querySelector('.tag-chip'));
- assert.equal(style.backgroundColor,'rgb(255, 255, 255)');assert.equal(style.borderRadius,'0px');
+ assert.equal(style.backgroundColor,'rgba(0, 0, 0, 0)');assert.equal(style.borderRadius,'0px');
  console.log(JSON.stringify({base,stylesheet:cssPath,tagBackground:style.backgroundColor,tagRadius:style.borderRadius,exactBuiltStylesheet:true}));
 }finally{dom.window.close();}

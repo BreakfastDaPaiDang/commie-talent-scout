@@ -39,7 +39,7 @@
   display: block;
 }
 .main-panel {
-  background: #fcfcfc;
+  background: #fff;
 }
 .page-head {
   padding: 24px 30px 18px;
@@ -1672,3 +1672,15 @@
   transform: translateX(-50%);
   min-width: 270px;
 }
+
+/* Reading and editing use the same components; maintenance has one entry. */
+.entity-identity > .archive-edit-entry { margin-left:auto; align-self:center; font-size:16px; white-space:nowrap; min-height:40px; gap:8px; }
+.contacts-bar:empty { display:none; }
+.composer.open .compose-launch { display:none; }
+.composer.open textarea { padding:0; outline:none; box-shadow:none; }
+.composer-foot { gap:12px; flex-wrap:wrap; }
+.composer-hint { margin-right:auto; font-size:14px; color:var(--muted); }
+.composer-foot .image-picker { display:contents; }
+.composer-foot .image-gallery, .composer-foot .upload-list, .composer-foot .form-error { flex-basis:100%; width:100%; }
+.visually-hidden { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+@media(max-width:600px) { .entity-identity > .archive-edit-entry { font-size:14px; padding:6px 0; } .composer-hint { display:none; } .composer-foot .image-select { margin-right:auto; } }

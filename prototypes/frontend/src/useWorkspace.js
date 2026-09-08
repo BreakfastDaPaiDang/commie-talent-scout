@@ -265,6 +265,7 @@ export function useWorkspace() {
           type: page,
           name: data.name,
           contacts: data.contacts,
+          links: data.links,
           avatar: data.avatar,
           state: data.state,
           owners: { [data.state]: data.owners },
@@ -283,8 +284,8 @@ export function useWorkspace() {
         entity.name === data.name &&
         (entity.avatar ?? "") === data.avatar &&
         JSON.stringify(
-          entity.contacts.map(({ type, value }) => ({ type, value })),
-        ) === JSON.stringify(data.contacts) &&
+          entity.contacts.map(({ type, value, note }) => ({ type, value, note:note??'' })),
+        ) === JSON.stringify(data.contacts) && JSON.stringify(entity.links??[])===JSON.stringify(data.links??[]) &&
         JSON.stringify(entity.owners[entity.state] ?? []) ===
           JSON.stringify(data.owners);
       if (unchanged) {
@@ -297,6 +298,7 @@ export function useWorkspace() {
         (d) => {
           d.name = data.name;
           d.contacts = data.contacts;
+          d.links = data.links;
           d.avatar = data.avatar;
           d.owners[d.state] = data.owners;
           return event(d, "更新了档案资料与当前关联");

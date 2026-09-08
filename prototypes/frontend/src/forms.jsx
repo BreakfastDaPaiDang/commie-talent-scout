@@ -1,7 +1,7 @@
+import {ProfileFields,StateChoices} from '../../../app/ui/ArchiveFields';
 import React, { useState } from "react";
 import { Button, ImageInput, Images, imageFiles } from "./components.jsx";
 import { MemberPicker } from "./MemberPicker.jsx";
-import { ContactFields } from "./ContactFields.jsx";
 import { AvatarEditor } from "./AvatarEditor.jsx";
 import { isWorkState, isClosed, personStates, orgStates } from "./model.js";
 
@@ -17,10 +17,11 @@ export function EntityForm({
     [avatar, setAvatar] = useState(entity?.avatar ?? "");
   const [state, setState] = useState(entity?.state ?? "视奸观察"),
     [owners, setOwners] = useState(entity?.owners?.[entity.state] ?? []);
+  const [contacts,setContacts]=useState((entity?.contacts??[]).map(c=>({...c,note:c.note??''}))),[links,setLinks]=useState(entity?.links??[]);
   const work = isWorkState(type, state);
   return (
     <form
-      className="modal-form"
+      className="modal-form manage-form archive-form"
       onSubmit={(e) => {
         e.preventDefault();
         if (!name.trim()) {
@@ -31,14 +32,6 @@ export function EntityForm({
           notify("工作状态必须选择负责成员", "error");
           return;
         }
-        const data = new FormData(e.target);
-        const contacts = data
-          .getAll("contact-type")
-          .map((type, i) => ({
-            type,
-            value: data.getAll("contact-value")[i].trim(),
-          }))
-          .filter((c) => c.value);
         const invalid = contacts.find(
           (c) => c.type === "QQ" && !/^\d{5,12}$/.test(c.value),
         );
@@ -46,7 +39,7 @@ export function EntityForm({
           notify("QQ 号需为 5–12 位数字", "error");
           return;
         }
-        onSave({ name: name.trim(), avatar, contacts, state, owners });
+        onSave({ name: name.trim(), avatar, contacts, links, state, owners });
       }}
     >
       <AvatarEditor
@@ -58,36 +51,8 @@ export function EntityForm({
         notify={notify}
         label={type === "org" ? "组织头像" : "人物头像"}
       />
-      <label>
-        {type === "org" ? "组织名称" : "人物名称"}
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          maxLength={80}
-          placeholder={type === "org" ? "这个组织叫什么" : "如何称呼这个人"}
-          required
-          autoFocus
-        />
-      </label>
-      {!entity && (
-        <label>
-          业务状态
-          <select
-            value={state}
-            onChange={(e) => {
-              setState(e.target.value);
-              setOwners([]);
-            }}
-          >
-            {(type === "org" ? orgStates : personStates)
-              .filter((s) => !isClosed(s))
-              .map((s) => (
-                <option key={s}>{s}</option>
-              ))}
-          </select>
-        </label>
-      )}
-      <ContactFields initial={entity?.contacts ?? []} />
+      <ProfileFields type={type} name={name} setName={setName} contacts={contacts} setContacts={setContacts} links={links} setLinks={setLinks}/>
+      {!entity&&<StateChoices value={state} onChange={value=>{setState(value);setOwners([]);}} choices={(type==='org'?orgStates:personStates).filter(s=>!isClosed(s))}/>}
       <div className="form-field">
         <label>
           {work
@@ -136,7 +101,7 @@ export function StateForm({
   );
   return (
     <form
-      className="modal-form"
+      className="modal-form manage-form"
       onSubmit={(e) => {
         e.preventDefault();
         if (work && !owners.length) {
@@ -153,20 +118,7 @@ export function StateForm({
             ? "关闭后保留资料，重新开启后才能继续修改。"
             : "业务状态没有先后顺序，可直接选择当前情况。"}
       </p>
-      <label>
-        业务状态
-        <select
-          value={state}
-          onChange={(e) => {
-            setState(e.target.value);
-            setOwners(entity.owners[e.target.value] ?? []);
-          }}
-        >
-          {choices.map((s) => (
-            <option key={s}>{s}</option>
-          ))}
-        </select>
-      </label>
+      <StateChoices value={state} onChange={value=>{setState(value);setOwners(entity.owners[value]??[]);}} choices={choices}/>
       {!isClosed(state) && (
         <div className="form-field">
           <label>

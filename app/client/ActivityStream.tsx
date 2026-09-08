@@ -8,6 +8,6 @@ export function ActivityStream<T extends Event>({events,renderRecord,renderEvent
 function ActivityBatch<T extends Event>({group,renderRecord,renderEvent}:{group:ActivityGroup<T>;renderRecord:(e:T)=>ReactNode;renderEvent:(e:T)=>ReactNode}){
  const[open,setOpen]=useState(false),records=group.events.filter(e=>e.observation),operations=group.events.filter(e=>!e.observation);
  if(group.events.length===1)return <>{records.length?renderRecord(group.events[0]):renderEvent(group.events[0])}</>;
- const summary=[...new Set(operations.map(e=>labels[e.kind]??'更新'))].join('、'),when=new Date(group.ended_at).toLocaleString('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
+ const summary=[...new Set(operations.map(e=>labels[e.kind]??'更新'))].join('、'),when=new Date(group.ended_at).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
  return <section className="activity-group" data-activity-group={group.id}>{records.map(e=><React.Fragment key={e.id}>{renderRecord(e)}</React.Fragment>)}{operations.length>0&&<details className="activity-batch" open={open} onToggle={e=>setOpen(e.currentTarget.open)}><summary><strong>{group.events[0].actor_name}</strong><span>{records.length?'同时更新':'更新'}{summary} · {operations.length} 项操作</span><small>{when}</small></summary>{open&&<div className="activity-batch-content">{operations.map(e=><React.Fragment key={e.id}>{renderEvent(e)}</React.Fragment>)}</div>}</details>}</section>;
 }

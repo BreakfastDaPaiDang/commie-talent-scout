@@ -13,7 +13,7 @@
   --line: #dcdcdc;
   --muted: #747474;
   --font: "CTS Sans", "Microsoft YaHei UI", sans-serif;
-  --mono: Consolas, monospace;
+  --mono: var(--font);
 }
 * {
   box-sizing: border-box;
@@ -817,6 +817,8 @@ a:focus-visible {
   padding-bottom: 4px;
   min-height: 110px;
   resize: vertical;
+  outline: none;
+  background: transparent;
 }
 .composer-foot {
   display: flex;
@@ -1476,13 +1478,17 @@ th:last-child {
   font-size: 13px;
 }
 .modal-actions {
+  position: sticky;
+  bottom: calc(-1 * var(--form-pad, 28px));
+  z-index: 3;
+  background: white;
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: 12px;
-  padding-top: 22px;
+  padding: 18px var(--form-pad, 28px) 24px;
   border-top: 1px solid var(--line);
-  margin-top: 4px;
+  margin: 4px calc(-1 * var(--form-pad, 28px)) calc(-1 * var(--form-pad, 28px));
 }
 .field-hint {
   font-size: 13px !important;

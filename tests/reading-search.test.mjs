@@ -47,12 +47,28 @@ test('hidden-only tag evidence is filtered before unread counts and page boundar
  const current=await archives.get(a.id);await archives.setState({id:a.id,expected_version:current.version,status:'已弃用',member_ids:[],request_id:uuid()});const eventId=f.sqlite.prepare("SELECT id FROM archive_events WHERE kind='archive.closed'").get().id;const closed=(await readerObs.event(eventId)).event;assert.equal(closed.kind,'archive.closed');assert.ok(closed.reading);assert.equal((await reader.confirm({tickets:[closed.reading.ticket]})).confirmed.length,1);
 });
 
-test('representative data uses two bounded archive queries and stable cursors across equal activity times and a snapshot of unread updates',async t=>{
+test('representative data uses bounded archive queries and one first-page count query and stable cursors across equal activity times and a snapshot of unread updates',async t=>{
  const f=fixture();t.after(f.close);const writer=member(f,'writer'),at='2027-01-01T00:00:00.000Z',ids=[];
  const ar=f.sqlite.prepare("INSERT INTO archives(id,type,name,created_by,created_at,updated_at) VALUES(?,'person',?,?,?,?)"),ob=f.sqlite.prepare('INSERT INTO observations(id,archive_id,author_id,created_at,updated_at) VALUES(?,?,?,?,?)'),ver=f.sqlite.prepare('INSERT INTO observation_versions(observation_id,version,body,editor_id,created_at) VALUES(?,1,?,?,?)'),ev=f.sqlite.prepare("INSERT INTO archive_events(id,archive_id,actor_id,source,kind,after_json,observation_id,created_at) VALUES(?,?,?,'web','observation.created',?,?,?)");
  f.sqlite.exec('BEGIN');for(let n=0;n<150;n++){const id=uuid();ids.push(id);ar.run(id,'虚构性能 '+n,writer.id,at,at);for(let k=0;k<8;k++){const oid=uuid();ob.run(oid,id,writer.id,at,at);ver.run(oid,'长观察内容'.repeat(1000)+(k===2?'唯一检索片段':''),writer.id,at);ev.run(uuid(),id,writer.id,JSON.stringify({id:oid,content_version:1}),oid,at);}}f.sqlite.exec('COMMIT');
  let queryCount=0;const prepare=f.env.DB.prepare;f.env.DB.prepare=sql=>{queryCount++;return prepare(sql);};const service=new Archives(f.env,f.actor,'web'),start=performance.now();let cursor,all=[];
- do{const before=queryCount,r=await service.list({type:'person',query:'唯一检索片段',limit:30,...(cursor?{before:cursor}:{})});assert.equal(queryCount-before,2,'one list projection and one batched tag summary');assert.equal(r.archives.length,30);assert.ok(r.archives.every(a=>a.search_match&&a.unread_count===8));all.push(...r.archives.map(a=>a.id));cursor=r.next_cursor;}while(cursor);
+ do{const before=queryCount,r=await service.list({type:'person',query:'唯一检索片段',limit:30,...(cursor?{before:cursor}:{})});assert.equal(queryCount-before,cursor?2:3,'list projection, batched tag summary, and first-page totals');if(!cursor)assert.deepEqual(r.counts,{all:150,mine:0,unread:150});else assert.equal(r.counts,undefined);assert.equal(r.archives.length,30);assert.ok(r.archives.every(a=>a.search_match&&a.unread_count===8));all.push(...r.archives.map(a=>a.id));cursor=r.next_cursor;}while(cursor);
  assert.equal(all.length,150);assert.equal(new Set(all).size,150);assert.deepEqual([...all].sort(),ids.sort());t.diagnostic(`150 archives / 1,200 observations / 6M body characters / 5 pages: ${Math.round(performance.now()-start)} ms, ${queryCount} DB reads`);
  const reading=new Reading(f.env,f.actor),first=await reading.list({limit:100});const extra=uuid();ev.run(extra,ids[0],writer.id,'{}',null,at);let snapshotSeen=[...first.events],next=first.next_cursor;while(next){const r=await reading.list({snapshot:first.snapshot,before:Number(next),limit:100});snapshotSeen.push(...r.events);next=r.next_cursor;}assert.equal(snapshotSeen.length,1200);assert.ok(!snapshotSeen.some(e=>e.id===extra));assert.ok((await reading.list({limit:1})).events.some(e=>e.id===extra));
+});
+
+
+test('scope totals count complete filtered archives, preserve other scopes, and follow personal unread receipts',async t=>{
+ const f=fixture();t.after(f.close);const writer=member(f,'totals-writer'),service=new Archives(f.env,writer,'web'),reader=new Archives(f.env,f.actor,'web');
+ const a=await create(service,'person','范围 甲'),b=await create(service,'person','范围 乙'),c=await create(service,'person','其他 丙');await create(service,'org','范围 组织');
+ for(const id of [a.id,b.id])await service.setState({id,expected_version:1,status:'人事审核',member_ids:[f.actor.id],request_id:uuid()});
+ let result=await reader.list({type:'person',limit:1,scope:'mine'});assert.equal(result.archives.length,1);assert.deepEqual(result.counts,{all:3,mine:2,unread:3});assert.ok(result.next_cursor);
+ assert.deepEqual((await reader.list({type:'person',scope:'unread',query:'范围',limit:1})).counts,{all:2,mine:2,unread:2});
+ assert.deepEqual((await reader.list({type:'person',status:'人事审核',member_id:f.actor.id})).counts,{all:2,mine:2,unread:2});
+ assert.deepEqual((await service.list({type:'person'})).counts,{all:3,mine:0,unread:0});
+ assert.deepEqual((await reader.list({type:'person',query:'没有这样的档案'})).counts,{all:0,mine:0,unread:0});
+ const reading=new Reading(f.env,f.actor),events=f.sqlite.prepare('SELECT id FROM archive_events WHERE archive_id=?').all(a.id),tickets=await reading.deliver(events);await reading.confirm({tickets:[...tickets.values()].map(r=>r.ticket)});
+ assert.deepEqual((await reader.list({type:'person'})).counts,{all:3,mine:2,unread:2});
+ const current=await service.get(b.id);await service.setState({id:b.id,expected_version:current.version,status:'已弃用',member_ids:[],request_id:uuid()});
+ assert.deepEqual((await reader.list({type:'person',closed:'open'})).counts,{all:2,mine:1,unread:1});assert.ok(c.id);
 });
