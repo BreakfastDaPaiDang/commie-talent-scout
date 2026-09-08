@@ -1,6 +1,6 @@
 {
   "date": "2026-09-08T13:22:34.369Z",
-  "status": "implementation_and_api_verified_cloud_browser_check_pending",
+  "status": "service_codex_and_cloud_browser_verified",
   "local": {
     "date": "2026-09-08T13:14:33.022Z",
     "base": "http://127.0.0.1:8790",
@@ -612,5 +612,15 @@
     "horizontal_overflow": false,
     "cloud_browser": "pending after Chrome debugger disconnected",
     "pixel_screenshot_review": false
+  },
+  "web_joint": {
+    "date": "2026-09-08T19:42:55.492Z",
+    "base": "https://scout-staging.dapaidang.org",
+    "checks": [
+      "independent authenticated web API reads match real Codex observation, author, tag evidence and history; list returns bounded visible summaries",
+      "isolated desktop browser opens the actual Codex archive deep link and displays exact saved observation, every current category/name, evidence and readable source versions",
+      "390px real-service view retains the saved observation without horizontal overflow or runtime errors"
+    ],
+    "recoveries": []
   }
 }

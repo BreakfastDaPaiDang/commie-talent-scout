@@ -2,7 +2,7 @@
 
 正式首版 **v0.1.0**。依据 [PRD（文档修订 1.6）](./PRD.md)、[技术方案](./technical-design.md)、[验证报告](./technical-validation.md)、[原型设计](./design/README.md)、[材料压缩体验](./mcp-agent-experience.md)、[标签系统](./tag-system.md)及[请求留存](./mcp-request-data.md)。S1–S14 保留为设计切片编号；14 项均已发布为 GitHub Issues，归入 [v0.1.0 里程碑](https://github.com/BreakfastDaPaiDang/commie-talent-scout/milestone/1)。状态以 GitHub 为准。
 
-每项交付可演示的完整业务路径，包含所需持久化、共享业务规则、网页/MCP 入口与行为验证。风格和窄屏适配随每项交付，不留到最后统一补皮肤；原型提供设计参考，正式代码使用真实业务服务。
+每项交付可演示的完整业务路径，包含所需持久化、共享业务规则、网页/MCP 入口与行为验证。风格和窄屏适配随每项交付，不留到最后统一补皮肤；正式前端与已确认原型共用 `app/ui/`，在这套界面上接入真实业务服务。下文复选框保留任务发布时的验收基线，当前进度以 GitHub Issues 与对应验收报告为准。
 
 | 切片 / Issue | 标题 | 依赖 | PRD 用户故事 |
 | --- | --- | --- | --- |

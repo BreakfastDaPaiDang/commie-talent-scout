@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
+import {readFileSync,mkdirSync} from 'node:fs';
+import {chromium} from 'playwright-core';
 import {verificationClient} from './verification-client.mjs';
-const v=await verificationClient('compression-web'),checks=[];
+const v=await verificationClient('compression-web'),checks=[];let browser,page;
 try{
  const report=JSON.parse(readFileSync('tmp/verification/codex-compression-detail-cloud.json','utf8'));assert.equal(v.target,'cloud');
  const expected=report.artifacts.observations.find(o=>o.body.includes('聊天整理')),id=expected.archive_id;
@@ -11,5 +12,10 @@ try{
  const timeline=await v.http('/archives/'+id+'/timeline');assert.equal(timeline.status,200);assert.ok(timeline.body.events.some(e=>e.kind==='archive.tags_changed'));assert.ok(timeline.body.events.some(e=>e.observation?.id===expected.id));
  const list=await v.http('/archives?type=person&query='+encodeURIComponent(report.fixture));assert.equal(list.status,200);assert.equal(list.body.archives[0].tag_summary.total,tags.body.tags.length);assert.ok(list.body.archives[0].tag_summary.tags.length<=3);assert.ok(!JSON.stringify(list.body.archives[0]).includes('evidence'));
  checks.push('independent authenticated web API reads match real Codex observation, author, tag evidence and history; list returns bounded visible summaries');
- const entry=await fetch(archive.body.archive.url);assert.equal(entry.status,200);assert.ok((await entry.text()).includes('/assets/'));checks.push('returned archive deep link resolves to the real web application; browser opening is checked separately');
-}finally{await v.close(checks);}
+ const admin=JSON.parse(readFileSync('secrets/bootstrap-staging-remote-admin.json','utf8')),login=await v.http('/auth/login',{username:admin.username,password:admin.password});assert.equal(login.status,200);
+ browser=await chromium.launch({channel:process.env.CTS_TEST_BROWSER??'msedge',headless:true});const context=await browser.newContext({viewport:{width:1440,height:1000},timezoneId:'Asia/Shanghai'}),[cookieName,...cookieValue]=login.cookie.split('=');await context.addCookies([{name:cookieName,value:cookieValue.join('='),url:v.base}]);page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.goto(archive.body.archive.url+'&observation='+expected.id);await page.locator('#focused-content .record-body').waitFor();const rendered=await page.locator('#focused-content .record-body').innerText();assert.equal(rendered.replace(/\s/g,''),expected.body.replace(/\s/g,''));assert.ok((await page.locator('.detail-panel').textContent()).includes(report.fixture));
+ for(const tag of report.artifacts.tags){const actual=tags.body.tags.find(t=>t.tag_id===tag.tag_id);await page.locator('.archive-tags .tag-binding-button').filter({hasText:`${actual.category_name}：${actual.name}`}).click();const dialog=page.getByRole('dialog').last();await dialog.waitFor();for(const evidence of actual.evidence)assert.ok((await dialog.textContent()).includes(evidence.note));const source=dialog.getByRole('button',{name:/查看来源/}).first();if(await source.count()){await source.click();await page.getByRole('dialog',{name:'引用的观察版本',exact:true}).waitFor();assert.ok((await page.getByRole('dialog',{name:'引用的观察版本',exact:true}).textContent()).length>20);await page.keyboard.press('Escape');}await page.keyboard.press('Escape');}
+ checks.push('isolated desktop browser opens the actual Codex archive deep link and displays exact saved observation, every current category/name, evidence and readable source versions');
+ await page.setViewportSize({width:390,height:844});await page.locator('#focused-content .record-body').waitFor();assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));assert.deepEqual(errors,[]);mkdirSync('tmp/verification',{recursive:true});await page.screenshot({path:'tmp/verification/compression-web-cloud-mobile.png',fullPage:true});checks.push('390px real-service view retains the saved observation without horizontal overflow or runtime errors');
+}catch(error){if(page){mkdirSync('tmp/verification',{recursive:true});await page.screenshot({path:'tmp/verification/compression-web-failure.png'});console.log(JSON.stringify({url:page.url(),text:(await page.locator('body').innerText()).slice(-7000)}));}throw error;}finally{if(page){try{await page.evaluate(()=>fetch('/api/auth/logout',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}));}catch{}}if(browser)await browser.close();await v.close(checks);}
