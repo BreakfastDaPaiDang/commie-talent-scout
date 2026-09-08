@@ -1,0 +1,35 @@
+name: Private backup and usage checks
+on:
+  schedule:
+    - cron: '43 19 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cts-production-operations
+  cancel-in-progress: false
+jobs:
+  operations:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Save a private consistent snapshot and referenced images
+        run: node scripts/backup.mjs --env production
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: '370c0a6a58a36a7e781de20d1a257ac2'
+          WRANGLER_SEND_METRICS: 'false'
+      - name: Check usage even if backup failed
+        if: ${{ !cancelled() }}
+        run: node scripts/monitor.mjs --env production
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

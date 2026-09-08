@@ -1,0 +1,66 @@
+{
+  "format": 1,
+  "count": 12,
+  "migrations": {
+    "0001_identity.sql": {
+      "sha256": "ceb732997de6972d3f88ae3a15b52b4df0def3418cc4b0834cd289ce55daff6a",
+      "backwards_compatible": true,
+      "reason": "Adds tables, indexes, or defaulted/nullable columns; retains the preceding schema and data."
+    },
+    "0002_mcp.sql": {
+      "sha256": "1418d9dab7f20533f745ee16d9098f57df174f062836c4948a02d47a790b1c4d",
+      "backwards_compatible": true,
+      "reason": "Adds tables, indexes, or defaulted/nullable columns; retains the preceding schema and data."
+    },
+    "0003_member_management.sql": {
+      "sha256": "ae49326b8e93d99ae14f8aea9dacdc9158c9f6567bcf0b40a9037f465ef5725b",
+      "backwards_compatible": true,
+      "reason": "Adds tables, indexes, or defaulted/nullable columns; retains the preceding schema and data."
+    },
+    "0004_archives.sql": {
+      "sha256": "f8aba7db2dcae4b95872e8cd684117f18fbf9c965482ede1b12af2efa4db7991",
+      "backwards_compatible": true,
+      "reason": "Adds tables, indexes, or defaulted/nullable columns; retains the preceding schema and data."
+    },
+    "0005_archive_states.sql": {
+      "sha256": "28cd995a7856a81ff30fdd9868f8e656fe89c3b9c143f60689c4331f6ba05049",
+      "backwards_compatible": true,
+      "reason": "Adds tables, indexes, or defaulted/nullable columns; retains the preceding schema and data."
+    },
+    "0006_observations.sql": {
+      "sha256": "b8383540686eeaee3255afed24031982b013ae8a343818a8a25a8c0314b98279",
+      "backwards_compatible": true,
+      "reason": "Adds tables, indexes, or defaulted/nullable columns; retains the preceding schema and data."
+    },
+    "0007_tags.sql": {
+      "sha256": "c2cbe1e853a730fbd857fca1e9f59353f8d89005e08092506b556d8fea3d9cd0",
+      "backwards_compatible": true,
+      "reason": "Adds tables, indexes, or defaulted/nullable columns; retains the preceding schema and data."
+    },
+    "0008_tag_catalog.sql": {
+      "sha256": "f756a0722385f5f42609e27a46b4fe8c2ee1698e3a03716e8fc58bbefbac9d7d",
+      "backwards_compatible": true,
+      "reason": "Adds tables, indexes, or defaulted/nullable columns; retains the preceding schema and data."
+    },
+    "0009_images.sql": {
+      "sha256": "f30f07c76a05c0fbc2efa9963de4d0493a6a2eda01d269508dd89fa6d931c8c1",
+      "backwards_compatible": true,
+      "reason": "Adds tables, indexes, or defaulted/nullable columns; retains the preceding schema and data."
+    },
+    "0010_reading.sql": {
+      "sha256": "600efb419095c1653b704863104e57563ea5053f94ffaf9d13b079f42812f02d",
+      "backwards_compatible": true,
+      "reason": "Adds tables, indexes, or defaulted/nullable columns; retains the preceding schema and data."
+    },
+    "0011_tag_maintenance.sql": {
+      "sha256": "873c60d7b5826be3acb74b1e503150349261cfc7a6fa4b08d25d9bcb2786ccea",
+      "backwards_compatible": true,
+      "reason": "Adds defaulted impact counters and additive triggers/tables; existing fields and write contracts remain intact."
+    },
+    "0012_task_review.sql": {
+      "sha256": "7fe3bc887c5dcfb7b9d846d5d3b9ea72ad49b9913efd4f0eb50791a30519f3b5",
+      "backwards_compatible": true,
+      "reason": "Adds nullable/defaulted metadata and summary tables; existing result data remains available to prior code."
+    }
+  }
+}

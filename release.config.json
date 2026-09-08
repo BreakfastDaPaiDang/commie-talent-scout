@@ -1,0 +1,20 @@
+{
+  "backup_bucket": "cts-private-backups",
+  "snapshot_retention_days": 30,
+  "max_export_bytes": 134217728,
+  "recovery": {
+    "database_name": "cts-restore-20260909",
+    "database_id": "2afc507e-025f-4fa1-9919-20b1c8b2d56e",
+    "bucket_name": "cts-restore-20260909-images"
+  },
+  "daily_limits": {
+    "mcp_calls": 10000,
+    "new_image_bytes": 1073741824,
+    "total_image_bytes": 5368709120,
+    "d1_bytes": 536870912
+  },
+  "environments": {
+    "production": { "origin": "https://scout.dapaidang.org" },
+    "staging": { "origin": "https://scout-staging.dapaidang.org" }
+  }
+}
