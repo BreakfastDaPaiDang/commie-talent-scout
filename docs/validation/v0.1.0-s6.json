@@ -88,5 +88,38 @@
       "real cloud MCP image response returns the complete 10 MiB original as standard image content",
       "actual cloud cron removes old orphan/pending uploads and retains all record history, active draft and removed-avatar history references"
     ]
+  },
+  "browser_joint_validation": {
+    "deployment": "741ee506-bc8e-4c2d-aba3-b76c51ddeb11",
+    "local": {
+      "date": "2026-09-08T21:17:29.665Z",
+      "base": "http://127.0.0.1:8790",
+      "checks": [
+        "actual three-file selection shows mobile upload progress, blocks premature publish through one injected PUT failure, queries/retries successfully and publishes exactly one three-image record",
+        "actual original-image viewer toggles size; mobile edit removes one current image and accepts a browser clipboard event; the saved version and immutable three-image original remain readable",
+        "real deletion confirmation rejects a stale version after an external edit, refreshes the record, deletes once and restores from the mobile deleted view without changing author or content version",
+        "mobile archive avatar uploads a JPEG, applies it through the real versioned command and removes the upload to resume the default fallback",
+        "pure-image publish creates a second real record; closed archive keeps deleted image content readable to the admin while removing restore and publish actions"
+      ],
+      "recoveries": []
+    },
+    "cloud": {
+      "date": "2026-09-08T21:20:05.386Z",
+      "base": "https://scout-staging.dapaidang.org",
+      "checks": [
+        "actual three-file selection shows mobile upload progress, blocks premature publish through one injected PUT failure, queries/retries successfully and publishes exactly one three-image record",
+        "actual original-image viewer toggles size; mobile edit removes one current image and accepts a browser clipboard event; the saved version and immutable three-image original remain readable",
+        "real deletion confirmation rejects a stale version after an external edit, refreshes the record, deletes once and restores from the mobile deleted view without changing author or content version",
+        "mobile archive avatar uploads a JPEG, applies it through the real versioned command and removes the upload to resume the default fallback",
+        "pure-image publish creates a second real record; closed archive keeps deleted image content readable to the admin while removing restore and publish actions"
+      ],
+      "recoveries": []
+    },
+    "screenshots_reviewed": [
+      "upload-mobile",
+      "edit-mobile",
+      "restore-mobile"
+    ],
+    "real_codex": "previous client policy blocks remain unresolved; browser/SDK success is not Codex acceptance"
   }
 }
