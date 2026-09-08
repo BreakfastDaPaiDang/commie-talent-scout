@@ -126,7 +126,15 @@ export function Images({ images, onOpen, onRemove }) {
   );
 }
 
-export function ReadBoundary({ token, enabled, paused, onRead, children }) {
+export function ReadBoundary({
+  token,
+  enabled,
+  paused,
+  onRead,
+  children,
+  id,
+  highlighted,
+}) {
   const ref = useRef(null),
     callback = useRef(onRead);
   callback.current = onRead;
@@ -159,7 +167,11 @@ export function ReadBoundary({ token, enabled, paused, onRead, children }) {
     };
   }, [token, enabled, paused]);
   return (
-    <div className="read-boundary">
+    <div
+      className={`read-boundary ${highlighted ? "entry-target" : ""}`}
+      id={id}
+      tabIndex={-1}
+    >
       <span className="read-sentinel" ref={ref} />
       {children}
     </div>

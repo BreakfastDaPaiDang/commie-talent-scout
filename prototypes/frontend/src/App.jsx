@@ -2,7 +2,12 @@ import React from "react";
 import { Icon, Mark } from "./icons.jsx";
 import { Avatar, Placeholder } from "./Avatar.jsx";
 import { Button, IconButton, Login } from "./components.jsx";
-import { ArchiveList, Updates, Detail } from "./WorkspaceViews.jsx";
+import {
+  ArchiveList,
+  ArchiveSearch,
+  Updates,
+  Detail,
+} from "./WorkspaceViews.jsx";
 import { Accounts, AgentPage, Dialogs } from "./SupportingViews.jsx";
 import { useWorkspace } from "./useWorkspace.js";
 const labels = {
@@ -116,7 +121,9 @@ export default function App() {
         <main
           className={`main-panel ${["accounts", "agent"].includes(w.page) ? "support-panel" : ""}`}
         >
-          <header className="page-head">
+          <header
+            className={`page-head ${["person", "org"].includes(w.page) ? "archive-head" : ""}`}
+          >
             <div>
               <span className="eyebrow">
                 {
@@ -141,16 +148,12 @@ export default function App() {
                 )}
               </h1>
             </div>
+            {["person", "org"].includes(w.page) && <ArchiveSearch w={w} />}
             {["person", "org"].includes(w.page) && (
               <Button
                 variant="primary"
                 icon="plus"
-                onClick={() =>
-                  w.attempt(() => {
-                    w.clearDraft();
-                    w.setDialog({ type: "entity-new" });
-                  })
-                }
+                onClick={() => w.setDialog({ type: "entity-new" })}
               >
                 新建
               </Button>

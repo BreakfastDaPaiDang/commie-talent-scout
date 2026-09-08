@@ -1,4 +1,4 @@
-import React, { useRef } from "react";
+import React, { useRef, useEffect, useLayoutEffect } from "react";
 import { Icon } from "./icons.jsx";
 import { Avatar } from "./Avatar.jsx";
 import {
@@ -32,72 +32,169 @@ export function StateBadge({ entity, onClick, small = false }) {
     <span className={style}>{entity.state}</span>
   );
 }
+function Highlight({ text = "", query = "" }) {
+  const index = query ? text.toLowerCase().indexOf(query.toLowerCase()) : -1;
+  if (index < 0) return text;
+  return (
+    <>
+      {text.slice(0, index)}
+      <mark>{text.slice(index, index + query.length)}</mark>
+      {text.slice(index + query.length)}
+    </>
+  );
+}
+function excerpt(text, query) {
+  const flat = text.replace(/\s+/g, " "),
+    index = query ? flat.toLowerCase().indexOf(query.toLowerCase()) : -1;
+  return index > 45 ? "…" + flat.slice(index - 30, index + 125) : flat;
+}
+export function ArchiveSearch({ w }) {
+  const searchRef = useRef(null);
+  useEffect(() => {
+    const key = (e) => {
+      if (
+        e.key === "/" &&
+        !e.ctrlKey &&
+        !e.metaKey &&
+        !e.altKey &&
+        !["INPUT", "TEXTAREA", "SELECT"].includes(e.target.tagName) &&
+        !e.target.isContentEditable &&
+        !document.querySelector("dialog[open]")
+      ) {
+        e.preventDefault();
+        searchRef.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", key);
+    return () => window.removeEventListener("keydown", key);
+  }, []);
+  return (
+    <div className="search-field">
+      <Icon name="search" />
+      <input
+        ref={searchRef}
+        aria-label="搜索档案"
+        placeholder="搜索名称、QQ、观察"
+        value={w.search}
+        onChange={(e) => w.setSearch(e.target.value)}
+      />
+      {w.search ? (
+        <IconButton
+          name="close"
+          label="清空搜索"
+          onClick={() => w.setSearch("")}
+        />
+      ) : (
+        <kbd>/</kbd>
+      )}
+    </div>
+  );
+}
 export function ArchiveList({ w }) {
   const states = w.page === "org" ? orgStates : personStates;
+  const activeFilters =
+    w.stateFilter !== "all" ||
+    w.lifeFilter !== "open" ||
+    w.ownerFilter.length > 0;
   return (
     <>
       <section className="list-toolbar">
-        <div className="search-field">
-          <Icon name="search" />
-          <input
-            aria-label="搜索档案"
-            placeholder="搜索名称、观察内容"
-            value={w.search}
-            onChange={(e) => w.setSearch(e.target.value)}
-          />
-          {w.search && (
-            <IconButton
-              name="close"
-              label="清空搜索"
-              onClick={() => w.setSearch("")}
-            />
-          )}
-        </div>
-        <div className="filter-row">
-          <select
-            aria-label="筛选业务状态"
-            value={w.stateFilter}
-            onChange={(e) => w.setStateFilter(e.target.value)}
-          >
-            <option value="all">全部状态</option>
-            {states.map((s) => (
-              <option key={s}>{s}</option>
+        <div className="scope-filter-row">
+          <div className="scope-tabs" aria-label="档案范围">
+            {[
+              ["all", "全部"],
+              ["mine", "我负责"],
+              ["unread", "有未读"],
+            ].map(([key, label]) => (
+              <button
+                key={key}
+                aria-pressed={w.scope === key}
+                className={w.scope === key ? "active" : ""}
+                onClick={() => {
+                  w.setScope(key);
+                  if (key === "unread") w.setLifeFilter("all");
+                  else if (w.scope === "unread") w.setLifeFilter("open");
+                }}
+              >
+                {label}
+                <small>{w.scopeCounts[key]}</small>
+              </button>
             ))}
-          </select>
-          <MemberPicker
-            members={w.members}
-            value={w.ownerFilter}
-            onChange={w.setOwnerFilter}
-            multiple={false}
-            label="筛选绑定成员"
-            placeholder="全部成员"
-          />
-          <select
-            aria-label="筛选开启关闭"
-            value={w.lifeFilter}
-            onChange={(e) => w.setLifeFilter(e.target.value)}
+          </div>
+          <button
+            className={`filter-toggle ${activeFilters ? "has-filters" : ""}`}
+            aria-expanded={w.filtersOpen}
+            onClick={() => w.setFiltersOpen(!w.filtersOpen)}
           >
-            <option value="open">开启中</option>
-            <option value="closed">已关闭</option>
-            <option value="all">全部档案</option>
-          </select>
+            <Icon name="filter" size={18} />
+            筛选{activeFilters && <span className="unread-dot" />}
+          </button>
         </div>
+        {w.filtersOpen && (
+          <div className="filter-row">
+            <select
+              aria-label="筛选业务状态"
+              value={w.stateFilter}
+              onChange={(e) => w.setStateFilter(e.target.value)}
+            >
+              <option value="all">全部状态</option>
+              {states.map((state) => (
+                <option key={state}>{state}</option>
+              ))}
+            </select>
+            <MemberPicker
+              members={w.members}
+              value={w.ownerFilter}
+              onChange={w.setOwnerFilter}
+              multiple={false}
+              label="筛选绑定成员"
+              placeholder="全部成员"
+            />
+            <select
+              aria-label="筛选开启关闭"
+              value={w.lifeFilter}
+              onChange={(e) => w.setLifeFilter(e.target.value)}
+            >
+              <option value="open">开启中</option>
+              <option value="closed">已关闭</option>
+              <option value="all">全部档案</option>
+            </select>
+          </div>
+        )}
         <div className="list-caption">
-          <span>{w.filtered.length} 个档案</span>
-          <span>最近更新 ↓</span>
+          <span>
+            {w.filtered.length} 个档案{w.scope === "mine" && " · 当前工作负责"}
+          </span>
+          {activeFilters || w.search ? (
+            <button onClick={w.resetFilters}>清除条件</button>
+          ) : (
+            <span>最近更新 ↓</span>
+          )}
         </div>
       </section>
       <div className="entity-list">
         {w.filtered.length ? (
           w.filtered.map((e) => {
-            const latest = e.records.find((r) => !r.deleted),
+            const matching = w.search
+                ? e.records.find(
+                    (r) =>
+                      !r.deleted &&
+                      r.body.toLowerCase().includes(w.search.toLowerCase()),
+                  )
+                : null,
+              latest = matching ?? e.records.find((r) => !r.deleted),
               bound = e.owners[e.state] ?? [],
-              working = isWorkState(e.type, e.state);
+              working = isWorkState(e.type, e.state),
+              contactMatch = w.search
+                ? e.contacts.find((c) =>
+                    c.value.toLowerCase().includes(w.search.toLowerCase()),
+                  )
+                : null;
             return (
               <button
                 className={`entity-row ${w.selected === e.id ? "selected" : ""}`}
                 key={e.id}
-                onClick={() => w.pick(e.id)}
+                onClick={() => w.pick(e.id, matching?.id)}
               >
                 <Avatar
                   type={e.type}
@@ -107,11 +204,13 @@ export function ArchiveList({ w }) {
                 />
                 <div className="row-content">
                   <div className="row-title">
-                    <h2>{e.name}</h2>
+                    <h2>
+                      <Highlight text={e.name} query={w.search} />
+                    </h2>
                     {w.unreadItems(e).length > 0 && (
                       <span className="unread-dot" aria-label="有未读更新" />
                     )}
-                    <Icon name="arrow" size={19} />
+                    <Icon name="arrow" size={18} />
                   </div>
                   <div className="row-meta">
                     <StateBadge entity={e} small />
@@ -123,9 +222,20 @@ export function ArchiveList({ w }) {
                         ◆
                       </span>
                     )}
+                    {w.hasDraft(e.id) && (
+                      <span className="draft-tag">草稿</span>
+                    )}
                   </div>
                   <p className="record-excerpt">
-                    {latest?.body ?? "还没有观察记录"}
+                    <Highlight
+                      text={excerpt(
+                        contactMatch && !matching
+                          ? `${contactMatch.type} ${contactMatch.value}`
+                          : (latest?.body ?? "还没有观察记录"),
+                        w.search,
+                      )}
+                      query={w.search}
+                    />
                   </p>
                   <div className="row-foot">
                     <span>
@@ -142,44 +252,43 @@ export function ArchiveList({ w }) {
         ) : (
           <Empty
             type={w.page}
-            title="没有找到对应档案"
+            title={
+              w.scope === "mine" && !w.search
+                ? "暂无你负责的工作"
+                : "没有找到对应档案"
+            }
             action={
-              <Button
-                variant="outline"
-                onClick={() => {
-                  w.setSearch("");
-                  w.setStateFilter("all");
-                  w.setLifeFilter("all");
-                  w.setOwnerFilter([]);
-                }}
-              >
-                清除筛选
+              <Button variant="outline" onClick={w.resetFilters}>
+                查看全部档案
               </Button>
             }
           >
-            换个关键词，或调整筛选条件。
+            {w.scope === "mine" && !w.search
+              ? "工作状态中绑定你的档案，会出现在这里。"
+              : "换个关键词，或清除筛选条件。"}
           </Empty>
         )}
       </div>
     </>
   );
 }
-
 export function Updates({ w }) {
   return (
     <section className="updates-list">
-      <p className="section-description">打开对应内容，阅读进度会自动更新。</p>
+      <p className="section-description">从变化的地方读起。</p>
       {w.unreadEntities.length ? (
-        w.unreadEntities.map((e) => {
+        w.sessionUpdates.map((e) => {
           const pending = w.unreadItems(e),
-            latest = pending.sort(
-              (a, b) => timelineOrder(b) - timelineOrder(a),
-            )[0];
+            latest = [
+              ...(pending.length
+                ? pending
+                : [...e.records.filter((r) => !r.deleted), ...e.events]),
+            ].sort((a, b) => timelineOrder(b) - timelineOrder(a))[0];
           return (
             <button
-              className={`update-row ${w.selected === e.id ? "selected" : ""}`}
+              className={`update-row ${w.selected === e.id ? "selected" : ""} ${!pending.length ? "read" : ""}`}
               key={e.id}
-              onClick={() => w.pick(e.id)}
+              onClick={() => w.openUnread(e)}
             >
               <Avatar
                 type={e.type}
@@ -189,19 +298,29 @@ export function Updates({ w }) {
               />
               <div>
                 <span className="kind-label">
-                  {e.type === "person" ? "人物" : "组织"} · {pending.length}{" "}
-                  项更新
+                  {e.type === "person" ? "人物" : "组织"} ·{" "}
+                  {pending.length ? `${pending.length} 项更新` : "已阅"}
                 </span>
                 <h2>{e.name}</h2>
-                <p>{latest.kind === "system" ? latest.text : latest.body}</p>
-                <time>{latest.time}</time>
+                <p>{latest?.kind === "system" ? latest.text : latest?.body}</p>
+                <time>{latest?.time}</time>
               </div>
-              <Icon name="arrow" />
+              <Icon name={pending.length ? "arrow" : "check"} />
             </button>
           );
         })
       ) : (
-        <Empty title="更新都看过了">新的观察与变化，会出现在这里。</Empty>
+        <div className="caught-up">
+          <img
+            src="/art/observation-pause-v3.png"
+            alt="放下望远镜，暂歇片刻的观察员"
+          />
+          <h2>近况，都看过了。</h2>
+          <p>新的观察与变化，会在这里等你。</p>
+          <Button variant="outline" onClick={() => w.navigate("person")}>
+            回到人物档案
+          </Button>
+        </div>
       )}
     </section>
   );
@@ -210,8 +329,21 @@ export function Updates({ w }) {
 export function Detail({ w }) {
   const { entity, locked, actor, memberName } = w,
     textarea = useRef(null),
+    scroll = useRef(null),
     work = isWorkState(entity.type, entity.state),
     owners = entity.owners[entity.state] ?? [];
+  useLayoutEffect(() => {
+    const target =
+      w.focusTarget?.entityId === entity.id
+        ? document.getElementById(`entry-${w.focusTarget.itemId}`)
+        : null;
+    if (target) {
+      target.scrollIntoView({ block: "start" });
+      target.focus({ preventScroll: true });
+    } else if (scroll.current)
+      scroll.current.scrollTop =
+        w.readingPositions.current[`${w.actorId}:${entity.id}`] ?? 0;
+  }, [entity.id, w.focusTarget?.request, w.actorId]);
   function addImages(files) {
     const added = imageFiles(files, w.notify);
     w.setImages((old) => {
@@ -230,6 +362,12 @@ export function Detail({ w }) {
           </span>
         </span>
         <div>
+          {w.unreadEntities.length > 0 && (
+            <button className="next-unread" onClick={w.nextUnread}>
+              下一处未读
+              <Icon name="arrow" size={15} />
+            </button>
+          )}
           <IconButton
             name="expand"
             label={w.detailWide ? "收起阅读视图" : "展开阅读视图"}
@@ -238,30 +376,23 @@ export function Detail({ w }) {
           <IconButton
             name="close"
             label="关闭档案详情"
-            onClick={() =>
-              w.attempt(() => {
-                w.setSelected(null);
-                w.clearDraft();
-              })
-            }
+            onClick={w.closeDetail}
           />
         </div>
       </div>
-      <div className="detail-scroll" key={entity.id}>
+      <div
+        className="detail-scroll"
+        key={entity.id}
+        ref={scroll}
+        onScroll={(event) => {
+          w.readingPositions.current[`${w.actorId}:${entity.id}`] =
+            event.currentTarget.scrollTop;
+        }}
+      >
         <div className="detail-inner">
           <header className="entity-header">
             <div className="entity-identity">
-              <Avatar
-                type={entity.type}
-                name={entity.name}
-                contacts={entity.contacts}
-                src={entity.avatar}
-                size="hero"
-              />
               <div className="entity-heading">
-                <span className="entity-overline">
-                  {locked ? "档案已关闭" : work ? "工作进行中" : "持续观察"}
-                </span>
                 <h1>{entity.name}</h1>
                 <StateBadge
                   entity={entity}
@@ -276,6 +407,13 @@ export function Detail({ w }) {
                   }
                 />
               </div>
+              <Avatar
+                type={entity.type}
+                name={entity.name}
+                contacts={entity.contacts}
+                src={entity.avatar}
+                size="hero"
+              />
               <IconButton
                 name="more"
                 label="档案操作"
@@ -294,7 +432,7 @@ export function Detail({ w }) {
               <div className="assigned-members">
                 {owners.length ? (
                   owners.map((id) => {
-                    const m = w.members.find((x) => x.id === id);
+                    const m = w.members.find((member) => member.id === id);
                     return (
                       <span className="member-chip" key={id}>
                         <Avatar name={m?.name} qq={m?.qq} size="micro" />
@@ -317,11 +455,24 @@ export function Detail({ w }) {
               )}
             </div>
             <div className="contacts-bar">
-              {entity.contacts.map((c, i) => (
-                <span className="contact-pill" key={i}>
-                  <small>{c.type}</small>
-                  <span>{c.value}</span>
-                </span>
+              {entity.contacts.map((contact, i) => (
+                <button
+                  className="contact-pill"
+                  key={i}
+                  title={`复制${contact.type}`}
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(contact.value);
+                      w.notify(`${contact.type}已复制`);
+                    } catch {
+                      w.notify("复制未成功，可选择文字复制");
+                    }
+                  }}
+                >
+                  <small>{contact.type}</small>
+                  <span>{contact.value}</span>
+                  <Icon name="copy" size={13} />
+                </button>
               ))}
               {!locked && (
                 <Button
@@ -373,7 +524,10 @@ export function Detail({ w }) {
             ))}
           </div>
           {!locked && w.recordView !== "deleted" && (
-            <section className={`composer ${w.composeOpen ? "open" : ""}`}>
+            <section
+              className={`composer ${w.composeOpen ? "open" : ""}`}
+              aria-label="撰写观察"
+            >
               <div className="composer-line">
                 <button
                   className="compose-launch"
@@ -411,6 +565,11 @@ export function Detail({ w }) {
                       w.setImages((p) => p.filter((_, n) => n !== i))
                     }
                   />
+                  <p className="draft-note">
+                    {w.draftDirty
+                      ? "草稿随此档案保留，本次预览刷新后清空。"
+                      : "写下具体的交流、行动或变化。"}
+                  </p>
                   <div className="composer-foot">
                     <ImageInput onFiles={addImages} />
                     <Button
@@ -454,6 +613,11 @@ export function Detail({ w }) {
               return (
                 <ReadBoundary
                   key={token}
+                  id={`entry-${item.id}`}
+                  highlighted={
+                    w.focusTarget?.entityId === entity.id &&
+                    w.focusTarget?.itemId === item.id
+                  }
                   token={token}
                   enabled={unread && w.recordView !== "deleted"}
                   paused={!!w.dialog}

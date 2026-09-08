@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   initialEntities,
   initialMembers,
@@ -17,18 +17,68 @@ export function useWorkspace() {
   const [entities, setEntities] = useState(initialEntities),
     [members, setMembers] = useState(initialMembers);
   const [actorId, setActorId] = useState("zhou"),
-    [page, setPage] = useState("person"),
+    [page, setPage] = useState(
+      new URLSearchParams(location.search).get("page") === "agent"
+        ? "agent"
+        : "person",
+    ),
     [selected, setSelected] = useState("p1");
-  const [search, setSearch] = useState(""),
-    [stateFilter, setStateFilter] = useState("all"),
-    [lifeFilter, setLifeFilter] = useState("open"),
-    [ownerFilter, setOwnerFilter] = useState([]);
+  const [listState, setListState] = useState({});
+  const listKey = `${actorId}:${page}`;
+  const {
+    search = "",
+    stateFilter = "all",
+    lifeFilter = "open",
+    ownerFilter = [],
+    scope = "all",
+    filtersOpen = false,
+  } = listState[listKey] ?? {};
+  const setListField = (field, value) =>
+    setListState((previous) => ({
+      ...previous,
+      [listKey]: { ...previous[listKey], [field]: value },
+    }));
+  const setSearch = (value) => setListField("search", value),
+    setStateFilter = (value) => setListField("stateFilter", value),
+    setLifeFilter = (value) => setListField("lifeFilter", value),
+    setOwnerFilter = (value) => setListField("ownerFilter", value),
+    setScope = (value) => setListField("scope", value),
+    setFiltersOpen = (value) => setListField("filtersOpen", value);
   const [recordView, setRecordView] = useState("all"),
     [dialog, setDialog] = useState(null),
     [toast, setToast] = useState("");
-  const [text, setText] = useState(""),
-    [images, setImages] = useState([]),
-    [composeOpen, setComposeOpen] = useState(false);
+  const [drafts, setDrafts] = useState({});
+  const draftKey = `${actorId}:${selected}`;
+  const {
+    text = "",
+    images = [],
+    composeOpen = false,
+  } = drafts[draftKey] ?? {};
+  const patchDraft = (field, value) => {
+    if (!selected) return;
+    setDrafts((previous) => {
+      const current = {
+        text: "",
+        images: [],
+        composeOpen: false,
+        ...previous[draftKey],
+      };
+      return {
+        ...previous,
+        [draftKey]: {
+          ...current,
+          [field]: typeof value === "function" ? value(current[field]) : value,
+        },
+      };
+    });
+  };
+  const setText = (value) => patchDraft("text", value),
+    setImages = (value) => patchDraft("images", value),
+    setComposeOpen = (value) => patchDraft("composeOpen", value);
+  const selectionMemory = useRef({}),
+    readingPositions = useRef({});
+  const [focusTarget, setFocusTarget] = useState(null),
+    [unreadSessionIds, setUnreadSessionIds] = useState([]);
   const [readByMember, setReadByMember] = useState({}),
     [detailWide, setDetailWide] = useState(false),
     [menuOpen, setMenuOpen] = useState(false);
@@ -62,36 +112,90 @@ export function useWorkspace() {
       [actorId]: [...new Set([...(prev[actorId] ?? []), token])],
     }));
   const draftDirty = !!text.trim() || images.length > 0;
-  function attempt(action) {
-    if (draftDirty) setDialog({ type: "leave", action });
-    else action();
-  }
+  const hasDraft = (id) => {
+    const value = drafts[`${actorId}:${id}`];
+    return !!value?.text?.trim() || !!value?.images?.length;
+  };
   function clearDraft() {
-    setText("");
-    setImages([]);
-    setComposeOpen(false);
+    setDrafts((previous) => {
+      const next = { ...previous };
+      delete next[draftKey];
+      return next;
+    });
   }
   function navigate(next) {
-    attempt(() => {
-      setPage(next);
-      setSelected(null);
-      setSearch("");
-      setStateFilter("all");
-      setLifeFilter("open");
-      setOwnerFilter([]);
+    if (next === page) {
       setMenuOpen(false);
-      setDetailWide(false);
-      clearDraft();
-    });
+      return;
+    }
+    selectionMemory.current[`${actorId}:${page}`] = selected;
+    setPage(next);
+    setSelected(selectionMemory.current[`${actorId}:${next}`] ?? null);
+    setFocusTarget(null);
+    setMenuOpen(false);
+    setDetailWide(false);
+    setRecordView("all");
+    if (next === "unread") setUnreadSessionIds(unreadEntities.map((e) => e.id));
   }
-  function pick(id) {
-    attempt(() => {
-      setSelected(id);
-      setRecordView("all");
-      setDetailWide(false);
-      clearDraft();
-    });
+  function pick(id, targetId) {
+    setSelected(id);
+    setRecordView("all");
+    setDetailWide(false);
+    setFocusTarget(
+      targetId ? { entityId: id, itemId: targetId, request: uuid() } : null,
+    );
   }
+  function closeDetail() {
+    setSelected(null);
+    setFocusTarget(null);
+  }
+  function openUnread(e) {
+    const pending = unreadItems(e).sort(
+      (a, b) => timelineOrder(b) - timelineOrder(a),
+    );
+    pick(e.id, pending[0]?.id);
+  }
+  function nextUnread() {
+    const candidates = [
+      entity,
+      ...entities.filter((e) => e.id !== selected),
+    ].filter(Boolean);
+    const next = candidates.find((e) => unreadItems(e).length);
+    if (next) {
+      if (page !== "unread") navigate("unread");
+      openUnread(next);
+    }
+  }
+  function resetFilters() {
+    setListState((previous) => ({
+      ...previous,
+      [listKey]: {
+        search: "",
+        stateFilter: "all",
+        lifeFilter: "open",
+        ownerFilter: [],
+        scope: "all",
+        filtersOpen: false,
+      },
+    }));
+  }
+  const scopeCounts = {
+    all: entities.filter((e) => e.type === page && !isClosed(e.state)).length,
+    mine: entities.filter(
+      (e) =>
+        e.type === page &&
+        !isClosed(e.state) &&
+        isWorkState(e.type, e.state) &&
+        (e.owners[e.state] ?? []).includes(actorId),
+    ).length,
+    unread: entities.filter((e) => e.type === page && unreadItems(e).length)
+      .length,
+  };
+  const sessionUpdates = [
+    ...new Set([...unreadSessionIds, ...unreadEntities.map((e) => e.id)]),
+  ]
+    .map((id) => entities.find((e) => e.id === id))
+    .filter(Boolean);
   function patchEntity(id, change, message) {
     setEntities((prev) => {
       const old = prev.find((e) => e.id === id);
@@ -163,6 +267,7 @@ export function useWorkspace() {
         },
         ...prev,
       ]);
+      resetFilters();
       setSelected(id);
       setRecordView("all");
       notify("档案已创建");
@@ -277,14 +382,19 @@ export function useWorkspace() {
       setSelected("p1");
     }
     closeDialog();
-    clearDraft();
+    setFocusTarget(null);
     notify("预览身份已切换");
   }
   const filtered = entities.filter(
     (e) =>
       e.type === page &&
+      (scope === "all" ||
+        (scope === "mine"
+          ? isWorkState(e.type, e.state) &&
+            (e.owners[e.state] ?? []).includes(actorId)
+          : unreadItems(e).length > 0)) &&
       (!search ||
-        `${e.name} ${e.records
+        `${e.name} ${e.contacts.map((c) => c.value).join(" ")} ${e.records
           .filter((r) => !r.deleted)
           .map((r) => r.body)
           .join(" ")}`
@@ -296,6 +406,24 @@ export function useWorkspace() {
       (!ownerFilter.length ||
         (e.owners[e.state] ?? []).some((id) => ownerFilter.includes(id))),
   );
+  useEffect(() => {
+    if (
+      ["person", "org"].includes(page) &&
+      selected &&
+      !filtered.some((e) => e.id === selected)
+    )
+      setSelected(null);
+  }, [
+    page,
+    selected,
+    search,
+    stateFilter,
+    lifeFilter,
+    ownerFilter,
+    scope,
+    entities,
+    actorId,
+  ]);
   const visibleRecords =
     entity?.records.filter(
       (r) =>
@@ -356,7 +484,20 @@ export function useWorkspace() {
     unreadItems,
     unreadEntities,
     markSeen,
-    attempt,
+    draftDirty,
+    hasDraft,
+    scope,
+    setScope,
+    scopeCounts,
+    filtersOpen,
+    setFiltersOpen,
+    resetFilters,
+    focusTarget,
+    readingPositions,
+    sessionUpdates,
+    openUnread,
+    nextUnread,
+    closeDetail,
     clearDraft,
     navigate,
     pick,

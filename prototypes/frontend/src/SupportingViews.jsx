@@ -64,71 +64,37 @@ export function Accounts({ w }) {
 }
 export function AgentPage({ w }) {
   return (
-    <section className="agent-content">
-      <div className="agent-intro">
-        <div>
-          <h2>把整理与记录，交给 Agent。</h2>
-          <p>它使用你的成员身份，遵守同样的协作规则。</p>
-        </div>
-        <div className="agent-character">
-          <Placeholder />
-        </div>
-      </div>
-      <div className="agent-section">
-        <span>01</span>
-        <div>
-          <h3>创建个人凭证</h3>
-          <p>为自己的客户端命名，随时可以撤销。</p>
-          <Button
-            variant="outline"
-            icon="plus"
-            onClick={() =>
-              w.notify("原型不生成真实凭证，正式服务接入后可创建。")
+    <section className="agent-simple">
+      <div className="agent-copy">
+        <span className="eyebrow">使用说明</span>
+        <h2>复制，交给你的 Agent。</h2>
+        <p>
+          把提示词粘贴到你常用的 Agent，
+          <br />
+          再把需要整理的材料交给它。
+        </p>
+        <p className="agent-examples">
+          查找档案、整理近况、补充观察，
+          <br />
+          它会按你的成员权限协作。
+        </p>
+        <Button
+          variant="primary"
+          icon="copy"
+          onClick={async () => {
+            try {
+              await navigator.clipboard.writeText(protocolText);
+              w.notify("提示词已复制，粘贴给 Agent 即可");
+            } catch {
+              w.setDialog({ type: "protocol" });
             }
-          >
-            创建凭证
-          </Button>
-        </div>
+          }}
+        >
+          复制提示词给 Agent
+        </Button>
       </div>
-      <div className="agent-section">
-        <span>02</span>
-        <div>
-          <h3>配置 Codex</h3>
-          <div className="code-panel">
-            <pre>
-              {
-                '[mcp_servers.talent_scout]\nurl = "{{MCP_SERVER_URL}}"\nbearer_token_env_var = "CTS_MCP_TOKEN"'
-              }
-            </pre>
-          </div>
-        </div>
-      </div>
-      <div className="agent-section">
-        <span>03</span>
-        <div>
-          <h3>交代协作规则</h3>
-          <p>包含状态与负责人、主动补全资料、删除可见性和自动阅读进度。</p>
-          <Button
-            variant="primary"
-            icon="copy"
-            onClick={async () => {
-              try {
-                await navigator.clipboard.writeText(protocolText);
-                w.notify("使用说明已复制");
-              } catch {
-                w.setDialog({ type: "protocol" });
-              }
-            }}
-          >
-            复制 Agent 使用说明
-          </Button>
-          <button
-            className="text-button"
-            onClick={() => w.setDialog({ type: "protocol" })}
-          >
-            查看完整说明
-          </button>
-        </div>
+      <div className="agent-art" aria-hidden="true">
+        <img src="/art/agent-handoff-v3.png" alt="" />
       </div>
     </section>
   );
@@ -155,7 +121,6 @@ export function Dialogs({ w }) {
     profile: "个人账号",
     "member-new": "新建账号",
     "member-edit": "管理账号",
-    leave: "保留未发布的观察",
     protocol: "Agent 使用说明",
   };
   return (
@@ -359,27 +324,6 @@ export function Dialogs({ w }) {
             w.notify("演示账号已保存");
           }}
         />
-      )}
-      {dialog.type === "leave" && (
-        <div className="modal-form">
-          <p>当前有未发布的内容，离开后会丢弃。</p>
-          <div className="modal-actions">
-            <Button variant="quiet" onClick={closeDialog}>
-              继续编辑
-            </Button>
-            <Button
-              variant="primary"
-              onClick={() => {
-                const action = dialog.action;
-                closeDialog();
-                w.clearDraft();
-                action();
-              }}
-            >
-              丢弃并离开
-            </Button>
-          </div>
-        </div>
       )}
       {dialog.type === "protocol" && (
         <div className="protocol-text">{protocolText}</div>
