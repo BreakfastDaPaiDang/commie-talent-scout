@@ -3,6 +3,7 @@ import {createRoot} from 'react-dom/client';
 import {api,ApiError,type Member} from './api';
 import {AgentPage,ConnectionsPage,CallsPage} from './ConnectionPages';
 import {MembersPage} from './MembersPage';
+import {ArchivesPage} from './ArchivesPage';
 import './app.css';
 import './workspace.css';
 import './brand.css';
@@ -39,7 +40,7 @@ function App(){
     {error&&<p className="form-error" role="alert">{error}</p>}{notice&&<p className="form-notice" role="status">{notice}</p>}
   </main></div>;
   return <div className="app"><header className="topbar"><Brand/><nav className="primary-nav" aria-label="主要导航"><button className={path==='/'?'active':''} onClick={()=>navigate('/')}>人物</button><button className={path==='/organizations'?'active':''} onClick={()=>navigate('/organizations')}>组织</button><button className={path==='/agent'?'active':''} onClick={()=>navigate('/agent')}>Agent 接入</button></nav><div className="topbar-tools"><details className="account-menu"><summary>{member.name}<span aria-hidden="true"> ▾</span></summary><div><button onClick={()=>navigate('/account/connections')}>我的连接</button><button onClick={()=>navigate('/account/password')}>修改密码</button>{member.role==='admin'&&<><button onClick={()=>navigate('/admin/members')}>猎头管理</button><button onClick={()=>navigate('/admin/calls')}>Agent 调用</button></>}<button disabled={busy} onClick={logout}>退出登录</button></div></details></div></header>{notice&&<p className="site-notice" role="status">{notice}</p>}
-    {path==='/agent'?<AgentPage/>:path==='/account/connections'?<ConnectionsPage/>:path.startsWith('/admin/')?(member.role==='admin'?(path==='/admin/members'?<MembersPage actor={member} refreshActor={refreshActor}/>:<CallsPage/>):<main className="account-content"><p role="alert">仅管理员可以进入此页面。</p></main>):<main className="empty-workspace"><p className="eyebrow">共同观察 · 持续沉淀</p><h1>{path==='/organizations'?'组织与伙伴，':'人物与组织，'}<br/>从一条观察开始。</h1><p>目前还没有档案。</p>{error&&<p className="form-error" role="alert">{error}</p>}</main>}
+    {path==='/agent'?<AgentPage/>:path==='/account/connections'?<ConnectionsPage/>:path.startsWith('/admin/')?(member.role==='admin'?(path==='/admin/members'?<MembersPage actor={member} refreshActor={refreshActor}/>:<CallsPage/>):<main className="account-content"><p role="alert">仅管理员可以进入此页面。</p></main>):<ArchivesPage key={member.id+path} actor={member} type={path==='/organizations'?'org':'person'}/>}
   </div>;
 }
 createRoot(document.getElementById('root')!).render(<App/>);

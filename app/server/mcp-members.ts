@@ -5,7 +5,7 @@ import {registerJournalFields} from './mcp-journal.ts';
 import {getRequestResult,requestId} from './commands.ts';
 import {type Actor,type Env} from './types.ts';
 
-type Reply=(action:()=>Promise<Record<string,unknown>>,summary?:(result:Record<string,unknown>)=>Record<string,unknown>)=>Promise<{content:{type:'text';text:string}[];structuredContent:Record<string,unknown>;isError?:boolean}>;
+export type McpReply=(action:()=>Promise<Record<string,unknown>>,summary?:(result:Record<string,unknown>)=>Record<string,unknown>)=>Promise<{content:{type:'text';text:string}[];structuredContent:Record<string,unknown>;isError?:boolean}>;
 export const memberToolNames=['list_members','get_member','create_member','reset_member_password','set_member_frozen','set_member_role','update_member_profile','get_member_history','get_request_result'];
 const fields:Record<string,string[]>={
   list_members:['before','limit'],get_member:['id'],create_member:['username','name','role','qq','request_id'],
@@ -22,7 +22,7 @@ export const memberGuides=[
   '角色调整立即影响后续请求；至少保留一名未冻结管理员。不要为完成其他业务擅自授予管理员、解冻或改变成员身份。',
   '每次业务操作使用新的 request_id；网络结果不明时 get_request_result 查询或原参数原 ID 重试。修改参数或临时密码必须作为明确的新操作，不能复用旧 ID。',
 ];
-export function registerMemberTools(server:McpServer,env:Env,actor:Actor,reply:Reply){
+export function registerMemberTools(server:McpServer,env:Env,actor:Actor,reply:McpReply){
   const service=new Members(env,actor,'mcp');
   const read={readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:false};
   const write={readOnlyHint:false,destructiveHint:false,idempotentHint:true,openWorldHint:false};

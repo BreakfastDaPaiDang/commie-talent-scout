@@ -1,0 +1,22 @@
+{
+  "archives-local": {
+    "date": "2026-09-08T11:47:46.628Z",
+    "base": "http://127.0.0.1:8790",
+    "checks": [
+      "web creation and MCP retry share one archive, preserving QQ as a string",
+      "unchanged profile does not alter version, activity time or history",
+      "concurrent profile edits commit once and the event stream paginates without repeats",
+      "types remain fixed, duplicate display names are allowed, queries paginate and unsafe links or blank names are rejected"
+    ]
+  },
+  "archives-cloud": {
+    "date": "2026-09-08T11:48:28.408Z",
+    "base": "https://scout-staging.dapaidang.org",
+    "checks": [
+      "web creation and MCP retry share one archive, preserving QQ as a string",
+      "unchanged profile does not alter version, activity time or history",
+      "concurrent profile edits commit once and the event stream paginates without repeats",
+      "types remain fixed, duplicate display names are allowed, queries paginate and unsafe links or blank names are rejected"
+    ]
+  }
+}

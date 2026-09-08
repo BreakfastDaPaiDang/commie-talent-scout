@@ -2,8 +2,8 @@ import React,{useEffect,useState,type FormEvent} from 'react';
 import {api} from './api';
 import template from '../shared/bootstrap-prompt.txt?raw';
 
-export function PageError({error,retry}:{error:string;retry?:()=>void}){
-  return error?<div className="form-error" role="alert">{error}{retry&&<button className="button quiet" onClick={retry}>重试</button>}</div>:null;
+export function PageError({error,retry,retryLabel='重试'}:{error:string;retry?:()=>void;retryLabel?:string}){
+  return error?<div className="form-error" role="alert">{error}{retry&&<button type="button" className="button quiet" onClick={retry}>{retryLabel}</button>}</div>:null;
 }
 export function AgentPage(){
   const[copied,setCopied]=useState(false),[fallback,setFallback]=useState(false);

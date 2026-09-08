@@ -2,7 +2,7 @@
 
 `commie-talent-scout` 是早餐社内部使用的人物与组织观察档案、接触进度和协作记录系统。
 
-正式首版定为 **v0.1.0**，见 [里程碑](https://github.com/BreakfastDaPaiDang/commie-talent-scout/milestone/1)。PRD 文档修订 1.6 包含标签、材料压缩、持久 MCP 接入与请求留存。正式应用已交付隔离测试环境的真实登录、首次改密、MCP 接入、基础调用留存及猎头账号管理，其他能力逐项实施，尚未生产上线。见 [开发说明](./docs/development.md)、[S1 验收](./docs/validation/v0.1.0-s1.md)、[S2 验收](./docs/validation/v0.1.0-s2.md)与 [S9 验收](./docs/validation/v0.1.0-s9.md)。
+正式首版定为 **v0.1.0**，见 [里程碑](https://github.com/BreakfastDaPaiDang/commie-talent-scout/milestone/1)。PRD 文档修订 1.6 包含标签、材料压缩、持久 MCP 接入与请求留存。正式应用已交付隔离测试环境的真实登录、首次改密、MCP 接入、基础调用留存、猎头账号管理及基础档案，其他能力逐项实施，尚未生产上线。见 [开发说明](./docs/development.md)、[S1 验收](./docs/validation/v0.1.0-s1.md)、[S2 验收](./docs/validation/v0.1.0-s2.md)、[S9 验收](./docs/validation/v0.1.0-s9.md)与 [S3 验收](./docs/validation/v0.1.0-s3.md)。
 
 本地查看：在 `prototypes/frontend` 执行 `npm ci`、`npm run dev`，打开 http://127.0.0.1:5181/ 。原型仅含虚构数据，刷新复位。
 
