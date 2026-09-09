@@ -124,56 +124,8 @@ export function Images({ images, onOpen, onRemove }) {
   );
 }
 
-export function ReadBoundary({
-  token,
-  enabled,
-  paused,
-  onRead,
-  children,
-  id,
-  highlighted,
-}) {
-  const ref = useRef(null),
-    callback = useRef(onRead);
-  callback.current = onRead;
-  useEffect(() => {
-    if (!enabled || paused) return;
-    let visible = false,
-      timer,
-      done = false;
-    const schedule = () => {
-      clearTimeout(timer);
-      if (visible && !document.hidden && !done)
-        timer = setTimeout(() => {
-          done = true;
-          callback.current(token);
-        }, 650);
-    };
-    const observer = new IntersectionObserver(
-      (entries) => {
-        visible = entries[0].isIntersecting;
-        schedule();
-      },
-      { threshold: 1 },
-    );
-    observer.observe(ref.current);
-    document.addEventListener("visibilitychange", schedule);
-    return () => {
-      observer.disconnect();
-      clearTimeout(timer);
-      document.removeEventListener("visibilitychange", schedule);
-    };
-  }, [token, enabled, paused]);
-  return (
-    <div
-      className={`read-boundary ${highlighted ? "entry-target" : ""}`}
-      id={id}
-      tabIndex={-1}
-    >
-      <span className="read-sentinel" ref={ref} />
-      {children}
-    </div>
-  );
+export function TimelineEntry({children,id,highlighted}) {
+  return <div className={`read-boundary ${highlighted ? "entry-target" : ""}`} id={id} tabIndex={-1}>{children}</div>;
 }
 
 export function Login({ onLogin }) {

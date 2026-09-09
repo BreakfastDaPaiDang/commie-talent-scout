@@ -116,10 +116,10 @@ export function useWorkspace() {
       isUnread(e, item),
     );
   const unreadEntities = entities.filter((e) => unreadItems(e).length);
-  const markSeen = (token) =>
+  const markArchiveSeen = (tokens) =>
     setReadByMember((prev) => ({
       ...prev,
-      [actorId]: [...new Set([...(prev[actorId] ?? []), token])],
+      [actorId]: [...new Set([...(prev[actorId] ?? []), ...tokens])],
     }));
   const draftDirty = !!text.trim() || images.length > 0;
   const hasDraft = (id) => {
@@ -166,10 +166,7 @@ export function useWorkspace() {
     pick(e.id, pending[0]?.id);
   }
   function nextUnread() {
-    const candidates = [
-      entity,
-      ...entities.filter((e) => e.id !== selected),
-    ].filter(Boolean);
+    const candidates = entities.filter((e) => e.id !== selected);
     const next = candidates.find((e) => unreadItems(e).length);
     if (next) {
       if (page !== "unread") navigate("unread");
@@ -477,7 +474,7 @@ export function useWorkspace() {
     isUnread,
     unreadItems,
     unreadEntities,
-    markSeen,
+    markArchiveSeen,
     draftDirty,
     hasDraft,
     scope,

@@ -1,0 +1,18 @@
+{
+  "date": "2026-09-09T17:49:12.893Z",
+  "base": "http://127.0.0.1:8790",
+  "checks": [
+    "MCP metadata and listing leave all personal unread unchanged, including more than one page of observations",
+    "failed and simulated background detail reads do not confirm; foreground opening clears folded, offscreen and unpaged events; a lost successful response retries the same snapshot and retains later updates without changing activity",
+    "mine uses the real current responsible member; person and organization retain separate search/filter preferences, and empty results can clear all conditions",
+    "actual list read failure is visible and its retry replaces the failure with the correct empty result",
+    "real queue crosses person and closed organization exactly once, opens deleted observation context without its body, keeps read row positions, and shares the final result with MCP",
+    "refreshing the queue acknowledges newly arrived events even when the same archive stays selected",
+    "MCP remains event-specific; mobile opening synchronizes cards and counts, complete profile editing keeps save visible, and publication persists exactly once without adding personal unread"
+  ],
+  "recoveries": [],
+  "catalog_cleanup": {
+    "created": 0,
+    "errors": []
+  }
+}

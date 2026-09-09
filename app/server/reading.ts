@@ -4,7 +4,7 @@ import {evidenceVisibilitySql} from './tag-state.ts';
 
 export type ReadDelivery={event_id:string;ticket:string};
 export const confirmReadingInput=z.object({tickets:z.array(z.uuid()).min(1).max(100)}).strict();
-export const unreadListInput=z.object({archive_id:z.uuid().optional(),exclude_event_id:z.uuid().optional(),before:z.coerce.number().int().positive().optional(),snapshot:z.coerce.number().int().nonnegative().optional(),limit:z.coerce.number().int().min(1).max(100).default(30)});
+export const unreadListInput=z.object({archive_id:z.uuid().optional(),exclude_archive_id:z.uuid().optional(),exclude_event_id:z.uuid().optional(),before:z.coerce.number().int().positive().optional(),snapshot:z.coerce.number().int().nonnegative().optional(),limit:z.coerce.number().int().min(1).max(100).default(30)});
 // The same visibility predicate is used before pagination, in counts and at confirmation.
 export function eventVisibility(actor:Actor,alias='e'){
  const one=(column:string)=>`EXISTS(SELECT 1 FROM json_each(${alias}.${column}) binding WHERE ${evidenceVisibilitySql("json_extract(binding.value,'$.evidence')")})`;
@@ -16,7 +16,8 @@ export function unreadPredicate(actor:Actor,alias='e'){
 }
 
 // A GET only creates a delivery receipt. The recipient confirms it after receiving/rendering
-// that exact content. Each event is independent; there is no archive-wide read watermark.
+// that exact content. MCP event receipts and webpage opening snapshots both create
+// independent event marks; neither maintains an advancing archive read watermark.
 export class Reading{
  constructor(readonly env:Env,readonly actor:Actor){}
  stmt(sql:string,...args:unknown[]){return this.env.DB.prepare(sql).bind(...args);}
@@ -44,7 +45,7 @@ export class Reading{
  async list(input:unknown){
   const a=unreadListInput.parse(input),u=unreadPredicate(this.actor),snapshot=a.snapshot??Number((await this.stmt('SELECT coalesce(max(seq),0) seq FROM archive_events').first<{seq:number}>())!.seq);
   if(a.before&&a.before>snapshot+1)throw new Failure(400,'INVALID_CURSOR','分页位置超出本次队列');
-  const rows=await this.stmt(`SELECT e.id,e.seq,e.archive_id,e.actor_id,e.kind,e.observation_id,e.created_at,m.name actor_name,a.name archive_name,a.type,a.closed FROM archive_events e JOIN archives a ON a.id=e.archive_id JOIN members m ON m.id=e.actor_id WHERE e.seq<=? ${a.before?'AND e.seq<?':''} ${a.archive_id?'AND e.archive_id=?':''} ${a.exclude_event_id?'AND e.id<>?':''} AND ${u.sql} ORDER BY e.seq DESC LIMIT ?`,snapshot,...(a.before?[a.before]:[]),...(a.archive_id?[a.archive_id]:[]),...(a.exclude_event_id?[a.exclude_event_id]:[]),...u.args,a.limit+1).all<Record<string,unknown>>();
+  const rows=await this.stmt(`SELECT e.id,e.seq,e.archive_id,e.actor_id,e.kind,e.observation_id,e.created_at,m.name actor_name,a.name archive_name,a.type,a.closed FROM archive_events e JOIN archives a ON a.id=e.archive_id JOIN members m ON m.id=e.actor_id WHERE e.seq<=? ${a.before?'AND e.seq<?':''} ${a.archive_id?'AND e.archive_id=?':''} ${a.exclude_archive_id?'AND e.archive_id<>?':''} ${a.exclude_event_id?'AND e.id<>?':''} AND ${u.sql} ORDER BY e.seq DESC LIMIT ?`,snapshot,...(a.before?[a.before]:[]),...(a.archive_id?[a.archive_id]:[]),...(a.exclude_archive_id?[a.exclude_archive_id]:[]),...(a.exclude_event_id?[a.exclude_event_id]:[]),...u.args,a.limit+1).all<Record<string,unknown>>();
   return {events:rows.results.slice(0,a.limit),snapshot,next_cursor:rows.results.length>a.limit?String(rows.results[a.limit-1].seq):null};
  }
 }

@@ -12,7 +12,7 @@ import {
   Images,
   ImageInput,
   imageFiles,
-  ReadBoundary,
+  TimelineEntry,
 } from "./components.jsx";
 import { MemberPicker } from "./MemberPicker.jsx";
 import {
@@ -109,6 +109,12 @@ export function Detail({ w }) {
     scroll = useRef(null),
     work = isWorkState(entity.type, entity.state),
     owners = entity.owners[entity.state] ?? [];
+  useEffect(()=>{
+    const tokens=w.unreadItems(entity).map(item=>itemKey(entity.id,item));let done=false;
+    const opened=()=>{if(done||document.visibilityState!=='visible'||document.querySelector('dialog[open],[role="dialog"]')||!scroll.current?.getClientRects().length)return;done=true;w.markArchiveSeen(tokens);};
+    opened();const timer=setInterval(opened,250);document.addEventListener('visibilitychange',opened);
+    return()=>{clearInterval(timer);document.removeEventListener('visibilitychange',opened);};
+  },[entity.id,w.actorId]);
   useLayoutEffect(() => {
     const target =
       w.focusTarget?.entityId === entity.id
@@ -131,7 +137,7 @@ export function Detail({ w }) {
     w.setComposeOpen(true);
   }
   return (
-    <DetailFrame label={entity.type==='person'?'人物档案':'组织档案'} code={entity.id.toUpperCase().slice(0,6)} expanded={w.detailWide} onExpand={()=>w.setDetailWide(!w.detailWide)} onClose={w.closeDetail} onNextUnread={w.unreadEntities.length?w.nextUnread:undefined} scrollRef={scroll} onScroll={event=>{w.readingPositions.current[`${w.actorId}:${entity.id}`]=event.currentTarget.scrollTop;}}>
+    <DetailFrame label={entity.type==='person'?'人物档案':'组织档案'} code={entity.id.toUpperCase().slice(0,6)} expanded={w.detailWide} onExpand={()=>w.setDetailWide(!w.detailWide)} onClose={w.closeDetail} onNextUnread={w.unreadEntities.some(e=>e.id!==entity.id)?w.nextUnread:undefined} scrollRef={scroll} onScroll={event=>{w.readingPositions.current[`${w.actorId}:${entity.id}`]=event.currentTarget.scrollTop;}}>
           <EntityHeader name={entity.name} state={<StateBadge entity={entity} onClick={locked?undefined:()=>w.setDialog({type:'state',nextState:entity.state})}/>} avatar={<Avatar type={entity.type} name={entity.name} contacts={entity.contacts} src={entity.avatar} size="hero"/>} actions={<IconButton name="more" label="档案操作" onClick={()=>w.setDialog({type:'entity-actions'})}/>} assignment={owners.length>0&&<div className="assignment-row"><div className="assigned-members">{owners.map(id=>{const m=w.members.find(m=>m.id===id);return <span className="member-chip" key={id}><Avatar name={m?.name} src={m?.avatar} qq={m?.qq} size="micro"/>{memberName(id)}{m?.frozen&&<small>已冻结</small>}</span>})}</div></div>} contacts={<>
               {entity.contacts.map((contact, i) => (
                 <button
@@ -229,17 +235,13 @@ export function Detail({ w }) {
               const token = itemKey(entity.id, item),
                 unread = w.isUnread(entity, item);
               return (
-                <ReadBoundary
+                <TimelineEntry
                   key={token}
                   id={`entry-${item.id}`}
                   highlighted={
                     w.focusTarget?.entityId === entity.id &&
                     w.focusTarget?.itemId === item.id
                   }
-                  token={token}
-                  enabled={unread && w.recordView !== "deleted"}
-                  paused={!!w.dialog}
-                  onRead={w.markSeen}
                 >
                   {item.kind === "system" ? (
                     <div className="system-event">
@@ -299,7 +301,7 @@ export function Detail({ w }) {
                       />
                     </ObservationFrame>
                   )}
-                </ReadBoundary>
+                </TimelineEntry>
               );
             })}
           </section>

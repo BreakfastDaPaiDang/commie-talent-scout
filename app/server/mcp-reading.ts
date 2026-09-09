@@ -6,9 +6,10 @@ import {registerJournalFields} from './mcp-journal.ts';
 import type {McpReply} from './mcp-members.ts';
 import type {Actor,Env} from './types.ts';
 export const readingToolNames=['get_unread_summary','list_unread_events','get_archive_event','confirm_reading'];
-for(const [name,fields] of Object.entries({get_unread_summary:[],list_unread_events:['archive_id','exclude_event_id','before','snapshot','limit'],get_archive_event:['id'],confirm_reading:[]}))registerJournalFields(name,fields);
+for(const [name,fields] of Object.entries({get_unread_summary:[],list_unread_events:['archive_id','exclude_archive_id','exclude_event_id','before','snapshot','limit'],get_archive_event:['id'],confirm_reading:[]}))registerJournalFields(name,fields);
 export const readingGuides=[
  '阅读进度属于当前成员，网页与 MCP 共用。排除本人动作和账号创建前事件；编辑产生新的未读事件，不影响档案活动排序。',
+ '网页成功打开档案时一次确认当时已有可见未读；MCP 仍按所需完整内容逐事件确认。get_archive 或列表元数据不触发网页的整档确认。',
  '列表摘要、搜索命中与 get_unread_summary/list_unread_events 不等于读过正文。仅在实际收到本次任务所需的完整内容后，用返回 reading.ticket 调用 confirm_reading；不得猜测票据、预先确认或为了清空未读扩大读取范围。',
  'get_observation/list_observations 返回当前正文，list_archive_timeline/get_archive_event 返回事件内容及可见正文。每张票据绑定当前连接、事件和观察状态，重复确认安全；unconfirmed 表示未确认，重新读取确实需要的内容后再确认。图片附件的实际读取按 images 指南。',
  'list_unread_events 同时覆盖人物和组织，保存 snapshot 与 next_cursor 分页；下一条可先按 archive_id 与 exclude_event_id 查询当前档案剩余未读，保留本次已读条目位置；新更新留待下一次队列。get_archive_event 按稳定事件 ID 直达，不受原搜索筛选限制；已删除事件只给出可见上下文，关闭档案仍可阅读。',

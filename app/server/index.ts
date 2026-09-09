@@ -2,6 +2,7 @@ import {TagDeletion} from './tag-deletion.ts';
 import {TagMaintenance} from './tag-maintenance.ts';
 import {TagMigration} from './tag-migration.ts';
 import {Reading} from './reading.ts';
+import {ArchiveReading} from './archive-reading.ts';
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { ZodError } from 'zod';
@@ -95,7 +96,7 @@ app.post('/api/archives/reopen',async c=>c.json(await new Archives(c.env,await a
 app.post('/api/archives/create',async c=>c.json(await new Archives(c.env,await authenticate(c.req.raw,c.env),'web').create(await c.req.json())));
 app.post('/api/archives/update',async c=>c.json(await new Archives(c.env,await authenticate(c.req.raw,c.env),'web').update(await c.req.json())));
 app.get('/api/archives/:id/events',async c=>c.json(await new Archives(c.env,await authenticate(c.req.raw,c.env),'web').events({...c.req.query(),id:c.req.param('id')})));
-app.get('/api/archives/:id',async c=>c.json(await new Archives(c.env,await authenticate(c.req.raw,c.env),'web').detail(c.req.param('id'))));
+app.get('/api/archives/:id',async c=>{const actor=await authenticate(c.req.raw,c.env),id=c.req.param('id'),result=await new Archives(c.env,actor,'web').detail(id);return c.json({...result,archive_reading:await new ArchiveReading(c.env,actor).deliver(id)});});
 app.post('/api/observations/create',async c=>c.json(await new Observations(c.env,await authenticate(c.req.raw,c.env),'web').create(await c.req.json())));
 app.get('/api/drafts',async c=>c.json(await new Drafts(c.env,await authenticate(c.req.raw,c.env)).list()));
 app.get('/api/drafts/:id',async c=>c.json(await new Drafts(c.env,await authenticate(c.req.raw,c.env)).get(c.req.param('id'))));
@@ -105,6 +106,7 @@ app.post('/api/observations/update',async c=>c.json(await new Observations(c.env
 app.get('/api/reading',async c=>c.json(await new Reading(c.env,await authenticate(c.req.raw,c.env)).summary()));
 app.get('/api/reading/events',async c=>c.json(await new Reading(c.env,await authenticate(c.req.raw,c.env)).list(c.req.query())));
 app.post('/api/reading/confirm',async c=>c.json(await new Reading(c.env,await authenticate(c.req.raw,c.env)).confirm(await c.req.json())));
+app.post('/api/reading/archive',async c=>c.json(await new ArchiveReading(c.env,await authenticate(c.req.raw,c.env)).confirm(await c.req.json())));
 app.get('/api/events/:id',async c=>c.json(await new Observations(c.env,await authenticate(c.req.raw,c.env),'web').event(c.req.param('id'))));
 app.get('/api/observations',async c=>c.json(await new Observations(c.env,await authenticate(c.req.raw,c.env),'web').list(c.req.query())));
 app.get('/api/observations/:id/versions',async c=>c.json(await new Observations(c.env,await authenticate(c.req.raw,c.env),'web').versions({...c.req.query(),id:c.req.param('id')})));
@@ -160,6 +162,7 @@ export default {
     await env.DB.batch([
       env.DB.prepare('DELETE FROM observation_drafts WHERE updated_at<?').bind(new Date(Date.now()-30*86400000).toISOString()),
       env.DB.prepare('DELETE FROM reading_deliveries WHERE expires_at<?').bind(new Date().toISOString()),
+      env.DB.prepare('DELETE FROM archive_reading_deliveries WHERE expires_at<?').bind(new Date().toISOString()),
       env.DB.prepare('DELETE FROM tag_maintenance_previews WHERE expires_at<?').bind(new Date().toISOString()),
       env.DB.prepare('DELETE FROM auth_rates WHERE expires_at<?').bind(Math.floor(Date.now()/1000)),
       env.DB.prepare('DELETE FROM credentials WHERE expires_at<? OR revoked_at<?').bind(new Date(Date.now()-86400000).toISOString(),new Date(Date.now()-86400000).toISOString()),

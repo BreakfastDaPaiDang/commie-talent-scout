@@ -13,8 +13,9 @@ export async function fixture(route){const request=route.request(),url=new URL(r
  else if(p==='/auth/me')body={member:members[0]};
  else if(p==='/members')body={members,next_cursor:null};
  else if(p==='/reading')body={total:readingEvents.filter(e=>!confirmed.has(e.id)).length};
- else if(p==='/reading/events')body={events:readingEvents.filter(e=>!confirmed.has(e.id)),snapshot:100,next_cursor:null};
+ else if(p==='/reading/events')body={events:readingEvents.filter(e=>!confirmed.has(e.id)&&e.archive_id!==url.searchParams.get('exclude_archive_id')).slice(0,Number(url.searchParams.get('limit')??100)),snapshot:100,next_cursor:null};
  else if(p.startsWith('/events/')){const event=readingEvents.find(e=>e.id===p.split('/')[2]),reading={event_id:event.id,ticket:event.id};body={event:{...event,reading,observation:{...observations.find(o=>o.id===event.observation_id),reading}}};}
+ else if(p==='/reading/archive'){const archive=archives.find(a=>uuid('archive-open'+a.id)===request.postDataJSON().ticket);readingEvents.filter(e=>e.archive_id===archive.id).forEach(e=>confirmed.add(e.id));body={member_id:members[0].id,archive_id:archive.id,through_seq:100,confirmed:true,unread_event_ids:[]};}
  else if(p==='/reading/confirm'){const tickets=request.postDataJSON().tickets;tickets.forEach(ticket=>confirmed.add(ticket));body={confirmed:tickets.map(ticket=>({ticket,event_id:ticket})),unconfirmed:[]};}
  else if(p==='/drafts')body={drafts:[]};
  else if(p==='/drafts/save'){const data=request.postDataJSON();drafts.set(data.archive_id,{...data,version:(drafts.get(data.archive_id)?.version??0)+1,publish_request_id:uuid('publish')});body={version:drafts.get(data.archive_id).version,publish_request_id:uuid('publish')};}
@@ -23,7 +24,7 @@ export async function fixture(route){const request=route.request(),url=new URL(r
  else if(p==='/archives/update'||p==='/archives/state'){const data=request.postDataJSON(),archive=archives.find(a=>a.id===data.id);if(p.endsWith('update'))Object.assign(archive,{name:data.name,contacts:data.contacts,links:data.links});else Object.assign(archive,{status:data.status,members:members.filter(m=>data.member_ids.includes(m.id)),bindings:{...archive.bindings,[data.status]:members.filter(m=>data.member_ids.includes(m.id))}});archive.version++;body={id:archive.id,changed:true,version:archive.version};}
  else if(p==='/archives'){const type=url.searchParams.get('type'),query=url.searchParams.get('query');body={counts:{all:137,mine:42,unread:11},archives:archives.filter(a=>a.type===type&&(!query||a.name.includes(query))),next_cursor:null};}
  else if(/^\/archives\/[^/]+\/timeline$/.test(p)){const id=p.split('/')[2];body={events:observations.filter(r=>r.archive_id===id&&!r.deleted).map((r,i)=>({id:uuid('event'+r.id),archive_id:id,actor_id:r.author_id,actor_name:r.author_name,kind:'observation.created',created_at:r.created_at,seq:100-i,source:'web',observation_id:r.id,observation:r})),next_cursor:null};}
- else if(/^\/archives\/[^/]+$/.test(p))body={archive:archives.find(a=>a.id===p.split('/')[2])};
+ else if(/^\/archives\/[^/]+$/.test(p)){const archive=archives.find(a=>a.id===p.split('/')[2]);body={archive,archive_reading:{archive_id:archive.id,through_seq:100,ticket:uuid('archive-open'+archive.id)}};}
  else if(p==='/observations')body={observations:observations.filter(r=>r.archive_id===url.searchParams.get('archive_id')&&r.deleted===(url.searchParams.get('deleted')==='true')),next_cursor:null};
  else if(/^\/observations\/[^/]+\/versions$/.test(p)){const record=observations.find(r=>r.id===p.split('/')[2]);body={versions:[{...record,editor_name:record.author_name}],next_cursor:null};}
  else if(p==='/tags')body={tags:[...fixtureTags,{tag_id:uuid('extra-tag'),category_name:'协作',name:'整理材料',description:'整理材料',color:'teal',enabled:1,category_enabled:1}].map(t=>({...t,id:t.tag_id,version:1,binding_count:1})),next_cursor:null};

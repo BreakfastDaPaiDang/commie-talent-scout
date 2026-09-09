@@ -35,3 +35,5 @@ MCP 行为检查：`node scripts/verify-mcp.mjs`（本地）或加 `--remote`（
 `verify-codex-images.mjs --remote` 是完整真实客户端验收脚本，要求该客户端同时具备本地文件读取和 HTTP PUT 能力。早期 S6 曾因隔离 CLI 策略未完成上传；后续真实客户端及网页联验已完成，当前结论见[首次上线验收](./validation/v0.1.0-release-acceptance.md)。重跑条件与逐次确认流程见[部署与恢复](./operations.md)，不为普通文档维护重复执行整套外部模型测试。
 
 本地 Worker 显式使用 `dev.host=127.0.0.1:8790`，避免 Wrangler 把无 Origin 的本地 MCP URL 改写为云端域名。Vite 的同源开发代理涵盖 API、MCP、上传、图片和头像；只对明确的本地开发 Origin 改写上游 Origin。正式页面仍由同域 Worker 提供。
+
+档案阅读验收使用 `node scripts/verify-reading-ui.mjs`，可加 `--remote` 验证隔离 staging。当前覆盖 Issue #36 邮件式阅读；S10 的旧逐条滚动证据仅保留历史含义。阅读边界见 [ADR 0012](./adr/0012-mail-style-archive-reading.md)。

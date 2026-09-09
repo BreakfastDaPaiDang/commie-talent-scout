@@ -1,6 +1,6 @@
 {
   "format": 1,
-  "count": 16,
+  "count": 17,
   "migrations": {
     "0001_identity.sql": {
       "sha256": "ceb732997de6972d3f88ae3a15b52b4df0def3418cc4b0834cd289ce55daff6a",
@@ -81,6 +81,11 @@
       "sha256": "d9c18fe8edf7a89ae84fbbccc5e3863898f28bce0c91a0805f399aeb5a9e7e3f",
       "backwards_compatible": true,
       "reason": "Adds defaulted deletion flags and indexes. Definitions, historical references and existing columns are retained."
+    },
+    "0017_archive_reading.sql": {
+      "sha256": "3566b7378992441beaa501c29d15772a74b477e770c6611b96ca1730030b00a5",
+      "backwards_compatible": true,
+      "reason": "Adds short-lived archive opening snapshots and their event references; retains event read marks and MCP receipts. Trash transitions invalidate only transient opening tickets."
     }
   }
 }
