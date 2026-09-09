@@ -5,7 +5,7 @@ import {dirname} from 'node:path';
 
 // An actual app-server client. Approval requests wait for a human response in
 // <path>-reply.json; this harness never grants an approval automatically.
-export async function runInteractiveCodex({cli,clientHome,work,path,prompt,requireMcp=true,serverName='cts_staging',sandbox='read-only',redactValues=[]}) {
+export async function runInteractiveCodex({cli,clientHome,work,path,prompt,nextTurn,requireMcp=true,serverName='cts_staging',sandbox='read-only',redactValues=[]}) {
  const redact=value=>redactValues.reduce((text,secret)=>text.split(secret).join('[REDACTED_CREDENTIAL]'),value);
  const env={...process.env,CODEX_HOME:clientHome,PATH:dirname(cli)+';'+process.env.PATH};
  delete env.CTS_MCP_TEST_BEARER;
@@ -13,7 +13,8 @@ export async function runInteractiveCodex({cli,clientHome,work,path,prompt,requi
  let nextId=1,buffer='',errors='',final='',ended=false,turnId,threadId;
  const waiting=new Map(),approvals=new Map(),events=[];
  let finish,rejectCompletion;
- const completed=new Promise((resolve,reject)=>{finish=resolve;rejectCompletion=reject;});
+ const newCompletion=()=>{const p=new Promise((resolve,reject)=>{finish=resolve;rejectCompletion=reject;});p.catch(()=>{});return p;};
+ let completed=newCompletion();
  const fail=error=>{for(const pending of waiting.values())pending.reject(error);waiting.clear();rejectCompletion(error);};
  // A request can fail before the caller reaches the turn completion await.
  completed.catch(()=>{});
@@ -78,12 +79,22 @@ export async function runInteractiveCodex({cli,clientHome,work,path,prompt,requi
   const server=inventory.data.find(server=>server.name===serverName);
   console.log(JSON.stringify({status:'mcp_inventory',connection:server?.runtimeStatus,tools:Object.keys(server?.tools??{}).length}));
   if(requireMcp)assert.ok(server&&Object.keys(server.tools).length,'MCP server must connect before acceptance starts');
-  const turn=await request('turn/start',{threadId,input:[{type:'text',text:prompt}]});turnId=turn.turn.id;
-  await completed;
-  writeFileSync(path+'-final.txt',redact(final),{mode:0o600});
+  const turns=[];
+  while(prompt){
+   const start=events.length;
+   const turn=await request('turn/start',{threadId,input:[{type:'text',text:prompt}]});turnId=turn.turn.id;
+   await completed;
+   const output=events.slice(start).map(event=>JSON.stringify(event)).join('\n');
+   turns.push({prompt,final,output});
+   writeFileSync(path+'-final.txt',redact(final),{mode:0o600});
+   writeFileSync(path+'-turns.json',redact(JSON.stringify(turns,null,2)),{mode:0o600});
+   console.log(JSON.stringify({status:'conversation_turn_completed',index:turns.length-1}));
+   prompt=await nextTurn?.({index:turns.length-1,final,output,turns});
+   if(prompt){final='';turnId=undefined;completed=newCompletion();timeout.refresh();}
+  }
   const output=events.map(event=>JSON.stringify(event)).join('\n');
   writeFileSync(path+'-events.jsonl',redact(output),{mode:0o600});
-  return {final,output};
+  return {final,output,turns};
  }finally{
   ended=true;clearInterval(timer);clearTimeout(timeout);
   writeFileSync(path+'-pending.json','[]',{mode:0o600});
