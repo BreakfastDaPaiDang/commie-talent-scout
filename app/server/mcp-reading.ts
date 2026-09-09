@@ -12,7 +12,7 @@ export const readingGuides=[
  '列表摘要、搜索命中与 get_unread_summary/list_unread_events 不等于读过正文。仅在实际收到本次任务所需的完整内容后，用返回 reading.ticket 调用 confirm_reading；不得猜测票据、预先确认或为了清空未读扩大读取范围。',
  'get_observation/list_observations 返回当前正文，list_archive_timeline/get_archive_event 返回事件内容及可见正文。每张票据绑定当前连接、事件和观察状态，重复确认安全；unconfirmed 表示未确认，重新读取确实需要的内容后再确认。图片附件的实际读取按 images 指南。',
  'list_unread_events 同时覆盖人物和组织，保存 snapshot 与 next_cursor 分页；下一条可先按 archive_id 与 exclude_event_id 查询当前档案剩余未读，保留本次已读条目位置；新更新留待下一次队列。get_archive_event 按稳定事件 ID 直达，不受原搜索筛选限制；已删除事件只给出可见上下文，关闭档案仍可阅读。',
- 'list_archives 可按正文 query、scope(all/mine/unread)、status、member_id、closed(all/open/closed) 组合查询。mine 仅当前工作状态的负责人，旧状态绑定不计入。search_match 提供当前未删除观察的命中摘要和 ID，须 get_observation 读取全文。',
+ 'list_archives 可按正文 query、scope(all/mine/unread)、status、member_id、closed(all/open/closed) 组合查询。mine 表示关联我：当前状态关联成员包含调用者即命中，不限工作状态或开启状态；旧状态历史关联不计入，仍遵循其他筛选和删除权限。counts.mine 使用同一口径。search_match 提供当前未删除观察的命中摘要和 ID，须 get_observation 读取全文。',
 ];
 export function registerReadingTools(server:McpServer,env:Env,actor:Actor,reply:McpReply){
  const service=new Reading(env,actor),read={readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:false},record=z.record(z.string(),z.unknown());

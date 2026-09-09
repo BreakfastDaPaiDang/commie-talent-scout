@@ -189,17 +189,18 @@ export function useWorkspace() {
       },
     }));
   }
+  const matching = entities.filter(e =>
+    e.type === page &&
+    (!search || `${e.name} ${e.contacts.map(c => c.value).join(" ")} ${e.records.filter(r => !r.deleted).map(r => r.body).join(" ")}`.toLowerCase().includes(search.toLowerCase())) &&
+    (stateFilter === "all" || e.state === stateFilter) &&
+    (lifeFilter === "all" || (lifeFilter === "closed") === isClosed(e.state)) &&
+    (!ownerFilter.length || (e.owners[e.state] ?? []).some(id => ownerFilter.includes(id))),
+  );
+  const associated = e => (e.owners[e.state] ?? []).includes(actorId);
   const scopeCounts = {
-    all: entities.filter((e) => e.type === page && !isClosed(e.state)).length,
-    mine: entities.filter(
-      (e) =>
-        e.type === page &&
-        !isClosed(e.state) &&
-        isWorkState(e.type, e.state) &&
-        (e.owners[e.state] ?? []).includes(actorId),
-    ).length,
-    unread: entities.filter((e) => e.type === page && unreadItems(e).length)
-      .length,
+    all: matching.length,
+    mine: matching.filter(associated).length,
+    unread: matching.filter(e => unreadItems(e).length).length,
   };
   const sessionUpdates = [
     ...new Set([...unreadSessionIds, ...unreadEntities.map((e) => e.id)]),
@@ -397,27 +398,8 @@ export function useWorkspace() {
     setFocusTarget(null);
     notify("预览身份已切换");
   }
-  const filtered = entities.filter(
-    (e) =>
-      e.type === page &&
-      (scope === "all" ||
-        (scope === "mine"
-          ? isWorkState(e.type, e.state) &&
-            (e.owners[e.state] ?? []).includes(actorId)
-          : unreadItems(e).length > 0)) &&
-      (!search ||
-        `${e.name} ${e.contacts.map((c) => c.value).join(" ")} ${e.records
-          .filter((r) => !r.deleted)
-          .map((r) => r.body)
-          .join(" ")}`
-          .toLowerCase()
-          .includes(search.toLowerCase())) &&
-      (stateFilter === "all" || e.state === stateFilter) &&
-      (lifeFilter === "all" ||
-        (lifeFilter === "closed") === isClosed(e.state)) &&
-      (!ownerFilter.length ||
-        (e.owners[e.state] ?? []).some((id) => ownerFilter.includes(id))),
-  ).sort((a,b)=>{const x=prototypeReminder(a),y=prototypeReminder(b);return Number(y.overdue)-Number(x.overdue)||(x.overdue&&y.overdue?Date.parse(x.due_at)-Date.parse(y.due_at):0);});
+  const filtered = matching.filter(e => scope === "all" || (scope === "mine" ? associated(e) : unreadItems(e).length > 0))
+    .sort((a,b)=>{const x=prototypeReminder(a),y=prototypeReminder(b);return Number(y.overdue)-Number(x.overdue)||(x.overdue&&y.overdue?Date.parse(x.due_at)-Date.parse(y.due_at):0);});
   useEffect(() => {
     if (
       ["person", "org"].includes(page) &&
