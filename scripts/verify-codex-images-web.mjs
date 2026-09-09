@@ -4,9 +4,9 @@ import {randomUUID} from 'node:crypto';
 import {chromium} from 'playwright-core';
 import {verificationClient} from './verification-client.mjs';
 
-const evidencePath='tmp/verification/codex-images-detail-cloud.json';
+const evidencePath='tmp/verification/codex-images-detail-'+(process.argv.includes('--production')?'production':'cloud')+'.json';
 const evidence=JSON.parse(readFileSync(evidencePath,'utf8'));
-const v=await verificationClient('codex-images-web'),checks=[];let browser;
+const v=await verificationClient('codex-images-web',{environment:process.argv.includes('--production')?'production':'staging'}),checks=[];let browser;
 assert.equal(v.base,evidence.base);
 try{
  const observation=(await v.call('get_observation',{id:evidence.observation.id})).observation;

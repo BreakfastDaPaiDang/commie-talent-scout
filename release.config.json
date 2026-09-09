@@ -3,9 +3,9 @@
   "snapshot_retention_days": 30,
   "max_export_bytes": 134217728,
   "recovery": {
-    "database_name": "cts-restore-20260909",
-    "database_id": "2afc507e-025f-4fa1-9919-20b1c8b2d56e",
-    "bucket_name": "cts-restore-20260909-images"
+    "database_name": "cts-restore-20260909-final",
+    "database_id": "734bc4a6-84e7-49b4-97a9-d2f1fc83b0b0",
+    "bucket_name": "cts-restore-20260909-final-images"
   },
   "daily_limits": {
     "mcp_calls": 10000,
@@ -14,7 +14,11 @@
     "d1_bytes": 536870912
   },
   "environments": {
-    "production": { "origin": "https://scout.dapaidang.org" },
-    "staging": { "origin": "https://scout-staging.dapaidang.org" }
+    "production": {
+      "origin": "https://scout.dapaidang.org"
+    },
+    "staging": {
+      "origin": "https://scout-staging.dapaidang.org"
+    }
   }
 }

@@ -1,5 +1,5 @@
 {
-  "status": "web_and_shared_service_verified_real_codex_pending",
+  "status": "production_web_and_actual_codex_verified",
   "date": "2026-09-09",
   "evidence": {
     "tag-maintenance-local": {
@@ -55,5 +55,315 @@
   "known_remaining": [
     "真实 Codex 新会话的词库写入和权限拒绝验收",
     "v0.1.0 统一发布验收"
-  ]
+  ],
+  "production_actual_codex": {
+    "date": "2026-09-09T10:27:23.039Z",
+    "base": "https://scout.dapaidang.org",
+    "checks": [
+      "real ordinary-member Codex filters, inspects grouped bindings, previews rename, receives stale-preview rejection and recovers without rewriting closed snapshot",
+      "real administrator Codex merges exact selected scope, preserves independent evidence/focus and closed/unselected bindings, then restores/disables/restores with history",
+      "actual ordinary-member Codex receives server ADMIN_REQUIRED for both administrative previews and preserves state",
+      "freezing the synthetic ordinary member invalidates the same web session and Codex credential"
+    ],
+    "rounds": [
+      {
+        "round": "member-preview",
+        "tools": [
+          {
+            "tool": "preview_tag_definition",
+            "outcome": "success",
+            "error_code": null
+          },
+          {
+            "tool": "list_tag_bindings",
+            "outcome": "success",
+            "error_code": null
+          },
+          {
+            "tool": "get_tag_definition",
+            "outcome": "success",
+            "error_code": null
+          },
+          {
+            "tool": "list_tag_bindings",
+            "outcome": "rejected",
+            "error_code": "INVALID_TOOL_REQUEST"
+          },
+          {
+            "tool": "list_archives",
+            "outcome": "success",
+            "error_code": null
+          },
+          {
+            "tool": "get_usage_guide",
+            "outcome": "success",
+            "error_code": null
+          },
+          {
+            "tool": "get_usage_guide",
+            "outcome": "success",
+            "error_code": null
+          },
+          {
+            "tool": "whoami",
+            "outcome": "success",
+            "error_code": null
+          }
+        ],
+        "final": "已实际完成预览，**未保存**。服务为 `https://scout.dapaidang.org`，身份为 `codex-tags-98dce28e`（普通成员），未切换身份或提升权限。\n\n- `preview_id`：`efe6d176-3ced-4805-87b7-2ae0d6449976`\n- 开启影响数量：**2**（虚构 Codex 选中／未选 98dce28e）\n- 关闭范围数量：**1**（虚构 Codex 关闭 98dce28e）；冻结定义及依据保留原文。\n\n三个绑定依据均为成员指令：“2026-09-09 虚构对象明确表示可独立处理这份音频的持续底噪。”\n\n预览差异仅为名称改成「底噪处理 98dce28e」；类别及通用释义保持不变。"
+      },
+      {
+        "round": "member-conflict-recovery",
+        "tools": [
+          {
+            "tool": "list_tag_bindings",
+            "outcome": "success",
+            "error_code": null
+          },
+          {
+            "tool": "get_tag_definition",
+            "outcome": "success",
+            "error_code": null
+          },
+          {
+            "tool": "apply_tag_definition",
+            "outcome": "success",
+            "error_code": null
+          },
+          {
+            "tool": "preview_tag_definition",
+            "outcome": "success",
+            "error_code": null
+          },
+          {
+            "tool": "list_tag_bindings",
+            "outcome": "success",
+            "error_code": null
+          },
+          {
+            "tool": "list_tag_bindings",
+            "outcome": "rejected",
+            "error_code": "INVALID_TOOL_REQUEST"
+          },
+          {
+            "tool": "get_tag_definition",
+            "outcome": "success",
+            "error_code": null
+          },
+          {
+            "tool": "get_usage_guide",
+            "outcome": "success",
+            "error_code": null
+          },
+          {
+            "tool": "apply_tag_definition",
+            "outcome": "rejected",
+            "error_code": "PREVIEW_STALE"
+          },
+          {
+            "tool": "get_usage_guide",
+            "outcome": "success",
+            "error_code": null
+          },
+          {
+            "tool": "whoami",
+            "outcome": "success",
+            "error_code": null
+          }
+        ],
+        "final": "已完成更名并核验。\n\n- 已确认指定生产服务和普通成员身份，实际读取工具说明，全程未更换身份或提权。\n- 原预览返回 `PREVIEW_STALE`；重新核对定义、绑定及影响后，按原配置重新预览并提交成功，定义版本为 **2**。\n- 两个开启档案显示“底噪处理 98dce28e”，词义、类别及原有依据（含他人并发补充）保持不变。\n- 关闭档案仍保持关闭，快照保留旧名称 **“原词条 98dce28e”**及定义版本 **1**。"
+      },
+      {
+        "round": "admin-merge-availability",
+        "tools": [
+          {
+            "tool": "get_archive_tags",
+            "outcome": "success",
+            "error_code": null
+          },
+          {
+            "tool": "get_tag_definition",
+            "outcome": "success",
+            "error_code": null
+          },
+          {
+            "tool": "get_tag_definition",
+            "outcome": "success",
+            "error_code": null
+          },
+          {
+            "tool": "apply_tag_availability",
+            "outcome": "success",
+            "error_code": null
+          },
+          {
+            "tool": "preview_tag_availability",
+            "outcome": "success",
+            "error_code": null
+          },
+          {
+            "tool": "get_archive_tags",
+            "outcome": "success",
+            "error_code": null
+          },
+          {
+            "tool": "get_archive_tags",
+            "outcome": "success",
+            "error_code": null
+          },
+          {
+            "tool": "apply_tag_availability",
+            "outcome": "success",
+            "error_code": null
+          },
+          {
+            "tool": "preview_tag_availability",
+            "outcome": "success",
+            "error_code": null
+          },
+          {
+            "tool": "get_archive_tags",
+            "outcome": "success",
+            "error_code": null
+          },
+          {
+            "tool": "apply_tag_availability",
+            "outcome": "success",
+            "error_code": null
+          },
+          {
+            "tool": "preview_tag_availability",
+            "outcome": "success",
+            "error_code": null
+          },
+          {
+            "tool": "get_archive_tags",
+            "outcome": "success",
+            "error_code": null
+          },
+          {
+            "tool": "apply_tag_migration",
+            "outcome": "success",
+            "error_code": null
+          },
+          {
+            "tool": "preview_tag_migration",
+            "outcome": "success",
+            "error_code": null
+          },
+          {
+            "tool": "get_tag_definition",
+            "outcome": "success",
+            "error_code": null
+          },
+          {
+            "tool": "get_tag_definition",
+            "outcome": "success",
+            "error_code": null
+          },
+          {
+            "tool": "get_archive_tags",
+            "outcome": "success",
+            "error_code": null
+          },
+          {
+            "tool": "get_archive_tags",
+            "outcome": "success",
+            "error_code": null
+          },
+          {
+            "tool": "get_tag_definition",
+            "outcome": "rejected",
+            "error_code": "INVALID_TOOL_REQUEST"
+          },
+          {
+            "tool": "get_archive_tags",
+            "outcome": "success",
+            "error_code": null
+          },
+          {
+            "tool": "get_tag_definition",
+            "outcome": "rejected",
+            "error_code": "INVALID_TOOL_REQUEST"
+          },
+          {
+            "tool": "get_usage_guide",
+            "outcome": "success",
+            "error_code": null
+          },
+          {
+            "tool": "whoami",
+            "outcome": "success",
+            "error_code": null
+          }
+        ],
+        "final": "已在指定生产服务完成验收，全程使用原 admin 身份，未切换身份或提升权限。\n\n- 仅执行一个合并批次：档案 `3b21994f…` 已迁至保留词条 `7598a3ea…`。依据去重后共 3 条，目标重点保持为 1。\n- 未选档案 `ad1183c5…`、关闭档案 `59077b37…` 均未迁移；停用期间已实际核对旧绑定与依据仍可读，关闭词义快照保留。\n- 源词条已依次恢复、停用、再次恢复，最终为启用状态，合并跳转已清除；已合并档案未迁回。\n- 完整核对源定义历史 v1–v6：创建 → 澄清 → 合并停用 → 恢复 → 停用 → 恢复，无遗漏分页。保留词条定义仍为 v1。\n\n未操作其他词条。"
+      },
+      {
+        "round": "member-admin-denied",
+        "tools": [
+          {
+            "tool": "get_tag_definition",
+            "outcome": "success",
+            "error_code": null
+          },
+          {
+            "tool": "preview_tag_migration",
+            "outcome": "rejected",
+            "error_code": "ADMIN_REQUIRED"
+          },
+          {
+            "tool": "preview_tag_availability",
+            "outcome": "rejected",
+            "error_code": "ADMIN_REQUIRED"
+          },
+          {
+            "tool": "get_archive",
+            "outcome": "success",
+            "error_code": null
+          },
+          {
+            "tool": "get_usage_guide",
+            "outcome": "success",
+            "error_code": null
+          },
+          {
+            "tool": "whoami",
+            "outcome": "success",
+            "error_code": null
+          }
+        ],
+        "final": "验收通过。\n\n- 服务：`https://scout.dapaidang.org`（production）。\n- 身份：`codex-tags-98dce28e`，普通成员；已读取工具说明及标签指南。\n- 停用预览：实际调用一次，返回 `ADMIN_REQUIRED`。\n- 合并预览：仅选择指定开启档案，使用刚读取的版本 `2`，实际调用一次，返回 `ADMIN_REQUIRED`。\n- 最后读取源词条：`enabled=1`、`merged_into=null`、版本 `6`，仍可用。\n\n两项拒绝后均停止对应操作，未切换账号、未提权、未执行任何保存。"
+      }
+    ],
+    "archives": [
+      "3b21994f-4a98-49d8-844e-270c9d014f96",
+      "ad1183c5-d121-4232-82d2-9a836d8ad23f",
+      "59077b37-f013-43a6-8fe9-71f7279fd0a0"
+    ]
+  },
+  "production_web": {
+    "tag-maintenance": {
+      "date": "2026-09-09T10:29:54.357Z",
+      "base": "https://scout.dapaidang.org",
+      "checks": [
+        "shared MCP reads apply tag filters before counts and pages, and expose current visible definition, grouped bindings and evidence",
+        "existing filter area selects a tag without creating vocabulary and shows the same two matching archives through real HTTP",
+        "real editor previews exact open/closed impact, rejects an injected concurrent evidence change, then saves a freshly reviewed definition while preserving the closed snapshot",
+        "definition history keeps original wording and fully expanded mobile maintenance form has a reachable action without overflow or runtime errors"
+      ],
+      "recoveries": []
+    },
+    "tag-migration": {
+      "date": "2026-09-09T10:09:24.166Z",
+      "base": "https://scout.dapaidang.org",
+      "checks": [
+        "administrator web merge previews selected scope, coalesces an existing target without duplicate evidence, preserves its focus, and keeps unselected/closed source bindings",
+        "source redirects to the retained definition; explicit restore preserves the merge history and does not move completed bindings back",
+        "mobile meaning-change flow requires new supporting evidence and moves only the chosen open archive, retaining old vocabulary and closed snapshots",
+        "real category disable blocks new MCP bindings while existing references remain; restore retains all three definition versions without runtime errors"
+      ],
+      "recoveries": []
+    }
+  }
 }

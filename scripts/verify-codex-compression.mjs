@@ -6,8 +6,8 @@ import {createServer} from 'node:http';
 import {randomUUID} from 'node:crypto';
 import {verificationClient} from './verification-client.mjs';
 const primaryOnly=process.argv.includes('--primary-only');
-const v=await verificationClient(primaryOnly?'codex-compression-refined':'codex-compression'),checks=[],rounds=[];
-assert.equal(v.target,'cloud','real Codex cold-session acceptance uses isolated staging');
+const v=await verificationClient(primaryOnly?'codex-compression-refined':'codex-compression',{environment:process.argv.includes('--production')?'production':'staging'}),checks=[],rounds=[];
+assert.ok(['cloud','production'].includes(v.target),'real Codex acceptance requires an explicitly selected cloud environment');
 const suffix=randomUUID().slice(0,8),root=resolve('secrets','codex-compression-'+suffix),clientHome=join(root,'client'),work=join(root,'work');mkdirSync(clientHome,{recursive:true});mkdirSync(work,{recursive:true});
 const originalHome=join(process.env.USERPROFILE,'.codex'),baseline=readFileSync(join(originalHome,'config.toml'),'utf8').split(/\r?\n/).filter(x=>/^(model|model_reasoning_effort)\s*=/.test(x)).join('\n');
 copyFileSync(join(originalHome,'auth.json'),join(clientHome,'auth.json'));
@@ -39,7 +39,7 @@ try{
  const r=await v.http('/connections',{name:'Codex 材料整理冷启动验收 '+suffix,days:1});assert.equal(r.status,200);connection=r.body;
  writeFileSync(join(clientHome,'config.toml'),baseline+`\n[mcp_servers.cts_staging]\nurl = ${JSON.stringify(v.base+'/mcp')}\nhttp_headers = { Authorization = ${JSON.stringify('Bearer '+connection.secret)} }\nstartup_timeout_sec = 30\n`,{mode:0o600});
  writeFileSync(join(root,'fixture.json'),JSON.stringify({archive_id:archive.id,name,old_observation_id:old.id,chat},null,2));
- const primary=await run('primary',`请使用已经接好的康米巨星猎头系统，把下面聊天整理进人物「${name}」的档案。这是隔离测试环境的虚构材料，已授权在这份档案内保存必要整理结果。\n\n${chat}`);
+ const primary=await run('primary',`请使用已经接好的康米巨星猎头系统，把下面聊天整理进人物「${name}」的档案。这是本次验收专用的虚构材料，已授权在这份档案内保存必要整理结果。\n\n${chat}`);
  let current=(await v.call('get_archive',{id:archive.id})).archive,observations=(await v.call('list_observations',{archive_id:archive.id})).observations,bound=(await v.call('get_archive_tags',{archive_id:archive.id})).tags;
  writeFileSync(join(root,'primary-artifacts.json'),JSON.stringify({archive:current,observations,tags:bound},null,2));
  assert.ok(observations.length>1,'new facts become observations');assert.ok(bound.some(t=>t.tag_id===skill.id),'resource handover does not remove video skill');assert.ok(!bound.some(t=>t.tag_id===resource.id),'explicit loss of publishing access removes channel resource');assert.ok(bound.some(t=>t.tag_id===language.id),'unmentioned Japanese stays');assert.ok(bound.some(t=>/音频|音訊|声音/.test(t.name)&&t.category_id===category.id),'new supported audio capability creates and binds an appropriate skill');assert.ok(bound.some(t=>t.name==='固定时段'),'dated availability reuses existing definition');assert.ok(!bound.some(t=>t.name==='软件开发'||t.name==='英语'||/Blender|三维|3D/.test(t.name)),'other speakers and learning plans are not inferred capabilities');assert.ok(bound.filter(t=>t.tag_id!==language.id&&t.tag_id!==skill.id).every(t=>t.evidence.length>0));
@@ -69,7 +69,7 @@ try{
  const recovered=await run('lost-response',`请用已连接的系统给「虚构响应丢失恢复 ${suffix}」补充观察：2026-09-08，本人明确表示本月愿意按项目参与音频后期，具体排期另行约定。把有依据且适用的标签一并整理好。这是已授权的虚构验收资料。`);
  assert.equal(dropped,true,'the intended response-loss fixture was exercised');assert.equal((await v.call('get_archive',{id:recovery.id})).archive.observation_count,1,'recovery does not duplicate committed observation');assert.ok(recovered.calls.some(c=>c.tool==='get_request_result'||(c.tool==='create_observation'&&c.outcome==='no_change')),'agent recovers using receipt or original request retry');assert.ok((await v.call('get_archive_tags',{archive_id:recovery.id})).tags.some(t=>t.name==='项目制'),'remaining supported tagging completes');checks.push('real Codex recovers a deliberately lost post-commit response using the original request and completes remaining tagging without duplicate observations');
  }
- writeFileSync(primaryOnly?'tmp/verification/codex-compression-refined-detail-cloud.json':'tmp/verification/codex-compression-detail-cloud.json',JSON.stringify({date:new Date().toISOString(),base:v.base,fixture:name,checks,rounds,artifacts:{observations,tags:bound},quality_review:'pending manual reading; protocol assertions alone do not grade compression quality'},null,2));
+ writeFileSync(primaryOnly?'tmp/verification/codex-compression-refined-detail-'+v.target+'.json':'tmp/verification/codex-compression-detail-'+v.target+'.json',JSON.stringify({date:new Date().toISOString(),base:v.base,fixture:name,checks,rounds,artifacts:{observations,tags:bound},quality_review:'pending manual reading; protocol assertions alone do not grade compression quality'},null,2));
 }finally{
  if(relay)await new Promise(ok=>relay.close(ok));
  if(connection)await v.http('/connections/revoke',{id:connection.id});

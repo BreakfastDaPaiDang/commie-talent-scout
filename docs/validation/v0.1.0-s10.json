@@ -2,21 +2,20 @@
   "date": "2026-09-08T22:03:03.565Z",
   "issue": 14,
   "application_version": "0.1.0",
-  "milestone_released": false,
   "production_origin": "https://scout.dapaidang.org",
   "checks": {
-    "local_service_tests": 37,
+    "local_service_tests": 46,
     "dom_tests": 5,
     "design_viewports": 4,
     "simplicity_checks": 25,
     "card_checks": 18,
     "attention_checks": 11,
     "github_checks": {
-      "run": "https://github.com/BreakfastDaPaiDang/commie-talent-scout/actions/runs/34319636595",
+      "run": "https://github.com/BreakfastDaPaiDang/commie-talent-scout/actions/runs/34340099997",
       "status": "success"
     },
     "github_deploy": {
-      "run": "https://github.com/BreakfastDaPaiDang/commie-talent-scout/actions/runs/34319636595",
+      "run": "https://github.com/BreakfastDaPaiDang/commie-talent-scout/actions/runs/34340099997",
       "status": "success"
     }
   },
@@ -137,8 +136,109 @@
   },
   "maintainer_network_report": {
     "reported_at": "2026-09-09",
+    "operator": "中国联通",
     "proxy_enabled": false,
-    "verification_in_progress": true,
-    "operator_and_full_business_results": "awaiting_maintainer_feedback"
-  }
+    "verification_in_progress": false,
+    "reported_result": "目前没问题；有问题会反馈",
+    "evidence_type": "maintainer_report"
+  },
+  "production_restore_followup": {
+    "date": "2026-09-09T10:26:34.377Z",
+    "snapshot": "snapshots/production/2026-09-09T10-23-43.944Z-78b30672-3fb2-4557-be34-79e46f55c9aa",
+    "isolated": true,
+    "tables_equal": 33,
+    "images_verified": 5,
+    "cleanup": "application cleanup executed twice; business observations, versions and attachment references unchanged",
+    "public_worker_created": false
+  },
+  "production_actual_codex": {
+    "codex-copied-onboarding": {
+      "date": "2026-09-09T10:16:13.937Z",
+      "base": "https://scout.dapaidang.org",
+      "checks": [
+        "a real Codex session starts without MCP configuration and persists the browser-copied connection in its isolated private client",
+        "an independent app-server process authenticates from the saved configuration without temporary credential injection or browser login and retrieves the service guide"
+      ],
+      "recoveries": []
+    },
+    "browserless-http": {
+      "date": "2026-09-09T10:05:41.289Z",
+      "base": "https://scout.dapaidang.org",
+      "checks": [
+        "default Python urllib MCP: valid credential 200; anonymous request 401 from application",
+        "default Python urllib uploads: missing ticket 401; signed PUT 200 and resulting image publishes",
+        "revocation immediately rejects the same Python MCP credential"
+      ],
+      "recoveries": []
+    },
+    "codex-tag-maintenance": {
+      "date": "2026-09-09T10:27:39.413Z",
+      "base": "https://scout.dapaidang.org",
+      "checks": [
+        "real ordinary-member Codex filters, inspects grouped bindings, previews rename, receives stale-preview rejection and recovers without rewriting closed snapshot",
+        "real administrator Codex merges exact selected scope, preserves independent evidence/focus and closed/unselected bindings, then restores/disables/restores with history",
+        "actual ordinary-member Codex receives server ADMIN_REQUIRED for both administrative previews and preserves state",
+        "freezing the synthetic ordinary member invalidates the same web session and Codex credential"
+      ],
+      "recoveries": []
+    },
+    "codex-images": {
+      "date": "2026-09-09T10:27:12.787Z",
+      "base": "https://scout.dapaidang.org",
+      "checks": [
+        "real cold Codex reads two authorized local files, prepares and performs HTTP PUT, verifies readiness, retrieves MCP image content and publishes two images with accurate visual observations",
+        "another real cold Codex session edits JPEG/WebP attachments and reads the original PNG from immutable history; independent web API reads agree"
+      ],
+      "recoveries": []
+    },
+    "codex-images-web": {
+      "date": "2026-09-09T10:28:33.597Z",
+      "base": "https://scout.dapaidang.org",
+      "checks": [
+        "formal web UI reads the actual Codex-edited record and decodes both current JPEG/WebP images; original-size viewer works",
+        "mobile history retains and decodes the original PNG/JPEG pair after the Codex edit; original image opens without page overflow or runtime errors"
+      ],
+      "recoveries": []
+    },
+    "codex-observation-state": {
+      "date": "2026-09-09T10:24:18.620Z",
+      "base": "https://scout.dapaidang.org",
+      "checks": [
+        "real cold Codex reads identity and target then executes explicitly authorized recoverable deletion",
+        "second independent cold Codex session restores same record identity, author and immutable content history",
+        "cold Codex respects current closed archive and reports inability without implicit reopening"
+      ],
+      "recoveries": []
+    },
+    "codex-compression-refined": {
+      "date": "2026-09-09T10:12:30.150Z",
+      "base": "https://scout.dapaidang.org",
+      "checks": [
+        "real cold Codex session publishes supported facts, reuses and creates tags, removes changed resource, preserves unmentioned skill/language and speaker boundaries"
+      ],
+      "recoveries": []
+    },
+    "codex-compression-web": {
+      "date": "2026-09-09T10:26:50.483Z",
+      "base": "https://scout.dapaidang.org",
+      "checks": [
+        "production web displays the actual Codex-written observation and supported tags",
+        "actual Codex task links its submitted summary, service calls and resulting observation; missing original request/material are explicitly unknown",
+        "expanded actual-task review is readable on mobile without browser errors; anonymous HTTP access is denied"
+      ],
+      "recoveries": []
+    },
+    "codex-archive-lifecycle": {
+      "date": "2026-09-09T10:32:10.111Z",
+      "base": "https://scout.dapaidang.org",
+      "checks": [
+        "actual production Codex recycles and restores the same closed archive, preserving status and original observation"
+      ],
+      "recoveries": []
+    }
+  },
+  "technical_acceptance_complete": true,
+  "release_tag": "v0.1.0",
+  "milestone_acceptance_complete": true,
+  "release_record": "https://github.com/BreakfastDaPaiDang/commie-talent-scout/releases/tag/v0.1.0"
 }
