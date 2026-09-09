@@ -12,12 +12,12 @@
     "card_checks": 18,
     "attention_checks": 11,
     "github_checks": {
-      "run": "https://github.com/BreakfastDaPaiDang/commie-talent-scout/actions/runs/34281722887",
+      "run": "https://github.com/BreakfastDaPaiDang/commie-talent-scout/actions/runs/34319636595",
       "status": "success"
     },
     "github_deploy": {
-      "status": "blocked",
-      "reason": "CLOUDFLARE_API_TOKEN secret is absent"
+      "run": "https://github.com/BreakfastDaPaiDang/commie-talent-scout/actions/runs/34319636595",
+      "status": "success"
     }
   },
   "recovery": {
@@ -95,10 +95,31 @@
     "test_members_frozen": 2
   },
   "remaining": [
-    "CI scoped credential and a successful automatic deployment run",
     "Mainland carrier and absence of VPN/TUN confirmation",
-    "Real Codex destructive-tool and local-image approvals, then complete the remaining client paths",
+    "Real Codex vocabulary maintenance and full production-client joint acceptance",
     "Monthly billing notification validation",
     "Milestone acceptance and v0.1.0 GitHub Release"
-  ]
+  ],
+  "ci_followup": {
+    "date": "2026-09-09T07:33:33Z",
+    "code": "d707b764458b68196714f40324bb5acc9040ad2e",
+    "credential": {
+      "owner": "account",
+      "environment": "production",
+      "permissions": 5,
+      "global_key_used_in_github": false
+    },
+    "release": {
+      "run": "https://github.com/BreakfastDaPaiDang/commie-talent-scout/actions/runs/34319636595",
+      "status": "success",
+      "worker_version": "9f8271a4-c5c3-4f3d-9dc5-c058476b6af9"
+    },
+    "daily_operations": {
+      "run": "https://github.com/BreakfastDaPaiDang/commie-talent-scout/actions/runs/34324366445",
+      "status": "success",
+      "private_backup": true,
+      "usage_check": true,
+      "alerts": []
+    }
+  }
 }

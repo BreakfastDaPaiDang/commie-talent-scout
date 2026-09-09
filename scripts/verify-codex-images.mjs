@@ -1,23 +1,27 @@
 import assert from 'node:assert/strict';
 import {readFileSync,writeFileSync,mkdirSync,copyFileSync,readdirSync,existsSync,unlinkSync} from 'node:fs';
-import {resolve,join,dirname} from 'node:path';
-import {spawn} from 'node:child_process';
+import {resolve,join,relative,isAbsolute} from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {verificationClient} from './verification-client.mjs';
+import {runInteractiveCodex} from './codex-interactive-client.mjs';
+const resumeAt=process.argv.indexOf('--resume-upload');let resumed;
+if(resumeAt>=0){const path=resolve(process.argv[resumeAt+1]??'');const location=relative(resolve('secrets'),path);assert.ok(location&&!location.startsWith('..')&&!isAbsolute(location));resumed=JSON.parse(readFileSync(path,'utf8'));}
 const v=await verificationClient('codex-images'),checks=[],rounds=[];assert.equal(v.target,'cloud');
 const suffix=randomUUID().slice(0,8),root=resolve('secrets','codex-images-'+suffix),clientHome=join(root,'client'),work=join(root,'work');mkdirSync(clientHome,{recursive:true});mkdirSync(work,{recursive:true});
 const originalHome=join(process.env.USERPROFILE,'.codex'),baseline=readFileSync(join(originalHome,'config.toml'),'utf8').split(/\r?\n/).filter(x=>/^(model|model_reasoning_effort)\s*=/.test(x)).join('\n');copyFileSync(join(originalHome,'auth.json'),join(clientHome,'auth.json'));
 for(const ext of ['png','jpg','webp'])copyFileSync(resolve('tests','fixtures','images','shapes.'+ext),join(work,'fixture.'+ext));
 const extensions=join(process.env.USERPROFILE,'.vscode','extensions'),cli=readdirSync(extensions).filter(x=>x.startsWith('openai.chatgpt-')).sort().reverse().map(x=>join(extensions,x,'bin','windows-x86_64','codex.exe')).find(existsSync);assert.ok(cli);let connection;
 async function run(round,prompt){
- const path=join(root,round),env={...process.env,CODEX_HOME:clientHome,PATH:dirname(cli)+';'+process.env.PATH};const start=Date.now();console.log(JSON.stringify({round,status:'started'}));
- const child=spawn(cli,['exec','--ephemeral','--skip-git-repo-check','--sandbox','read-only','--json','--output-last-message',path+'-final.txt','-C',work,'-'],{cwd:work,env,stdio:['pipe','pipe','pipe']});let output='',errors='';child.stdout.on('data',x=>output+=x);child.stderr.on('data',x=>errors+=x);child.stdin.end(prompt);
- const result=await new Promise((ok,no)=>{child.on('error',no);child.on('exit',ok);});writeFileSync(path+'-events.jsonl',output,{mode:0o600});writeFileSync(path+'-stderr.txt',errors,{mode:0o600});assert.equal(result,0,'real Codex exits normally; diagnostic stays private');assert.ok(!output.includes(connection.secret),'MCP credential must not enter transcript');
- const final=readFileSync(path+'-final.txt','utf8');assert.ok(!/ctsu_[a-f0-9]{64}|cts_[a-f0-9]{64}/.test(final),'secrets do not enter final text');
+ const path=join(root,round);const start=Date.now();console.log(JSON.stringify({round,status:'started'}));
+ const {output,final}=await runInteractiveCodex({cli,clientHome,work,path,prompt});
+ assert.ok(!output.includes(connection.secret),'MCP credential must not enter transcript');assert.ok(!/ctsu_[a-f0-9]{64}|cts_[a-f0-9]{64}/.test(final),'secrets do not enter final text');
  const calls=(await v.http('/admin/calls?limit=100')).body.calls.filter(c=>c.credential_id===connection.id&&Date.parse(c.started_at)>=start);assert.ok(calls.some(c=>c.tool==='whoami'&&c.outcome==='success'));rounds.push({round,elapsed_ms:Date.now()-start,tools:calls.map(c=>({tool:c.tool,outcome:c.outcome,error_code:c.error_code})),final});console.log(JSON.stringify({round,status:'finished',calls:calls.length,elapsed_ms:Date.now()-start}));writeFileSync(join(root,'rounds.json'),JSON.stringify(rounds,null,2));return {calls,final};
 }
 try{
- const name='虚构冷启动图像 '+suffix,archive=await v.call('create_archive',{type:'person',name,request_id:randomUUID()});connection=(await v.http('/connections',{name:'Codex 图像冷启动 '+suffix,days:1})).body;
+ const name=resumed?.name??'虚构冷启动图像 '+suffix,archive=resumed?{id:resumed.archive_id}:await v.call('create_archive',{type:'person',name,request_id:randomUUID()});
+ assert.equal((await v.call('list_observations',{archive_id:archive.id})).observations.length,0,'upload resume must not duplicate an existing publication');
+ writeFileSync(join(root,'fixture.json'),JSON.stringify({name,archive_id:archive.id},null,2),{mode:0o600});
+ connection=(await v.http('/connections',{name:'Codex 图像冷启动 '+suffix,days:1})).body;
  writeFileSync(join(clientHome,'config.toml'),baseline+`\n[mcp_servers.cts_staging]\nurl = ${JSON.stringify(v.base+'/mcp')}\nhttp_headers = { Authorization = ${JSON.stringify('Bearer '+connection.secret)} }\nstartup_timeout_sec = 30\n`,{mode:0o600});
  const first=await run('upload',`请使用已经接好的康米巨星猎头系统，为人物「${name}」发布一条观察。当前工作目录的 fixture.png 和 fixture.jpg 都是本次验收专用的虚构图片，我已经授权你读取这两个本地文件，并用 HTTP PUT 把原始字节上传到系统返回的测试站上传地址。两张都要保留。上传后请从系统取回图片查看，在观察正文中简短记录画面的主要图形和颜色，并注明这是虚构验收图，不解释操作过程。系统写入和文件上传均已授权，无需再等确认；不要回显秘密。`);
  const observations=(await v.call('list_observations',{archive_id:archive.id})).observations;assert.equal(observations.length,1);const record=observations[0];assert.equal(record.attachments.length,2);assert.match(record.body,/红/);assert.match(record.body,/蓝/);assert.match(record.body,/圆/);assert.match(record.body,/方|矩形/);assert.ok(first.calls.some(c=>c.tool==='get_image'&&c.outcome==='success'));assert.equal(first.calls.filter(c=>c.tool==='prepare_image_upload'&&c.outcome==='success').length,2);assert.ok(first.calls.some(c=>c.tool==='get_upload_status'&&c.outcome==='success'));

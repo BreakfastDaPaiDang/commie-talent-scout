@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict';
 import {readFileSync,writeFileSync,mkdirSync,copyFileSync,readdirSync,existsSync,unlinkSync} from 'node:fs';
-import {resolve,join,dirname} from 'node:path';
-import {spawn} from 'node:child_process';
-import {createServer} from 'node:http';
+import {resolve,join,relative,isAbsolute} from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {verificationClient} from './verification-client.mjs';
+import {runInteractiveCodex} from './codex-interactive-client.mjs';
+const resumeAt=process.argv.indexOf('--resume-after-delete');
+let resumed;
+if(resumeAt>=0){const path=resolve(process.argv[resumeAt+1]??'');const location=relative(resolve('secrets'),path);assert.ok(location&&!location.startsWith('..')&&!isAbsolute(location));resumed=JSON.parse(readFileSync(path,'utf8'));}
 const v=await verificationClient('codex-observation-state'),checks=[],rounds=[];
 assert.equal(v.target,'cloud','real Codex cold-session acceptance uses isolated staging');
 const suffix=randomUUID().slice(0,8),root=resolve('secrets','codex-observation-state-'+suffix),clientHome=join(root,'client'),work=join(root,'work');mkdirSync(clientHome,{recursive:true});mkdirSync(work,{recursive:true});
@@ -12,23 +14,28 @@ const originalHome=join(process.env.USERPROFILE,'.codex'),baseline=readFileSync(
 copyFileSync(join(originalHome,'auth.json'),join(clientHome,'auth.json'));
 const extensions=join(process.env.USERPROFILE,'.vscode','extensions'),cli=readdirSync(extensions).filter(x=>x.startsWith('openai.chatgpt-')).sort().reverse().map(x=>join(extensions,x,'bin','windows-x86_64','codex.exe')).find(existsSync);assert.ok(cli);
 let connection;
-const name='虚构删除恢复冷启动 '+suffix;
+const name=resumed?.name??'虚构删除恢复冷启动 '+suffix;
 async function run(round,prompt){
- const path=join(root,round),args=['exec','--ephemeral','--skip-git-repo-check','--sandbox','read-only','--json','--output-last-message',path+'-final.txt','-C',work,'-'];
- const childEnv={...process.env,CODEX_HOME:clientHome,PATH:dirname(cli)+';'+process.env.PATH};delete childEnv.CTS_MCP_TEST_BEARER;
+ const path=join(root,round);
  const start=Date.now();console.log(JSON.stringify({round,status:'started'}));
- const child=spawn(cli,args,{cwd:work,env:childEnv,stdio:['pipe','pipe','pipe']});let output='',errors='';child.stdout.on('data',x=>output+=x);child.stderr.on('data',x=>errors+=x);child.stdin.end(prompt);
- const exit=await new Promise((ok,no)=>{child.on('error',no);child.on('exit',ok);});writeFileSync(path+'-events.jsonl',output,{mode:0o600});writeFileSync(path+'-stderr.txt',errors,{mode:0o600});assert.equal(exit,0,'Codex exits successfully; private diagnostic retained');assert.ok(!output.includes(connection.secret),'no MCP secret in transcript');
- const final=readFileSync(path+'-final.txt','utf8');assert.ok(!final.includes(connection.secret));
+ const {output,final}=await runInteractiveCodex({cli,clientHome,work,path,prompt});
+ assert.ok(!output.includes(connection.secret),'no MCP secret in transcript');assert.ok(!final.includes(connection.secret));
  const calls=(await v.http('/admin/calls?limit=100')).body.calls.filter(c=>c.credential_id===connection.id&&new Date(c.started_at).valueOf()>=start);
  assert.ok(calls.some(c=>c.tool==='whoami'&&c.outcome==='success'),'cold session checks service identity');
  rounds.push({round,elapsed_ms:Date.now()-start,tools:calls.map(c=>({tool:c.tool,outcome:c.outcome,error_code:c.error_code,task_id:c.task_id})),final});writeFileSync(join(root,'rounds.json'),JSON.stringify(rounds,null,2));console.log(JSON.stringify({round,status:'finished',elapsed_ms:Date.now()-start,calls:calls.length}));return {final,calls,output};
 }
 try{
- const archive=await v.call('create_archive',{type:'person',name,request_id:randomUUID()}),record=await v.call('create_observation',{archive_id:archive.id,body:'虚构删除恢复验收：这条材料由测试成员误发，恢复后仍应保留原始作者。',request_id:randomUUID()});
+ const archive=resumed?{id:resumed.archive_id}:await v.call('create_archive',{type:'person',name,request_id:randomUUID()});
+ const record=resumed?{id:resumed.observation_id}:await v.call('create_observation',{archive_id:archive.id,body:'虚构删除恢复验收：这条材料由测试成员误发，恢复后仍应保留原始作者。',request_id:randomUUID()});
+ writeFileSync(join(root,'fixture.json'),JSON.stringify({name,archive_id:archive.id,observation_id:record.id},null,2),{mode:0o600});
  const c=await v.http('/connections',{name:'Codex 删除恢复验收 '+suffix,days:1});assert.equal(c.status,200);connection=c.body;
  writeFileSync(join(clientHome,'config.toml'),baseline+`\n[mcp_servers.cts_staging]\nurl = ${JSON.stringify(v.base+'/mcp')}\nhttp_headers = { Authorization = ${JSON.stringify('Bearer '+connection.secret)} }\nstartup_timeout_sec = 30\n`,{mode:0o600});
- await run('delete',`请使用已连接的猎头系统，删除人物「${name}」档案内观察 ID ${record.id}。这是隔离测试站的虚构误发内容，已明确授权可恢复删除这条记录。`);
+ if(resumed){
+  const calls=(await v.http('/admin/calls?limit=100')).body.calls;
+  const evidence=calls.find(call=>call.id===resumed.deletion_call_id&&call.request_id===resumed.deletion_request_id&&call.tool==='delete_observation'&&call.outcome==='success');
+  assert.ok(evidence,'resume requires the successful original Codex deletion receipt');
+  rounds.push({round:'delete',resumed_after_client_timeout:true,tools:[{tool:evidence.tool,outcome:evidence.outcome,error_code:evidence.error_code}],final:null});
+ }else await run('delete',`请使用已连接的猎头系统，删除人物「${name}」档案内观察 ID ${record.id}。这是隔离测试站的虚构误发内容，已明确授权可恢复删除这条记录。`);
  const deleted=(await v.call('get_observation',{id:record.id})).observation;assert.equal(deleted.deleted,true);assert.equal(deleted.version,2);assert.equal(deleted.content_version,1);assert.equal((await v.call('list_observations',{archive_id:archive.id})).observations.length,0);checks.push('real cold Codex reads identity and target then executes explicitly authorized recoverable deletion');
  await run('restore',`请使用已连接的猎头系统，恢复人物「${name}」档案内刚误删的观察 ID ${record.id}。这是明确的恢复要求，请保留原记录和作者。`);
  const restored=(await v.call('get_observation',{id:record.id})).observation;assert.equal(restored.deleted,false);assert.equal(restored.version,3);assert.equal(restored.content_version,1);assert.equal(restored.author_id,deleted.author_id);assert.equal((await v.call('list_observation_versions',{id:record.id})).versions.length,1);checks.push('second independent cold Codex session restores same record identity, author and immutable content history');

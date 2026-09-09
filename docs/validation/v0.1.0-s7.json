@@ -100,5 +100,100 @@
       "restore-mobile"
     ],
     "real_codex": "previous client policy blocks remain unresolved; browser/SDK success is not Codex acceptance"
+  },
+  "interactive_codex": {
+    "date": "2026-09-09T07:29:58.163Z",
+    "status": "passed",
+    "environment": "staging",
+    "checks": [
+      "real cold Codex reads identity and target then executes explicitly authorized recoverable deletion",
+      "second independent cold Codex session restores same record identity, author and immutable content history",
+      "cold Codex respects current closed archive and reports inability without implicit reopening"
+    ],
+    "rounds": [
+      {
+        "round": "delete",
+        "tools": [
+          {
+            "tool": "delete_observation",
+            "outcome": "success",
+            "error_code": null
+          }
+        ],
+        "resumed_after_client_timeout": true
+      },
+      {
+        "round": "restore",
+        "tools": [
+          {
+            "tool": "get_observation",
+            "outcome": "success",
+            "error_code": null,
+            "task_id": null
+          },
+          {
+            "tool": "restore_observation",
+            "outcome": "success",
+            "error_code": null,
+            "task_id": null
+          },
+          {
+            "tool": "get_archive",
+            "outcome": "success",
+            "error_code": null,
+            "task_id": null
+          },
+          {
+            "tool": "get_observation",
+            "outcome": "success",
+            "error_code": null,
+            "task_id": null
+          },
+          {
+            "tool": "get_usage_guide",
+            "outcome": "success",
+            "error_code": null,
+            "task_id": null
+          },
+          {
+            "tool": "whoami",
+            "outcome": "success",
+            "error_code": null,
+            "task_id": null
+          }
+        ]
+      },
+      {
+        "round": "closed",
+        "tools": [
+          {
+            "tool": "get_archive",
+            "outcome": "success",
+            "error_code": null,
+            "task_id": null
+          },
+          {
+            "tool": "get_observation",
+            "outcome": "success",
+            "error_code": null,
+            "task_id": null
+          },
+          {
+            "tool": "get_usage_guide",
+            "outcome": "success",
+            "error_code": null,
+            "task_id": null
+          },
+          {
+            "tool": "whoami",
+            "outcome": "success",
+            "error_code": null,
+            "task_id": null
+          }
+        ]
+      }
+    ],
+    "approval": "actual user confirmation relayed as a one-shot client approval; tool annotations unchanged",
+    "recovery": "delete committed before client timeout; service receipt and state verified before continuing restore without repeating deletion"
   }
 }

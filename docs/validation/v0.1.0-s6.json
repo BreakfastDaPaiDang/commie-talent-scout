@@ -1,7 +1,7 @@
 {
   "date": "2026-09-08",
   "issue": 8,
-  "state": "implemented_with_acceptance_blocks",
+  "state": "accepted",
   "deploy": "1f16011e-fd97-412f-819f-e9740253ecf7",
   "local": {
     "date": "2026-09-08T14:10:54.190Z",
@@ -43,11 +43,7 @@
   },
   "unit_tests": 11,
   "r2_public_access": "disabled, verified using wrangler r2 bucket dev-url get",
-  "pending": [
-    "actual cloud scheduled orphan cleanup",
-    "actual desktop/mobile browser interaction",
-    "real Codex file upload and history flow"
-  ],
+  "pending": [],
   "real_codex_attempt": {
     "result": "blocked_before_upload",
     "profile": "read-only",
@@ -121,5 +117,161 @@
       "restore-mobile"
     ],
     "real_codex": "previous client policy blocks remain unresolved; browser/SDK success is not Codex acceptance"
+  },
+  "interactive_codex": {
+    "date": "2026-09-09T07:42:54.302Z",
+    "environment": "staging",
+    "status": "passed",
+    "checks": [
+      "real cold Codex reads two authorized local files, prepares and performs HTTP PUT, verifies readiness, retrieves MCP image content and publishes two images with accurate visual observations",
+      "another real cold Codex session edits JPEG/WebP attachments and reads the original PNG from immutable history; independent web API reads agree"
+    ],
+    "rounds": [
+      {
+        "round": "upload",
+        "elapsed_ms": 426602,
+        "tools": [
+          {
+            "tool": "get_observation",
+            "outcome": "success",
+            "error_code": null
+          },
+          {
+            "tool": "create_observation",
+            "outcome": "success",
+            "error_code": null
+          },
+          {
+            "tool": "get_image",
+            "outcome": "success",
+            "error_code": null
+          },
+          {
+            "tool": "get_image",
+            "outcome": "success",
+            "error_code": null
+          },
+          {
+            "tool": "get_upload_status",
+            "outcome": "success",
+            "error_code": null
+          },
+          {
+            "tool": "get_upload_status",
+            "outcome": "success",
+            "error_code": null
+          },
+          {
+            "tool": "prepare_image_upload",
+            "outcome": "success",
+            "error_code": null
+          },
+          {
+            "tool": "prepare_image_upload",
+            "outcome": "success",
+            "error_code": null
+          },
+          {
+            "tool": "get_archive",
+            "outcome": "success",
+            "error_code": null
+          },
+          {
+            "tool": "get_usage_guide",
+            "outcome": "success",
+            "error_code": null
+          },
+          {
+            "tool": "list_archives",
+            "outcome": "success",
+            "error_code": null
+          },
+          {
+            "tool": "get_usage_guide",
+            "outcome": "success",
+            "error_code": null
+          },
+          {
+            "tool": "whoami",
+            "outcome": "success",
+            "error_code": null
+          }
+        ]
+      },
+      {
+        "round": "edit-history",
+        "elapsed_ms": 544290,
+        "tools": [
+          {
+            "tool": "get_image",
+            "outcome": "success",
+            "error_code": null
+          },
+          {
+            "tool": "get_observation",
+            "outcome": "success",
+            "error_code": null
+          },
+          {
+            "tool": "list_observation_versions",
+            "outcome": "success",
+            "error_code": null
+          },
+          {
+            "tool": "update_observation",
+            "outcome": "success",
+            "error_code": null
+          },
+          {
+            "tool": "get_upload_status",
+            "outcome": "success",
+            "error_code": null
+          },
+          {
+            "tool": "prepare_image_upload",
+            "outcome": "success",
+            "error_code": null
+          },
+          {
+            "tool": "get_observation",
+            "outcome": "success",
+            "error_code": null
+          },
+          {
+            "tool": "list_observations",
+            "outcome": "success",
+            "error_code": null
+          },
+          {
+            "tool": "get_usage_guide",
+            "outcome": "success",
+            "error_code": null
+          },
+          {
+            "tool": "list_archives",
+            "outcome": "success",
+            "error_code": null
+          },
+          {
+            "tool": "get_usage_guide",
+            "outcome": "success",
+            "error_code": null
+          },
+          {
+            "tool": "whoami",
+            "outcome": "success",
+            "error_code": null
+          }
+        ]
+      }
+    ],
+    "web_visual_check": "passed",
+    "web_checks": [
+      "formal web UI reads the actual Codex-edited record and decodes both current JPEG/WebP images; original-size viewer works",
+      "mobile history retains and decodes the original PNG/JPEG pair after the Codex edit; original image opens without page overflow or runtime errors"
+    ],
+    "web_checked_at": "2026-09-09T07:43:37.369Z",
+    "human_approvals": true,
+    "prior_upload_attempt": "Initial client expired while waiting for approval, before uploading or publishing; the same empty archive was reused with a new revoked-on-finish connection."
   }
 }

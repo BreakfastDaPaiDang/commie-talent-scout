@@ -1,0 +1,47 @@
+import assert from 'node:assert/strict';
+import {readFileSync,writeFileSync} from 'node:fs';
+import {randomUUID} from 'node:crypto';
+import {chromium} from 'playwright-core';
+import {verificationClient} from './verification-client.mjs';
+
+const evidencePath='tmp/verification/codex-images-detail-cloud.json';
+const evidence=JSON.parse(readFileSync(evidencePath,'utf8'));
+const v=await verificationClient('codex-images-web'),checks=[];let browser;
+assert.equal(v.base,evidence.base);
+try{
+ const observation=(await v.call('get_observation',{id:evidence.observation.id})).observation;
+ assert.equal(observation.content_version,2);assert.equal(observation.deleted,false);
+ browser=await chromium.launch({channel:process.env.CTS_TEST_BROWSER??'msedge',headless:true});
+ const context=await browser.newContext({viewport:{width:1440,height:1000},timezoneId:'Asia/Shanghai'});
+ const [name,...value]=v.sessionCookie.split('=');await context.addCookies([{name,value:value.join('='),url:v.base}]);
+ const page=await context.newPage(),errors=[];page.on('pageerror',error=>errors.push(error.message));
+ await page.goto(v.base+'/?archive='+evidence.archive_id);
+ const card=page.locator('.observation-card').filter({hasText:observation.body});
+ await card.locator('.record-body').waitFor();
+ for(const image of await card.locator('.image-gallery img').all())await image.evaluate(image=>image.decode());
+ assert.equal(await card.locator('.image-gallery img').count(),2);
+ await card.getByRole('button',{name:'放大图片 1',exact:true}).click();
+ let dialog=page.getByRole('dialog',{name:'查看原图',exact:true});await dialog.locator('img').evaluate(image=>image.decode());
+ await dialog.getByRole('button',{name:'原始尺寸',exact:true}).click();assert.equal(await dialog.locator('.image-viewer.zoomed').count(),1);
+ await dialog.getByRole('button',{name:'关闭对话框',exact:true}).click();
+ await page.screenshot({path:'tmp/verification/codex-images-web-desktop.png'});
+ checks.push('formal web UI reads the actual Codex-edited record and decodes both current JPEG/WebP images; original-size viewer works');
+ await page.setViewportSize({width:390,height:844});
+ await card.getByRole('button',{name:/查看.*记录的历史/}).click();
+ dialog=page.getByRole('dialog',{name:'观察版本历史',exact:true});
+ const first=dialog.locator('article').filter({has:page.getByRole('heading',{name:'版本 1',exact:true})});
+ await first.waitFor();await first.scrollIntoViewIfNeeded();assert.equal(await first.locator('.image-gallery img').count(),2);
+ for(const image of await first.locator('.image-gallery img').all())await image.evaluate(image=>image.decode());
+ const originalPng=evidence.history.find(version=>version.version===1||version.content_version===1)?.attachments.find(image=>image.mime_type==='image/png')??evidence.history.at(-1).attachments.find(image=>image.mime_type==='image/png');
+ assert.ok(originalPng);assert.ok((await first.locator('.image-gallery img').evaluateAll(images=>images.map(image=>image.src))).some(src=>src.includes(originalPng.id)));
+ await page.screenshot({path:'tmp/verification/codex-images-web-history-mobile.png'});
+ await first.getByRole('button',{name:'放大图片 1',exact:true}).click();
+ const viewer=page.getByRole('dialog',{name:'查看原图',exact:true});await viewer.locator('img').evaluate(image=>image.decode());
+ assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+ await page.screenshot({path:'tmp/verification/codex-images-web-original-mobile.png'});
+ assert.deepEqual(errors,[]);
+ checks.push('mobile history retains and decodes the original PNG/JPEG pair after the Codex edit; original image opens without page overflow or runtime errors');
+ evidence.web_visual_check='passed';evidence.web_checks=checks;evidence.web_checked_at=new Date().toISOString();writeFileSync(evidencePath,JSON.stringify(evidence,null,2));
+ const archive=(await v.call('get_archive',{id:evidence.archive_id})).archive;
+ if(!archive.closed)await v.call('set_archive_state',{id:archive.id,expected_version:archive.version,status:'已弃用',member_ids:[],request_id:randomUUID()});
+}finally{if(browser)await browser.close();await v.close(checks);}

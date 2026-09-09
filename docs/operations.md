@@ -17,7 +17,7 @@
 
 GitHub 的 `Checks and production release` 在 PR 执行检查；main 检查通过后在 production 环境执行发布。检查包括类型、迁移清单、服务测试、DOM 测试、构建、四宽度历史原型对照及展开编辑/手机/卡片/标签体验。Actions 固定到审核过的完整提交 SHA，checkout 不持久化 Git 凭证。
 
-发布与每日备份共用 `cts-production-operations` 锁，禁用取消正在执行的操作。CI 使用独立 `CLOUDFLARE_API_TOKEN`，不复用本机 Wrangler OAuth。需要为 GitHub production environment 或 repository 设置该 Secret。
+发布与每日备份共用 `cts-production-operations` 锁，禁用取消正在执行的操作。CI 使用独立 `CLOUDFLARE_API_TOKEN`，不复用本机 Wrangler OAuth。2026-09-09 已在 GitHub `production` environment 配置专用账户令牌；自动发布与每日备份/用量工作流均实际运行成功。
 
 令牌仅包含账户 `370c0a6a58a36a7e781de20d1a257ac2` 的 Workers Scripts 编辑、D1 编辑、Workers R2 Storage 编辑，以及 `dapaidang.org` 的 Zone 读取、Workers Routes 编辑。Cloudflare 页面可能把编辑显示为 Write；不添加账号令牌管理、DNS 全局修改或其他项目权限。这些账户级权限并非单 Worker 隔离；如需进一步收窄，应使用专用账户或拆分按桶令牌。参考 [Cloudflare GitHub Actions 配置](https://developers.cloudflare.com/workers/ci-cd/external-cicd/github-actions/)、[API 权限](https://developers.cloudflare.com/fundamentals/api/reference/permissions/)及 [R2 认证](https://developers.cloudflare.com/r2/api/tokens/)。
 
@@ -35,6 +35,16 @@ node scripts/release.mjs --env production
 `release.mjs` 校验清单与已发布哈希 → 私有备份 → 兼容迁移 → Worker 部署 → 检查健康、首页安全头、真实静态资源字节、三个私有入口和实际 D1 登录路径 → 写入私有发布记录。部署后任一步失败会回退到上一个代码版本并重新检查服务；不清数据库。可在 `releases/production/latest.json` 查阅最后成功版本。
 
 安全头同时配置于 Worker 中间件和 `public/_headers`，因为默认静态资源不经过 Worker。参考 [Workers 静态响应头规则](https://developers.cloudflare.com/workers/static-assets/headers/)。
+
+## 真实 Codex 客户端验收
+
+`node scripts/verify-codex-images.mjs --remote` 和 `node scripts/verify-codex-observation-state.mjs --remote` 使用本机已登录 Codex 的 app-server，在独立临时客户端中连接 staging。两者保留只读沙箱及逐次确认，启动前先核验 MCP 工具已加载；不使用非交互 `exec` 的默认拒绝来代替验收。
+
+客户端打印 `human_input_required` 时，操作员应查看其指向的私有 `*-pending.json`，向用户展示实际命令或工具、目标及影响，等待用户答复。只可将用户明确批准的请求写入相邻 `*-reply.json`：`id` 必须匹配未完成请求，`human_confirmed: true` 表示已收到用户确认，`result` 使用本机 Codex 生成协议中的响应结构。取消或拒绝可直接响应；不得按超时自动批准，亦不得把一次批准转换为会话或永久授权。
+
+原始请求、临时认证和调用结果仅保存在已排除提交的 `secrets/`；结束时撤销测试连接并清除复制的认证信息。每次收到有效答复后重置客户端超时计时。删除已提交而客户端超时时，可使用 `--resume-after-delete <私有恢复文件>` 核对原成功收据再续验恢复；上传尚未发布时可使用 `--resume-upload <私有恢复文件>` 复用同一空档案。两者只接受 `secrets/` 内的文件，不以重新写入掩盖中断。
+
+图片两轮成功后执行 `node scripts/verify-codex-images-web.mjs --remote`，在独立无界面浏览器中检查同一条 Codex 记录的当前图片、手机历史图和原图。只有完整业务断言通过才算验收成功，收到确认框或列出工具不算通过。
 
 ## 备份与恢复
 
