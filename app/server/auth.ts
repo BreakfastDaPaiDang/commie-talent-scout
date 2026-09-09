@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { hashPassword, verifyPassword } from './password.ts';
 import { digest, Failure, now, uid, type Actor, type Env } from './types.ts';
 
-export const passwordInput = z.string().min(12,'密码至少 12 个字符').max(128,'密码最多 128 个字符');
+export const passwordInput = z.string().min(10,'密码至少 10 个字符').max(128,'密码最多 128 个字符');
 const loginInput = z.object({ username:z.string().trim().min(1).max(80), password:z.string().min(1).max(128) });
 export const cookieName = 'cts_session';
 

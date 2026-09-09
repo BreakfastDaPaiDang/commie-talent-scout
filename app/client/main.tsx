@@ -45,9 +45,9 @@ function App(){
   if(!member||member.must_change_password||path==='/account/password')return <div className="login-page"><section className="login-scene" aria-hidden="true"><img src="/art/login-observatory-v4.png" alt=""/></section><main className="login-form"><Brand/>
     {member?<><h1 className="password-heading">{member.must_change_password?'设置你的密码':'修改密码'}</h1><p>{member.must_change_password?'首次登录，请更换临时密码。':'修改后，所有旧登录和连接会失效。'}</p><form aria-label="修改密码" onSubmit={change}>
       <label>当前密码<input type="password" name="current_password" autoComplete="current-password" required maxLength={128}/></label>
-      <label>新密码<input type="password" name="new_password" autoComplete="new-password" minLength={12} maxLength={128} required/></label>
-      <label>再次输入新密码<input type="password" name="confirm_password" autoComplete="new-password" minLength={12} maxLength={128} required/></label>
-      <small>至少 12 个字符，可使用中文、字母、数字和符号。</small><button className="button primary" disabled={busy}>{busy?'正在保存…':'保存新密码'}</button>
+      <label>新密码<input type="password" name="new_password" autoComplete="new-password" minLength={10} maxLength={128} required/></label>
+      <label>再次输入新密码<input type="password" name="confirm_password" autoComplete="new-password" minLength={10} maxLength={128} required/></label>
+      <small>至少 10 个字符，可使用中文、字母、数字和符号。</small><button className="button primary" disabled={busy}>{busy?'正在保存…':'保存新密码'}</button>
     </form>{!member.must_change_password&&<button className="button quiet" onClick={()=>navigate('/')} disabled={busy}>返回工作台</button>}<button className="button quiet" onClick={logout} disabled={busy}>退出登录</button></>:<form aria-label="登录" onSubmit={login}><label>猎头账号<input name="username" autoComplete="username" required maxLength={80} autoFocus/></label><label>密码<input type="password" name="password" autoComplete="current-password" required maxLength={128}/></label><button className="button primary" disabled={busy}>{busy?'正在登录…':'登录'}<span aria-hidden="true">→</span></button></form>}
     {error&&<p className="form-error" role="alert">{error}</p>}{notice&&<p className="form-notice" role="status">{notice}</p>}
   </main></div>;
