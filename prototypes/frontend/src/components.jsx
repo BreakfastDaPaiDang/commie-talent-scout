@@ -1,3 +1,4 @@
+import {PasswordInput} from '../../../app/ui/PasswordInput';
 import {Modal as SharedModal} from '../../../app/ui/Modal';
 import React, {
   createContext,
@@ -201,8 +202,7 @@ export function Login({ onLogin }) {
           </label>
           <label>
             密码
-            <input
-              type="password"
+            <PasswordInput
               name="password"
               autoComplete="current-password"
               required

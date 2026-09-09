@@ -13,8 +13,8 @@ export const tagBatchInput=z.object({archive_id:z.uuid(),expected_version:expect
 export const tagListInput=z.object({type:archiveType,query:z.string().trim().max(200).default(''),category_id:z.uuid().optional(),include_disabled:z.boolean().default(false),before:z.string().max(100).optional(),limit:z.coerce.number().int().min(1).max(100).default(50)});
 export function nameKey(name:string){return name.normalize('NFKC').toLowerCase().replace(/ß/g,'ss').replace(/ς/g,'σ');}
 type Category={id:string;type:'person'|'org';name:string;description:string;color:string;version:number;enabled:number};
-export type TagDefinition={id:string;category_id:string;category_name:string;category_version:number;category_enabled:number;type:'person'|'org';name:string;description:string;color:string;version:number;enabled:number;merged_into:string|null};
-const definitionColumns='t.id,t.category_id,c.name category_name,c.version category_version,c.enabled category_enabled,c.type,t.name,t.description,c.color,t.version,t.enabled,t.merged_into';
+export type TagDefinition={id:string;category_id:string;category_name:string;category_description:string;category_version:number;category_enabled:number;type:'person'|'org';name:string;description:string;color:string;version:number;enabled:number;merged_into:string|null};
+const definitionColumns='t.id,t.category_id,c.name category_name,c.description category_description,c.version category_version,c.enabled category_enabled,c.type,t.name,t.description,c.color,t.version,t.enabled,t.merged_into';
 
 export class Tags{
  readonly archives:Archives;readonly state:TagState;

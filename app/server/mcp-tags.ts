@@ -1,4 +1,4 @@
-import {advisorRule,proposalRule,approvalRule,draftRule} from './mcp-consent.ts';
+import {advisorRule,proposalRule,approvalRule,draftRule,compressionRule} from './mcp-consent.ts';
 import {McpServer} from '@modelcontextprotocol/server';
 import {z} from 'zod';
 import {Tags,tagBatchInput,tagCreateInput,categoryCreateInput,tagListInput} from './tags.ts';
@@ -14,7 +14,7 @@ for(const [tool,fields] of Object.entries({get_tag_definition:['entity_type','id
 for(const [tool,fields] of Object.entries({list_tag_categories:['type'],list_tags:['type','query','category_id','include_disabled','before','limit'],create_tag_category:['type','name','description','color','request_id'],create_tag:['category_id','name','description','request_id'],get_archive_tags:['archive_id'],update_archive_tags:['archive_id','expected_version','changes','focus','request_id']}))registerJournalFields(tool,fields);
 export const tagGuides=[
  advisorRule,proposalRule,approvalRule,
- '人物与组织独立词库。先读 get_archive_tags 及 list_tags 的通用描述，优先复用；确无适用词义时先建议新词条/类别及通用描述，用户确认后才 create_tag_category/create_tag。词条创建与档案绑定是不同动作，重名返回已有 ID，不覆盖描述。',
+ '人物与组织独立词库。先读 get_archive_tags 及 list_tags 返回的标签描述与 category_description 类别边界；缺少类别说明时用 list_tag_categories/get_tag_definition 核对，不凭类别名猜含义。优先复用；确无适用词义时先建议新词条/类别及通用描述，用户确认后才 create_tag_category/create_tag。词条创建与档案绑定是不同动作，重名返回已有 ID，不覆盖描述。',
  '公共描述仅解释通用词义，不写某份档案的事实。标签名本身不含冒号，类别单独指定。新建后仍需 update_archive_tags 绑定。标签与状态、负责人不同，不能相互替代。',
  '从观察推导时先 get_observation/list_observations/list_observation_versions 实际读取所引用版本，提供 kind=observation、observation_id、content_version、note；系统检查当前凭证已读和来源可见。本人自述/成员指令若出自观察，同样保留引用，不能换 kind 绕过权限。',
  '用户本次明确提供的独立材料可以 kind=self_statement 或 member_instruction，并在 note 写明参与者、日期/范围与具体来源；没有记录引用表示独立材料，不能将已读观察伪装成独立材料。网页手工绑定可以没有附加依据，Agent 不可无依据绑定。',
@@ -28,7 +28,7 @@ export const tagGuides=[
  '管理员停用或恢复先 preview_tag_availability，再 apply_tag_availability。停用不删除原绑定，停用类别禁止其下新增。恢复曾合并词条会清除当前跳转，已迁出的绑定不会自动迁回，旧历史保留。普通成员不能合并或停用/恢复；冻结和降权以当前服务身份为准。',
 ];
 export const compressionGuides=[
- advisorRule,proposalRule,approvalRule,draftRule,
+ advisorRule,proposalRule,approvalRule,draftRule,compressionRule,
  '先 whoami，再查询同类型候选档案、已有观察和标签定义/依据；名称不唯一，结合已有联系方式、组织或事件确定稳定 ID。有影响结果的同名歧义只问一个具体问题，不先猜一个对象写入。',
  '区别聊天发言者、本人自述、成员转述和判断；保留事件、背景、发生时间与条件。不从计划推出能力、不从用词/议题/交往推断身份、健康诊断或可靠性。观察可长可短，保留关键事实而非逐句复述。',
  '观察正文应把材料整理得更易读、更简练：与已读旧观察做差量，只保存该对象值得新增的事实、必要背景、时间与来源。先说明本次推荐留下哪些变化及为何省去其他内容，不把原文每个主题都分配一个段落。不要把工具步骤、打标决策、推断禁令或权限说明写进观察；来源已标自述时无需逐段重复未核验。其他发言者的无关能力通常不入这份观察；确有混淆风险时一句澄清即可。无强制标题、段数或字数，避免比原聊天更冗长的流程解说。',
@@ -40,7 +40,7 @@ export const compressionGuides=[
 export function registerTagTools(server:McpServer,env:Env,actor:Actor,reply:McpReply){
  const service=new Tags(env,actor,'mcp'),read={readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:false},write={...read,readOnlyHint:false},output=z.record(z.string(),z.unknown()),summary=(r:Record<string,unknown>)=>({id:r.id,archive_id:r.archive_id,task_id:r.task_id,version:r.version,entity_type:r.entity_type,reused:r.reused,changed:r.changed,added:r.added,removed:r.removed});
  server.registerTool('list_tag_categories',{description:'读取人物/组织词库的类别、描述、颜色、版本与停用状态。类别名和标签名分开，优先复用。',annotations:read,inputSchema:{type:z.enum(['person','org']),task_id:taskIdSchema},outputSchema:output},a=>reply(()=>service.categories(a.type)));
- server.registerTool('list_tags',{description:'按人物/组织、类别及名称/描述搜索词库，返回通用描述、版本和当前成员可见绑定数。先读描述再复用，next_cursor 非空须按需翻页。',annotations:read,inputSchema:tagListInput.extend({task_id:taskIdSchema}),outputSchema:output},a=>reply(()=>service.list(businessInput(a)),r=>({count:(r.tags as unknown[]).length})));
+ server.registerTool('list_tags',{description:'按人物/组织、类别及名称/描述搜索词库，返回标签通用描述、category_description 类别边界、版本和当前成员可见绑定数。先读描述再复用，next_cursor 非空须按需翻页。',annotations:read,inputSchema:tagListInput.extend({task_id:taskIdSchema}),outputSchema:output},a=>reply(()=>service.list(businessInput(a)),r=>({count:(r.tags as unknown[]).length})));
  const maintenance=new TagMaintenance(env,actor,'mcp');
  server.registerTool('get_tag_definition',{description:'查看标签或类别当前定义、可见绑定数、开启/关闭档案数量和分页定义历史；历史保留原词义。',annotations:read,inputSchema:tagDetailInput.extend({task_id:taskIdSchema}),outputSchema:output},a=>reply(()=>maintenance.detail(businessInput(a))));
  server.registerTool('list_tag_bindings',{description:'按标签或类别分页查看当前身份可见的绑定档案及具体依据；支持开启/关闭分组，关闭绑定保留冻结词义。',annotations:read,inputSchema:tagBindingsInput.extend({task_id:taskIdSchema}),outputSchema:output},a=>reply(()=>maintenance.bindings(businessInput(a)),r=>({count:(r.archives as unknown[]).length})));

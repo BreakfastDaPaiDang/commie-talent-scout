@@ -57,7 +57,7 @@ export class TagMaintenance {
    expected.push({entity_type:'category',id:category.id,version:category.version,impact_version:category.impact_version});
    if(category.id!==current.category_id){const oldCategory=await this.definition({entity_type:'category',id:current.category_id}) as Category;expected.push({entity_type:'category',id:oldCategory.id,version:oldCategory.version,impact_version:oldCategory.impact_version});}
    const collision=await this.stmt('SELECT id FROM tags WHERE category_id=? AND name_key=? AND id<>?',category.id,nameKey(a.name),a.id).first();if(collision)throw new Failure(409,'DUPLICATE_VALUE','目标类别已有同名标签，请复用或由管理员合并');
-   after={...before,name:a.name,description:a.description,category_id:category.id,category_name:category.name,category_version:category.version,color:category.color};
+   after={...before,name:a.name,description:a.description,category_id:category.id,category_name:category.name,category_description:category.description,category_version:category.version,color:category.color};
   }else{
    if(await this.stmt('SELECT id FROM tag_categories WHERE type=? AND name_key=? AND id<>?',before.type,nameKey(a.name),a.id).first())throw new Failure(409,'DUPLICATE_VALUE','本词库已有同名类别');
    after={...before,name:a.name,description:a.description,color:a.color};
