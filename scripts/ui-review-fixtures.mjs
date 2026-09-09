@@ -9,7 +9,8 @@ const observations=initialEntities.flatMap(e=>e.records.map(r=>({id:uuid(r.id),a
 const readingEvents=observations.filter(o=>!o.deleted&&o.author_id!==members[0].id).slice(0,3).map((o,i)=>({id:uuid('unread'+o.id),seq:100-i,archive_id:o.archive_id,archive_name:archives.find(a=>a.id===o.archive_id).name,type:archives.find(a=>a.id===o.archive_id).type,closed:false,actor_id:o.author_id,actor_name:o.author_name,kind:'observation.created',created_at:o.created_at,observation_id:o.id}));
 export const apiRequests=[],errors=[],drafts=new Map(),confirmed=new Set();
 export async function fixture(route){const request=route.request(),url=new URL(request.url()),p=url.pathname.slice(4);apiRequests.push({path:p,method:request.method()});let body;
- if(p==='/auth/me')body={member:members[0]};
+ if(p.startsWith('/material-capacity/'))body={count:0};
+ else if(p==='/auth/me')body={member:members[0]};
  else if(p==='/members')body={members,next_cursor:null};
  else if(p==='/reading')body={total:readingEvents.filter(e=>!confirmed.has(e.id)).length};
  else if(p==='/reading/events')body={events:readingEvents.filter(e=>!confirmed.has(e.id)),snapshot:100,next_cursor:null};

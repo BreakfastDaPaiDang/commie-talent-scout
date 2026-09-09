@@ -1,6 +1,7 @@
+import {MaterialsPreview} from './MaterialsPreview.jsx';
 import {ArchiveLifecycleNotice} from '../../../app/ui/ArchiveLifecycle';
 import {CaughtUp,UpdateRow,ArchiveRow,ScopeToolbar,DetailFrame,EntityHeader,TimelineTabs,ComposerFrame,ObservationFrame,RecordBody} from '../../../app/ui/Workspace';
-import React, { useRef, useEffect, useLayoutEffect } from "react";
+import React, { useRef, useEffect, useLayoutEffect, useState } from "react";
 import { Icon } from "./icons.jsx";
 import { Avatar } from "./Avatar.jsx";
 import {
@@ -100,6 +101,8 @@ export function ArchiveList({w}) {
 export function Updates({w}){return <section className="updates-list"><p className="section-description">从变化的地方读起。</p>{w.unreadEntities.length?w.sessionUpdates.map(e=>{const pending=w.unreadItems(e),latest=[...(pending.length?pending:[...e.records.filter(r=>!r.deleted),...e.events])].sort((a,b)=>timelineOrder(b)-timelineOrder(a))[0];return <UpdateRow key={e.id} selected={w.selected===e.id} read={!pending.length} onClick={()=>w.openUnread(e)} avatar={<Avatar type={e.type} name={e.name} contacts={e.contacts} src={e.avatar}/>} label={<>{e.type==='person'?'人物':'组织'} · {pending.length?`${pending.length} 项更新`:'已阅'}</>} name={e.name} excerpt={latest?.kind==='system'?latest.text:latest?.body} time={latest?.time}/>;}):<CaughtUp action={<Button variant="outline" onClick={()=>w.navigate('person')}>回到人物档案</Button>}/>}</section>;}
 
 export function Detail({ w }) {
+  const [materialPane,setMaterialPane]=useState(false),[materialCounts,setMaterialCounts]=useState({});
+  useEffect(()=>setMaterialPane(false),[w.entity.id]);
   const { entity, locked, actor, memberName } = w,
     textarea = useRef(null),
     scroll = useRef(null),
@@ -159,7 +162,9 @@ export function Detail({ w }) {
               )}
 </>}/>
           <ArchiveLifecycleNotice deleted={false} closed={locked} onReopen={()=>w.setDialog({type:'state',mode:'reopen',nextState:entity.lastOpenState??'视奸观察'})}/>
-          <TimelineTabs id={entity.id} value={w.recordView==='records'?'observations':w.recordView} onChange={value=>w.setRecordView(value==='observations'?'records':value)} deletedCount={w.deletedCount}/>
+          <TimelineTabs id={entity.id} value={materialPane?'materials':w.recordView==='records'?'observations':w.recordView} onChange={value=>{setMaterialPane(value==='materials');if(value!=='materials')w.setRecordView(value==='observations'?'records':value);}} deletedCount={w.deletedCount} materialCount={materialCounts[entity.id]??0}/>
+          <div hidden={!materialPane} role="tabpanel" id={entity.id+'-materials'} aria-labelledby={entity.id+'-tab-materials'}><MaterialsPreview key={entity.id} entity={entity} actor={actor} locked={locked} onCount={count=>setMaterialCounts(c=>({...c,[entity.id]:count}))}/></div>
+          <div hidden={materialPane}>
           {!locked && w.recordView !== "deleted" && (
             <ComposerFrame open={w.composeOpen} onOpen={()=>w.setComposeOpen(true)} textarea={{value:w.text,onChange:e=>w.setText(e.target.value),onPaste:e=>{const files=[...e.clipboardData.files];if(files.length){e.preventDefault();addImages(files);}}}}>
               {w.composeOpen && (
@@ -297,6 +302,7 @@ export function Detail({ w }) {
               );
             })}
           </section>
+          </div>
     </DetailFrame>
   );
 }

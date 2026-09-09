@@ -13,19 +13,24 @@ import type {Archive} from '../server/archives';
 import type {Observation} from '../server/observations';
 import './observations.css';
 import {TagChip,TagEvidence} from './TagsSection';
+import {MaterialsSection} from './MaterialsSection';
 import type {TagBinding} from '../server/tag-state';
 
 export type ObservationFocus={event_id?:string;observation_id?:string;query?:string;key:string};
 type TimelineEvent={is_read?:boolean;reading?:ReadDelivery|null;id:string;archive_id:string;actor_id:string;seq:number;kind:string;actor_name:string;source:string;created_at:string;observation_id:string|null;observation:Observation|null;before:Record<string,unknown>|null;after:Record<string,unknown>|null};
 const time=(value:string)=>new Date(value).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai',year:'numeric',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false});
-const kinds:Record<string,string>={'archive.deleted':'删除档案','archive.restored':'恢复档案','observation.deleted':'删除观察','observation.restored':'恢复观察','archive.avatar_changed':'修改头像','archive.tags_changed':'整理标签','archive.created':'创建档案','archive.profile_changed':'修改基础资料','archive.state_changed':'变更业务状态','archive.members_changed':'调整关联成员','archive.closed':'已关闭','archive.reopened':'已重新开启','observation.created':'发布观察','observation.edited':'编辑观察'};
+const kinds:Record<string,string>={'material.uploaded':'上传材料','material.updated':'修改材料','material.deleted':'删除材料','material.restored':'恢复材料','material.purged':'清除材料','material.capacity_changed':'调整材料容量','archive.deleted':'删除档案','archive.restored':'恢复档案','observation.deleted':'删除观察','observation.restored':'恢复观察','archive.avatar_changed':'修改头像','archive.tags_changed':'整理标签','archive.created':'创建档案','archive.profile_changed':'修改基础资料','archive.state_changed':'变更业务状态','archive.members_changed':'调整关联成员','archive.closed':'已关闭','archive.reopened':'已重新开启','observation.created':'发布观察','observation.edited':'编辑观察'};
 const fields:Record<string,string>={name:'名称',contacts:'联系方式',links:'资料链接',status:'业务状态',members:'当前成员',content_version:'内容版本',deleted:'已删除'};
 function readingPosition(key:string){try{const value=JSON.parse(sessionStorage.getItem(key)??'null');return {top:typeof value==='number'?value:Number(value?.top??0),pages:Math.max(1,Math.min(100,Number(value?.pages??1))),mode:value?.mode==='deleted'?'deleted' as const:value?.mode==='observations'?'observations' as const:'all' as const};}catch{return {top:0,pages:1,mode:'all' as const};}}
 function value(v:unknown):string{if(typeof v==='boolean')return v?'是':'否';if(v===null||v===undefined||v==='')return '未填写';if(Array.isArray(v))return v.length?v.map(x=>x.name?x.name+(x.frozen?'（已冻结）':''):x.url?`${x.label||'链接'} ${x.url}`:`${x.type} ${x.value}${x.note?'（'+x.note+'）':''}`).join('、'):'未填写';return String(v);}
 export function ObservationSection({actor,archive,onChanged,focus}:{actor:Member;archive:Archive;onChanged:()=>void;focus?:ObservationFocus}){
+ const [materialsOpen,setMaterialsOpen]=useState(()=>{const p=new URLSearchParams(location.search);return p.get('archive')===archive.id&&p.has('material');}),[materialCount,setMaterialCount]=useState(0),[materialsVisited,setMaterialsVisited]=useState(false);
+ const paneScroll=useRef({timeline:0,materials:0});
+ useEffect(()=>{let stopped=false;api<{count:number}>('/material-capacity/'+archive.id).then(r=>{if(!stopped)setMaterialCount(r.count);}).catch(()=>{});return()=>{stopped=true;};},[archive.id,archive.version]);
+ function switchPane(value:string){const panel=document.querySelector('.archive-detail-panel');if(panel)paneScroll.current[materialsOpen?'materials':'timeline']=panel.scrollTop;const next=value==='materials';setMaterialsOpen(next);if(next)setMaterialsVisited(true);else changeMode(value as typeof mode);requestAnimationFrame(()=>{if(panel)panel.scrollTop=paneScroll.current[next?'materials':'timeline'];});}
  const positionKey=`cts:${actor.id}:${archive.id}:reading`,initialPosition=useRef(readingPosition(positionKey));
  const[mode,setMode]=useState<'all'|'observations'|'deleted'>(initialPosition.current.mode),[events,setEvents]=useState<TimelineEvent[]>([]),[records,setRecords]=useState<Observation[]>([]),[cursor,setCursor]=useState<string|null>(null),[loading,setLoading]=useState(true),[error,setError]=useState(''),[notice,setNotice]=useState(''),[edit,setEdit]=useState<Observation|null>(null),[history,setHistory]=useState<Observation|null>(null),[busy,setBusy]=useState(false),[stateTarget,setStateTarget]=useState<Observation|null>(null);
- const serial=useRef(0),restored=useRef(!!focus),pages=useRef(0);
+ const serial=useRef(0),restored=useRef(!!focus||materialsOpen),pages=useRef(0);
  const[focused,setFocused]=useState<TimelineEvent|Observation|null>(null),[focusError,setFocusError]=useState(''),[focusRetry,setFocusRetry]=useState(0);
  useEffect(()=>{setFocused(null);setFocusError('');if(!focus)return;restored.current=true;let cancelled=false;const path=focus.event_id?'/events/'+focus.event_id:'/observations/'+focus.observation_id;api<{event?:TimelineEvent;observation?:Observation}>(path).then(r=>{if(!cancelled){setFocused(r.event??r.observation??null);if(r.event?.is_read)window.dispatchEvent(new CustomEvent('cts-reading-confirmed',{detail:[r.event.id]}));requestAnimationFrame(()=>document.getElementById('focused-content')?.scrollIntoView({block:'start'}));}}).catch(e=>{if(!cancelled)setFocusError(e.message);});return()=>{cancelled=true;};},[focus?.key,focusRetry,archive.version]);
  async function load(before?:string){const n=++serial.current;setLoading(true);setError('');try{
@@ -36,18 +41,21 @@ export function ObservationSection({actor,archive,onChanged,focus}:{actor:Member
  useEffect(()=>{void load();const stale=()=>{void load();setFocusRetry(n=>n+1);};window.addEventListener('cts-reading-stale',stale);return()=>{serial.current++;window.removeEventListener('cts-reading-stale',stale);};},[archive.id,archive.version,mode]);
  useEffect(()=>{
   const panel=document.querySelector('.archive-detail-panel');if(!panel)return;
-  const save=()=>{if(!restored.current)return;try{sessionStorage.setItem(positionKey,JSON.stringify({top:panel.scrollTop,pages:pages.current,mode}));}catch{}};panel.addEventListener('scroll',save,{passive:true});return()=>panel.removeEventListener('scroll',save);
- },[positionKey,mode]);
+  const save=()=>{if(!restored.current||materialsOpen)return;try{sessionStorage.setItem(positionKey,JSON.stringify({top:panel.scrollTop,pages:pages.current,mode}));}catch{}};panel.addEventListener('scroll',save,{passive:true});return()=>panel.removeEventListener('scroll',save);
+ },[positionKey,mode,materialsOpen]);
  useEffect(()=>{if(loading||error||restored.current)return;if(cursor&&pages.current<initialPosition.current.pages){void load(cursor);return;}restored.current=true;requestAnimationFrame(()=>{const panel=document.querySelector('.archive-detail-panel');if(panel)panel.scrollTop=initialPosition.current.top;});},[loading,error,cursor,positionKey]);
  function changeMode(next:'all'|'observations'|'deleted'){restored.current=true;setMode(next);}
  async function saved(){setEdit(null);setNotice('观察已保存');onChanged();}
  function renderRecord(record:Observation,highlight?:string){return <ObservationCard key={record.id} record={record} highlight={highlight} onEdit={()=>setEdit(record)} onHistory={()=>setHistory(record)} onState={()=>setStateTarget(record)}/>;}
- return <>{focus&&<section className="focused-content" id="focused-content"><p className="eyebrow">{focus.query?'搜索命中':'指定更新'} · {archive.closed?'档案已关闭':'当前档案'}</p><PageError error={focusError} retry={()=>setFocusRetry(n=>n+1)}/>{!focused&&!focusError?<p role="status">正在定位内容…</p>:focused&&('kind' in focused?(focused.observation?renderRecord(focused.observation,focus.query):<EventCard event={focused} expanded/>):renderRecord(focused,focus.query))}</section>}
-  <TimelineTabs id={archive.id} value={mode} onChange={value=>changeMode(value as typeof mode)}/>
+ return <>{!materialsOpen&&focus&&<section className="focused-content" id="focused-content"><p className="eyebrow">{focus.query?'搜索命中':'指定更新'} · {archive.closed?'档案已关闭':'当前档案'}</p><PageError error={focusError} retry={()=>setFocusRetry(n=>n+1)}/>{!focused&&!focusError?<p role="status">正在定位内容…</p>:focused&&('kind' in focused?(focused.observation?renderRecord(focused.observation,focus.query):<EventCard event={focused} expanded/>):renderRecord(focused,focus.query))}</section>}
+  <TimelineTabs id={archive.id} value={materialsOpen?'materials':mode} onChange={switchPane} materialCount={materialCount}/>
+  {(materialsVisited||materialsOpen)&&<div hidden={!materialsOpen} role="tabpanel" id={`${archive.id}-materials`} aria-labelledby={`${archive.id}-tab-materials`}><MaterialsSection actor={actor} archive={archive} onChanged={onChanged} active={materialsOpen}/></div>}
+  <div hidden={materialsOpen}>
   {mode!=='deleted'&&!archive.deleted&&<ObservationComposer actor={actor} archive={archive} onPublished={()=>{setNotice('观察已发布');onChanged();}}/>}
   <div className="timeline observation-stream" role="tabpanel" id={`${archive.id}-timeline`} aria-labelledby={`${archive.id}-tab-${mode}`} tabIndex={0}><PageError error={error} retry={()=>void load()}/>{notice&&<p className="form-notice" role="status">{notice}</p>}
    {mode!=='all'?records.map(r=>renderRecord(r)):<ActivityStream events={events} renderRecord={e=>renderRecord(e.observation!)} renderEvent={e=><EventCard key={e.id} event={e}/>}/>}
    {loading?<p className="stream-status" role="status">正在读取观察与动态…</p>:error?null:cursor?<button className="button" onClick={()=>void load(cursor)}>更早的{mode==='all'?'动态':'观察'}</button>:<p className="stream-status">{mode==='deleted'&&!records.length?'没有你可查看的已删除观察。':mode==='observations'&&!records.length?'还没有观察记录，写下第一条吧。':'已到历史起点'}</p>}
+  </div>
   </div>
   {edit&&<Modal title="编辑观察" busy={busy} onClose={()=>setEdit(null)}><ObservationEdit actorId={actor.id} key={edit.id+edit.version} record={edit} busy={busy} setBusy={setBusy} onSaved={saved} onReload={async()=>setEdit((await api<{observation:Observation}>('/observations/'+edit.id)).observation)}/></Modal>}
   {stateTarget&&<Modal title={stateTarget.deleted?'恢复观察':'删除观察'} busy={busy} onClose={()=>setStateTarget(null)}><ObservationState key={stateTarget.id+stateTarget.version} record={stateTarget} busy={busy} setBusy={setBusy} onSaved={()=>{setStateTarget(null);setNotice(stateTarget.deleted?'观察已恢复':'观察已删除，原作者或管理员可在已删除视图恢复');onChanged();}} onReload={async()=>setStateTarget((await api<{observation:Observation}>('/observations/'+stateTarget.id)).observation)}/></Modal>}
@@ -99,7 +107,7 @@ function ObservationState({record,busy,setBusy,onSaved,onReload}:{record:Observa
 function EventCard({event:e,expanded=false}:{event:TimelineEvent;expanded?:boolean}){
  const[open,setOpen]=useState(expanded);
  const change=e.kind==='archive.tags_changed'?<TagEventChange before={(e.before??[]) as unknown as TagBinding[]} after={(e.after??[]) as unknown as TagBinding[]}/>:<ul>{Object.keys(e.after??{}).filter(k=>k!=='id'&&JSON.stringify(e.before?.[k])!==JSON.stringify(e.after?.[k])).map(k=><li key={k}>{fields[k]??k}：{e.before?value(e.before[k])+' → ':''}{value(e.after?.[k])}</li>)}</ul>;
- const hasChange=e.kind==='archive.tags_changed'||Object.keys(e.after??{}).some(k=>k!=='id');
+ const hasChange=!e.kind.startsWith('material.')&&(e.kind==='archive.tags_changed'||Object.keys(e.after??{}).some(k=>k!=='id'));
  return <article className="system-event compact-event" id={'event-'+e.id}><span className="event-node" aria-hidden="true"/><div><div className={'event-overview '+(!hasChange?'reading-content':'')}>{!hasChange&&<ReadBoundary reading={e.reading}/>}<strong>{kinds[e.kind]??'档案更新'}</strong><small>{e.actor_name} · {time(e.created_at)}</small></div>{hasChange&&<details open={open} onToggle={event=>setOpen(event.currentTarget.open)}><summary>查看{e.before?'变化':'内容'}</summary>{open&&<div className="reading-content"><ReadBoundary reading={e.reading}/>{change}</div>}</details>}</div></article>;
 
 }

@@ -1,0 +1,14 @@
+import React,{useEffect,useRef,useState} from 'react';
+import {getDocument,GlobalWorkerOptions,type PDFDocumentProxy,type RenderTask} from 'pdfjs-dist';
+import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+GlobalWorkerOptions.workerSrc=workerUrl;
+
+// Render one page at a time. No document JavaScript, embedded actions or HTML layer.
+export default function PdfPreview({url}:{url:string}){
+ const[document,setDocument]=useState<PDFDocumentProxy|null>(null),[page,setPage]=useState(1),[error,setError]=useState(''),[rendering,setRendering]=useState(true),[width,setWidth]=useState(700);
+ const canvas=useRef<HTMLCanvasElement>(null),container=useRef<HTMLDivElement>(null);
+ useEffect(()=>{const observer=new ResizeObserver(entries=>setWidth(Math.max(100,Math.floor(entries[0].contentRect.width))));if(container.current)observer.observe(container.current);return()=>observer.disconnect();},[]);
+ useEffect(()=>{let stopped=false;const task=getDocument({url,useSystemFonts:true,cMapUrl:'/assets/pdfjs/cmaps/',cMapPacked:true,standardFontDataUrl:'/assets/pdfjs/standard_fonts/',wasmUrl:'/assets/pdfjs/wasm/',iccUrl:'/assets/pdfjs/iccs/'});task.promise.then(pdf=>{if(!stopped)setDocument(pdf);}).catch(e=>{if(!stopped)setError(e.name==='PasswordException'?'这份 PDF 需要密码，请下载原文件查看':'无法预览这份 PDF，请下载原文件查看');});return()=>{stopped=true;void task.destroy();};},[url]);
+ useEffect(()=>{if(!document||!canvas.current)return;let cancelled=false,task:RenderTask|undefined;setRendering(true);setError('');void document.getPage(page).then(pdf=>{if(cancelled)return;const view=pdf.getViewport({scale:1}),scale=Math.min(width/view.width,2048/view.height,2048/view.width),viewport=pdf.getViewport({scale}),pixelRatio=Math.min(window.devicePixelRatio||1,2),target=canvas.current!;target.width=Math.ceil(viewport.width*pixelRatio);target.height=Math.ceil(viewport.height*pixelRatio);target.style.width='100%';target.style.height='auto';task=pdf.render({canvas:target,viewport,transform:[pixelRatio,0,0,pixelRatio,0,0]});return task.promise;}).then(()=>{if(!cancelled)setRendering(false);}).catch(e=>{if(!cancelled&&e.name!=='RenderingCancelledException'){setError('这一页无法预览，请下载原文件查看');setRendering(false);}});return()=>{cancelled=true;task?.cancel();};},[document,page,width]);
+ return <div ref={container} className="pdf-preview">{document&&<div className="pdf-pagination"><button className="button quiet" disabled={page<=1||rendering} onClick={()=>setPage(n=>n-1)}>上一页</button><span>{page} / {document.numPages}</span><button className="button quiet" disabled={page>=document.numPages||rendering} onClick={()=>setPage(n=>n+1)}>下一页</button></div>}{error?<p className="form-error" role="alert">{error}</p>:<>{rendering&&<p role="status">正在渲染 PDF…</p>}<canvas ref={canvas} aria-label={'PDF 第 '+page+' 页'} data-rendered={!rendering} hidden={rendering}/></>}</div>;
+}

@@ -1,7 +1,7 @@
 {
   "name": "commie-talent-scout",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 5190 --strictPort",
@@ -21,6 +21,7 @@
     "@modelcontextprotocol/server": "2.0.0",
     "agents": "0.22.0",
     "hono": "4.13.7",
+    "pdfjs-dist": "6.3.289",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "zod": "4.5.4"

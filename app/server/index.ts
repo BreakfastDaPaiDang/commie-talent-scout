@@ -18,6 +18,7 @@ import {Observations} from './observations.ts';
 import {Tags} from './tags.ts';
 import {Drafts} from './drafts.ts';
 import {Images,cleanupImages} from './images.ts';
+import {Materials,cleanupMaterials} from './materials.ts';
 import {Avatars} from './avatars.ts';
 
 const app=new Hono<{Bindings:Env}>();
@@ -28,8 +29,8 @@ app.use('*',async(c,next)=>{
   c.header('X-Content-Type-Options','nosniff');
   c.header('Referrer-Policy','same-origin');
   c.header('X-Frame-Options','DENY');
-  c.header('Content-Security-Policy',"default-src 'self'; img-src 'self' blob: data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'");
-  if (c.req.path.startsWith('/api') || c.req.path==='/mcp') c.header('Cache-Control','private, no-store');
+  c.header('Content-Security-Policy',"default-src 'self'; img-src 'self' blob: data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self' blob:; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'none'");
+  if (c.req.path.startsWith('/api') || c.req.path==='/mcp' || c.req.path.startsWith('/materials/') || c.req.path.startsWith('/material-uploads/')) c.header('Cache-Control','private, no-store');
   if (!['GET','HEAD','OPTIONS'].includes(c.req.method) && c.req.path.startsWith('/api')) {
     if (c.req.header('Origin')!==new URL(c.req.url).origin) throw new Failure(403,'ORIGIN_REJECTED','请求来源不匹配，请从本站重新操作');
     const length=Number(c.req.header('Content-Length')??0);
@@ -45,7 +46,7 @@ app.onError((error,c)=>{
   console.error(JSON.stringify({event:'request.failed',path:c.req.path,code:'INTERNAL_ERROR'}));
   return c.json({error:{code:'INTERNAL_ERROR',message:'服务暂时不可用，请稍后重试'}},500);
 });
-app.get('/api/health',c=>c.json({ok:true,version:'0.1.0',environment:c.env.ENVIRONMENT}));
+app.get('/api/health',c=>c.json({ok:true,version:'0.1.1',environment:c.env.ENVIRONMENT}));
 app.post('/api/auth/login',async c=>{
   const {secret,member}=await login(c.req.raw,c.env,await c.req.json());
   c.header('Set-Cookie',sessionCookie(secret,c.req.raw));
@@ -123,6 +124,17 @@ app.post('/api/tags/create',async c=>c.json(await new Tags(c.env,await authentic
 app.post('/api/archive-tags/update',async c=>c.json(await new Tags(c.env,await authenticate(c.req.raw,c.env),'web').batch(await c.req.json())));
 app.get('/api/archives/:id/tags',async c=>c.json(await new Tags(c.env,await authenticate(c.req.raw,c.env),'web').bindings(c.req.param('id'))));
 app.post('/api/images/prepare',async c=>c.json(await new Images(c.env,await authenticate(c.req.raw,c.env),'web').prepare(await c.req.json())));
+app.get('/api/materials',async c=>c.json(await new Materials(c.env,await authenticate(c.req.raw,c.env),'web').list(c.req.query())));
+app.get('/api/materials/:id',async c=>c.json(await new Materials(c.env,await authenticate(c.req.raw,c.env),'web').get(c.req.param('id'))));
+app.get('/api/material-capacity/:id',async c=>c.json(await new Materials(c.env,await authenticate(c.req.raw,c.env),'web').capacity(c.req.param('id'))));
+app.post('/api/materials/prepare',async c=>c.json(await new Materials(c.env,await authenticate(c.req.raw,c.env),'web').prepare(await c.req.json())));
+app.get('/api/material-uploads/:id',async c=>c.json(await new Materials(c.env,await authenticate(c.req.raw,c.env),'web').status(c.req.param('id'))));
+app.post('/api/materials/cancel',async c=>c.json(await new Materials(c.env,await authenticate(c.req.raw,c.env),'web').cancel(await c.req.json())));
+app.post('/api/materials/update',async c=>c.json(await new Materials(c.env,await authenticate(c.req.raw,c.env),'web').update(await c.req.json())));
+app.post('/api/materials/delete',async c=>c.json(await new Materials(c.env,await authenticate(c.req.raw,c.env),'web').setDeleted(await c.req.json(),true)));
+app.post('/api/materials/restore',async c=>c.json(await new Materials(c.env,await authenticate(c.req.raw,c.env),'web').setDeleted(await c.req.json(),false)));
+app.post('/api/materials/purge',async c=>c.json(await new Materials(c.env,await authenticate(c.req.raw,c.env),'web').purge(await c.req.json())));
+app.post('/api/materials/quota',async c=>c.json(await new Materials(c.env,await authenticate(c.req.raw,c.env),'web').setQuota(await c.req.json())));
 app.get('/api/images/uploads/:id',async c=>c.json(await new Images(c.env,await authenticate(c.req.raw,c.env),'web').status(c.req.param('id'))));
 app.post('/api/avatars/set',async c=>c.json(await new Avatars(c.env,await authenticate(c.req.raw,c.env),'web').set(await c.req.json())));
 app.post('/api/profile',async c=>c.json(await new Members(c.env,await authenticate(c.req.raw,c.env),'web').updateOwnProfile(await c.req.json())));
@@ -132,6 +144,9 @@ app.get('/images/:id',async c=>new Images(c.env,await authenticate(c.req.raw,c.e
 app.get('/avatars/archives/:id',async c=>new Avatars(c.env,await authenticate(c.req.raw,c.env),'web').read('archive',c.req.param('id')));
 app.get('/avatars/members/:id',async c=>new Avatars(c.env,await authenticate(c.req.raw,c.env),'web').read('member',c.req.param('id')));
 app.put('/uploads/:id',async c=>c.json(await Images.receive(c.env,c.req.param('id'),c.req.raw)));
+app.get('/materials/:id/content',async c=>new Materials(c.env,await authenticate(c.req.raw,c.env),'web').read(c.req.param('id'),c.req.query('preview')==='1'));
+app.put('/material-uploads/:id',async c=>c.json(await Materials.receive(c.env,c.req.param('id'),c.req.raw)));
+app.all('/material-uploads/*',c=>c.notFound());
 app.all('/uploads/*',c=>c.notFound());
 app.get('*',c=>c.env.ASSETS.fetch(c.req.raw));
 
@@ -147,5 +162,6 @@ export default {
       env.DB.prepare('DELETE FROM credentials WHERE expires_at<? OR revoked_at<?').bind(new Date(Date.now()-86400000).toISOString(),new Date(Date.now()-86400000).toISOString()),
     ]);
     await cleanupImages(env);
+    await cleanupMaterials(env);
   },
 };
