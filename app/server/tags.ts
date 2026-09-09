@@ -1,4 +1,5 @@
 import {z} from 'zod';
+import {assertAdmin} from './credentials.ts';
 import {Archives,archiveType} from './archives.ts';
 import {command,requestId,expectedVersion,type Source} from './commands.ts';
 import {TagState,evidenceInput,evidenceVisibilitySql,type TagBinding} from './tag-state.ts';
@@ -10,23 +11,24 @@ export const categoryCreateInput=z.object({type:archiveType,name:label(24),descr
 export const tagCreateInput=z.object({category_id:z.uuid(),name:label(40),description:z.string().trim().min(1).max(160),request_id:requestId}).strict();
 const changeInput=z.object({tag_id:z.uuid(),action:z.enum(['add','remove','evidence']),evidence:z.array(evidenceInput).max(30).optional()}).strict();
 export const tagBatchInput=z.object({archive_id:z.uuid(),expected_version:expectedVersion,changes:z.array(changeInput).max(50).default([]),focus:z.array(z.uuid()).max(3).refine(x=>new Set(x).size===x.length,'重点不能重复').optional(),request_id:requestId}).strict().refine(x=>new Set(x.changes.map(c=>c.tag_id)).size===x.changes.length,'同批次每个标签只能操作一次');
-export const tagListInput=z.object({type:archiveType,query:z.string().trim().max(200).default(''),category_id:z.uuid().optional(),include_disabled:z.boolean().default(false),before:z.string().max(100).optional(),limit:z.coerce.number().int().min(1).max(100).default(50)});
+export const categoryListInput=z.object({type:archiveType,include_disabled:z.boolean().default(false),include_deleted:z.boolean().default(false)});
+export const tagListInput=z.object({type:archiveType,query:z.string().trim().max(200).default(''),category_id:z.uuid().optional(),include_disabled:z.boolean().default(false),include_deleted:z.boolean().default(false),before:z.string().max(100).optional(),limit:z.coerce.number().int().min(1).max(100).default(50)});
 export function nameKey(name:string){return name.normalize('NFKC').toLowerCase().replace(/ß/g,'ss').replace(/ς/g,'σ');}
-type Category={id:string;type:'person'|'org';name:string;description:string;color:string;version:number;enabled:number};
-export type TagDefinition={id:string;category_id:string;category_name:string;category_description:string;category_version:number;category_enabled:number;type:'person'|'org';name:string;description:string;color:string;version:number;enabled:number;merged_into:string|null};
-const definitionColumns='t.id,t.category_id,c.name category_name,c.description category_description,c.version category_version,c.enabled category_enabled,c.type,t.name,t.description,c.color,t.version,t.enabled,t.merged_into';
+type Category={id:string;type:'person'|'org';name:string;description:string;color:string;version:number;enabled:number;deleted:number};
+export type TagDefinition={id:string;category_id:string;category_name:string;category_description:string;category_version:number;category_enabled:number;category_deleted:number;deleted:number;type:'person'|'org';name:string;description:string;color:string;version:number;enabled:number;merged_into:string|null};
+const definitionColumns='t.id,t.category_id,c.name category_name,c.description category_description,c.version category_version,c.enabled category_enabled,c.deleted category_deleted,t.deleted,c.type,t.name,t.description,c.color,t.version,t.enabled,t.merged_into';
 
 export class Tags{
  readonly archives:Archives;readonly state:TagState;
  constructor(readonly env:Env,readonly actor:Actor,readonly source:Source){this.archives=new Archives(env,actor,source);this.state=new TagState(env,actor);}
  private stmt(sql:string,...args:unknown[]){return this.env.DB.prepare(sql).bind(...args);}
  async definition(id:string){const row=await this.stmt(`SELECT ${definitionColumns} FROM tags t JOIN tag_categories c ON c.id=t.category_id WHERE t.id=?`,id).first<TagDefinition>();if(!row)throw new Failure(404,'NOT_FOUND','标签不存在');return row;}
- async categories(type:unknown){const t=archiveType.parse(type);return {categories:(await this.stmt('SELECT id,type,name,description,color,version,enabled FROM tag_categories WHERE type=? ORDER BY name_key,id',t).all<Category>()).results};}
+ async categories(input:unknown){const a=categoryListInput.parse(typeof input==='string'?{type:input}:input);if(a.include_deleted)assertAdmin(this.actor);return {categories:(await this.stmt(`SELECT id,type,name,description,color,version,enabled,deleted FROM tag_categories WHERE type=? AND deleted=? ${!a.include_deleted&&!a.include_disabled?'AND enabled=1':''} ORDER BY coalesce(deleted_name_key,name_key),id`,a.type,Number(a.include_deleted)).all<Category>()).results};}
  async list(input:unknown){
   const a=tagListInput.parse(input),where=['c.type=?'],args:unknown[]=[a.type];
-  if(!a.include_disabled)where.push('t.enabled=1','c.enabled=1');
+  if(a.include_deleted){assertAdmin(this.actor);where.push('(t.deleted=1 OR c.deleted=1)');}else{where.push('t.deleted=0','c.deleted=0');if(!a.include_disabled)where.push('t.enabled=1','c.enabled=1');}
   if(a.category_id){where.push('c.id=?');args.push(a.category_id);}
-  if(a.query){const q='%'+nameKey(a.query).replace(/[\\%_]/g,'\\$&')+'%';where.push("(t.name_key LIKE ? ESCAPE '\\' OR c.name_key LIKE ? ESCAPE '\\' OR t.description LIKE ? ESCAPE '\\' OR c.description LIKE ? ESCAPE '\\' OR (c.name_key||':'||t.name_key) LIKE ? ESCAPE '\\')");args.push(q,q,q,q,q);}
+  if(a.query){const q='%'+nameKey(a.query).replace(/[\\%_]/g,'\\$&')+'%';where.push("(coalesce(t.deleted_name_key,t.name_key) LIKE ? ESCAPE '\\' OR coalesce(c.deleted_name_key,c.name_key) LIKE ? ESCAPE '\\' OR t.description LIKE ? ESCAPE '\\' OR c.description LIKE ? ESCAPE '\\' OR (coalesce(c.deleted_name_key,c.name_key)||':'||coalesce(t.deleted_name_key,t.name_key)) LIKE ? ESCAPE '\\')");args.push(q,q,q,q,q);}
   if(a.before){where.push('t.id>?');args.push(a.before);}
   const rows=(await this.stmt(`SELECT ${definitionColumns},(SELECT count(*) FROM archive_tags b WHERE b.tag_id=t.id AND ${evidenceVisibilitySql('b.evidence_json')}) binding_count FROM tags t JOIN tag_categories c ON c.id=t.category_id WHERE ${where.join(' AND ')} ORDER BY t.id LIMIT ?`,this.actor.id,this.actor.role,...args,a.limit+1).all<TagDefinition&{binding_count:number}>()).results;
   const tags=rows.slice(0,a.limit);
@@ -43,10 +45,11 @@ export class Tags{
  });}
  async create(input:unknown){const a=tagCreateInput.parse(input);return command(this.env,this.actor,{requestId:a.request_id,operation:'tag.create',parameters:{...a,request_id:undefined}},async()=>{
   const c=await this.stmt('SELECT * FROM tag_categories WHERE id=?',a.category_id).first<Category>();if(!c)throw new Failure(404,'NOT_FOUND','类别不存在');
+  if(c.deleted)throw new Failure(409,'CATEGORY_DELETED','类别已删除，请先由管理员恢复');
   const old=await this.stmt('SELECT id,version FROM tags WHERE category_id=? AND name_key=?',a.category_id,nameKey(a.name)).first<{id:string;version:number}>();if(old)return {result:{...old,changed:false,reused:true},statements:[]};
   if(!c.enabled)throw new Failure(409,'CATEGORY_DISABLED','该类别已停用，不能创建词条');
   const id=uid(),at=now(),key=uid(),definition={id,category_id:c.id,name:a.name,description:a.description,enabled:1,version:1,merged_into:null};
-  return {result:{id,version:1,changed:true,reused:false},statements:[this.stmt('INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(SELECT 1 FROM tag_categories WHERE id=? AND enabled=1 AND version=?) THEN 1 ELSE 0 END)',key,c.id,c.version),this.stmt('INSERT INTO tags(id,category_id,name,name_key,description,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)',id,c.id,a.name,nameKey(a.name),a.description,this.actor.id,at,at),this.history('tag',id,1,definition,at),this.stmt('DELETE FROM mutation_guards WHERE id=?',key)]};
+  return {result:{id,version:1,changed:true,reused:false},statements:[this.stmt('INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(SELECT 1 FROM tag_categories WHERE id=? AND enabled=1 AND deleted=0 AND version=?) THEN 1 ELSE 0 END)',key,c.id,c.version),this.stmt('INSERT INTO tags(id,category_id,name,name_key,description,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)',id,c.id,a.name,nameKey(a.name),a.description,this.actor.id,at,at),this.history('tag',id,1,definition,at),this.stmt('DELETE FROM mutation_guards WHERE id=?',key)]};
  });}
  private history(type:string,id:string,version:number,definition:unknown,at:string){return this.stmt('INSERT INTO tag_definition_history(id,entity_type,version,definition_json,actor_id,created_at) VALUES(?,?,?,?,?,?)',id,type,version,JSON.stringify(definition),this.actor.id,at);}
  async bindings(id:string){const archive=await this.archives.get(id);return {archive_id:id,archive_url:this.archives.url(archive),version:archive.version,closed:archive.closed,tags:await this.state.list(id,archive.closed||archive.deleted,archive.deleted?archive.deleted_snapshot_version:archive.tag_snapshot_version)};}
@@ -66,8 +69,8 @@ export class Tags{
    await this.state.validateEvidence(c.evidence??[],a.archive_id,this.source==='mcp');
    const t=await this.definition(c.tag_id);
    if(t.type!==archive.type)throw new Failure(400,'TAG_TYPE_MISMATCH','人物与组织不能跨库绑定');
-   if(!old&&(!t.enabled||!t.category_enabled))throw new Failure(409,'TAG_DISABLED','停用标签或类别不能新增绑定');
-   const guard=uid();guards.push(this.stmt('INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(SELECT 1 FROM tags t JOIN tag_categories c ON c.id=t.category_id WHERE t.id=? AND t.version=? AND c.version=? AND (?=1 OR (t.enabled=1 AND c.enabled=1))) THEN 1 ELSE 0 END)',guard,t.id,t.version,t.category_version,old?1:0));cleanup.push(this.stmt('DELETE FROM mutation_guards WHERE id=?',guard));
+   if(!old&&(!t.enabled||!t.category_enabled||t.deleted||t.category_deleted))throw new Failure(409,'TAG_DISABLED','停用标签或类别不能新增绑定');
+   const guard=uid();guards.push(this.stmt('INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(SELECT 1 FROM tags t JOIN tag_categories c ON c.id=t.category_id WHERE t.id=? AND t.version=? AND c.version=? AND (?=1 OR (t.enabled=1 AND c.enabled=1 AND t.deleted=0 AND c.deleted=0))) THEN 1 ELSE 0 END)',guard,t.id,t.version,t.category_version,old?1:0));cleanup.push(this.stmt('DELETE FROM mutation_guards WHERE id=?',guard));
    for(const e of c.evidence??[]){if(e.observation_id){const sourceKey=uid();guards.push(this.stmt("INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(SELECT 1 FROM observations WHERE id=? AND (deleted=0 OR author_id=? OR ?='admin')) THEN 1 ELSE 0 END)",sourceKey,e.observation_id,this.actor.id,this.actor.role));cleanup.push(this.stmt('DELETE FROM mutation_guards WHERE id=?',sourceKey));}}
    if(old&&JSON.stringify(old.evidence)===JSON.stringify(evidence))continue;
    const b:TagBinding=old?{...old,evidence,confirmed_by:this.actor.id,confirmed_at:at}:{tag_id:t.id,category_id:t.category_id,type:t.type,category_name:t.category_name,name:t.name,description:t.description,definition_version:t.version,category_version:t.category_version,color:t.color,enabled:t.enabled,category_enabled:t.category_enabled,merged_into:t.merged_into,added_by:this.actor.id,added_at:at,confirmed_by:this.actor.id,confirmed_at:at,evidence,focus:0};next.set(c.tag_id,b);

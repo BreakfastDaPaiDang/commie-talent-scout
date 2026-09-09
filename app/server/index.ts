@@ -1,3 +1,4 @@
+import {TagDeletion} from './tag-deletion.ts';
 import {TagMaintenance} from './tag-maintenance.ts';
 import {TagMigration} from './tag-migration.ts';
 import {Reading} from './reading.ts';
@@ -109,16 +110,18 @@ app.get('/api/observations',async c=>c.json(await new Observations(c.env,await a
 app.get('/api/observations/:id/versions',async c=>c.json(await new Observations(c.env,await authenticate(c.req.raw,c.env),'web').versions({...c.req.query(),id:c.req.param('id')})));
 app.get('/api/observations/:id',async c=>c.json(await new Observations(c.env,await authenticate(c.req.raw,c.env),'web').detail(c.req.param('id'))));
 app.get('/api/archives/:id/timeline',async c=>c.json(await new Observations(c.env,await authenticate(c.req.raw,c.env),'web').timeline({...c.req.query(),id:c.req.param('id')})));
-app.get('/api/tag-categories',async c=>c.json(await new Tags(c.env,await authenticate(c.req.raw,c.env),'web').categories(c.req.query('type'))));
+app.get('/api/tag-categories',async c=>c.json(await new Tags(c.env,await authenticate(c.req.raw,c.env),'web').categories({type:c.req.query('type'),include_disabled:c.req.query('include_disabled')==='true',include_deleted:c.req.query('include_deleted')==='true'})));
 app.get('/api/tag-definitions/:entity_type/:id',async c=>c.json(await new TagMaintenance(c.env,await authenticate(c.req.raw,c.env),'web').detail({...c.req.query(),entity_type:c.req.param('entity_type'),id:c.req.param('id')})));
 app.get('/api/tag-bindings/:entity_type/:id',async c=>c.json(await new TagMaintenance(c.env,await authenticate(c.req.raw,c.env),'web').bindings({...c.req.query(),entity_type:c.req.param('entity_type'),id:c.req.param('id')})));
 app.post('/api/tag-definitions/preview',async c=>c.json(await new TagMaintenance(c.env,await authenticate(c.req.raw,c.env),'web').preview(await c.req.json())));
 app.post('/api/tag-definitions/apply',async c=>c.json(await new TagMaintenance(c.env,await authenticate(c.req.raw,c.env),'web').apply(await c.req.json())));
+app.post('/api/tag-deletion/preview',async c=>c.json(await new TagDeletion(c.env,await authenticate(c.req.raw,c.env),'web').preview(await c.req.json())));
+app.post('/api/tag-deletion/apply',async c=>c.json(await new TagDeletion(c.env,await authenticate(c.req.raw,c.env),'web').apply(await c.req.json())));
 app.post('/api/tag-availability/preview',async c=>c.json(await new TagMaintenance(c.env,await authenticate(c.req.raw,c.env),'web').previewAvailability(await c.req.json())));
 app.post('/api/tag-availability/apply',async c=>c.json(await new TagMaintenance(c.env,await authenticate(c.req.raw,c.env),'web').applyAvailability(await c.req.json())));
 app.post('/api/tag-migration/preview',async c=>c.json(await new TagMigration(c.env,await authenticate(c.req.raw,c.env),'web').preview(await c.req.json())));
 app.post('/api/tag-migration/apply',async c=>c.json(await new TagMigration(c.env,await authenticate(c.req.raw,c.env),'web').apply(await c.req.json())));
-app.get('/api/tags',async c=>c.json(await new Tags(c.env,await authenticate(c.req.raw,c.env),'web').list({...c.req.query(),include_disabled:c.req.query('include_disabled')==='true'})));
+app.get('/api/tags',async c=>c.json(await new Tags(c.env,await authenticate(c.req.raw,c.env),'web').list({...c.req.query(),include_disabled:c.req.query('include_disabled')==='true',include_deleted:c.req.query('include_deleted')==='true'})));
 app.post('/api/tag-categories/create',async c=>c.json(await new Tags(c.env,await authenticate(c.req.raw,c.env),'web').createCategory(await c.req.json())));
 app.post('/api/tags/create',async c=>c.json(await new Tags(c.env,await authenticate(c.req.raw,c.env),'web').create(await c.req.json())));
 app.post('/api/archive-tags/update',async c=>c.json(await new Tags(c.env,await authenticate(c.req.raw,c.env),'web').batch(await c.req.json())));

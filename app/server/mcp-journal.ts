@@ -2,7 +2,7 @@ import {z} from 'zod';
 import {assertAdmin} from './credentials.ts';
 import {Failure,now,uid,type Actor,type Env} from './types.ts';
 
-export const CONTRACT_VERSION='0.1.1-2026-09-09';
+export const CONTRACT_VERSION='0.1.1-2026-09-09.2';
 export type Outcome='success'|'no_change'|'rejected'|'failed'|'unknown';
 // Only named business fields may enter request storage. Add fields with each delivered tool.
 const fields:Record<string,string[]>={whoami:[],get_usage_guide:['topic'],list_connections:[],revoke_connection:['id']};

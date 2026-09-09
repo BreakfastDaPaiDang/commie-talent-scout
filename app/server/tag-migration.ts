@@ -20,7 +20,7 @@ export class TagMigration {
  constructor(readonly env:Env,readonly actor:Actor,readonly source:Source){this.tags=new Tags(env,actor,source);this.maintenance=new TagMaintenance(env,actor,source);}
  private stmt(sql:string,...args:unknown[]){return this.env.DB.prepare(sql).bind(...args);}
  private async definitions(a:Migration){if(a.mode==='merge')assertAdmin(this.actor);const from=await this.maintenance.definition({entity_type:'tag',id:a.from_tag_id}) as Definition,to=await this.maintenance.definition({entity_type:'tag',id:a.to_tag_id}) as Definition;
-  if(from.type!==to.type)throw new Failure(400,'TAG_TYPE_MISMATCH','不能跨人物与组织词库迁移');if(!to.enabled||!to.category_enabled||to.merged_into)throw new Failure(409,'TAG_DISABLED','目标标签或类别已停用或合并，请选择当前可用词义');if(a.mode==='merge'&&from.merged_into&&from.merged_into!==to.id)throw new Failure(409,'MERGE_TARGET_CHANGED','来源已有其他合并去向，请核对当前词义后重新选择');return {from,to};
+  this.maintenance.assertMutable(from);this.maintenance.assertMutable(to);if(from.type!==to.type)throw new Failure(400,'TAG_TYPE_MISMATCH','不能跨人物与组织词库迁移');if(!to.enabled||!to.category_enabled||to.merged_into)throw new Failure(409,'TAG_DISABLED','目标标签或类别已停用或合并，请选择当前可用词义');if(a.mode==='merge'&&from.merged_into&&from.merged_into!==to.id)throw new Failure(409,'MERGE_TARGET_CHANGED','来源已有其他合并去向，请核对当前词义后重新选择');return {from,to};
  }
  private async plan(a:Migration,to:Definition){const result=[];
   for(const selected of a.archives){const archive=await this.tags.archives.get(selected.archive_id,selected.expected_version,true),all=await this.tags.state.raw(archive.id),source=all.find(b=>b.tag_id===a.from_tag_id),target=all.find(b=>b.tag_id===a.to_tag_id);

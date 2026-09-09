@@ -8,10 +8,19 @@ import {startAttempt,finishAttempt,listCalls,getCall,cleanupJournal,registerJour
 import {Archives} from '../app/server/archives.ts';
 import {Observations} from '../app/server/observations.ts';
 import {Tags} from '../app/server/tags.ts';
+import {TagDeletion} from '../app/server/tag-deletion.ts';
 
 const atDays=days=>new Date(Date.now()-days*86400000).toISOString();
 function admin(f){f.sqlite.prepare("UPDATE members SET role='admin' WHERE id=?").run(f.actor.id);f.actor.role='admin';return new TaskReview(f.env,f.actor);}
 async function call(f,tool,args,result,outcome='success'){const a=await startAttempt(f.env,f.actor,tool,args);assert.equal(a.stored,true);await finishAttempt(f.env,a,outcome,null,result);return a.id;}
+
+test('a vocabulary deletion task retains an explicit link to its removed definition',async t=>{
+ const f=fixture();t.after(f.close);const review=admin(f),tags=new Tags(f.env,f.actor,'mcp'),deletion=new TagDeletion(f.env,f.actor,'mcp');
+ const category=await tags.createCategory({type:'person',name:'虚构删除产物',request_id:uuid()}),task=await recordTaskContext(f.env,f.actor,{purpose:'清理虚构词库',request_id:uuid()});
+ const p=await deletion.preview({entity_type:'category',id:category.id,deleted:true,reason:'清理测试'}),input={preview_id:p.preview_id,request_id:uuid()},result=await deletion.apply(input);
+ registerJournalFields('apply_tag_deletion',['preview_id','request_id']);await call(f,'apply_tag_deletion',{...input,task_id:task.task_id},result);
+ const detail=await review.detail({id:task.task_id});assert.equal(detail.artifacts[0].id,category.id);assert.equal(detail.artifacts[0].available,true);assert.equal(detail.artifacts[0].current_version,2);assert.ok(!(await tags.categories('person')).categories.some(c=>c.id===category.id));
+});
 test('explicit task and attempt identities, retry receipts and current artifacts remain distinct',async t=>{
  const f=fixture();t.after(f.close);const review=admin(f),archives=new Archives(f.env,f.actor,'mcp'),observations=new Observations(f.env,f.actor,'mcp');
  const archive=await archives.create({type:'person',name:'虚构任务档案',request_id:uuid()}),request={purpose:'整理虚构资料',request_id:uuid()},task=await recordTaskContext(f.env,f.actor,request);

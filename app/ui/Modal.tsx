@@ -1,4 +1,4 @@
-import React,{createContext,useEffect,useId,useRef,useState,type ReactNode} from 'react';
+import React,{useContext,createContext,useEffect,useId,useRef,useState,type ReactNode} from 'react';
 import {IconButton} from './Workspace';
 export const ModalAlertTarget=createContext<HTMLElement|null>(null);
 export const ModalControls=createContext<{onClose:()=>void;busy:boolean}|null>(null);
@@ -9,3 +9,5 @@ export function Modal({title,children,onClose,wide=false,busy=false,feedback}:{t
  useEffect(()=>{const trigger=document.activeElement,dialog=ref.current!;dialog.showModal();dialog.querySelector<HTMLElement>('input:not([type="file"]):not([type="hidden"]), textarea, select')?.focus({preventScroll:true});return()=>{dialog.close();if(trigger instanceof HTMLElement&&trigger.isConnected)trigger.focus({preventScroll:true});};},[]);
  return <dialog ref={ref} aria-labelledby={titleId} aria-label={title} className={`modal ${wide?'wide':''}`} onCancel={e=>{e.preventDefault();e.stopPropagation();if(!busy)onClose();}} onPointerDown={e=>{backdropPress.current=outside(e);}} onClick={e=>{if(!busy&&backdropPress.current&&outside(e))onClose();backdropPress.current=false;}}><div className="modal-chrome"><header className="modal-head"><h2 id={titleId}>{title}</h2><IconButton name="close" label="关闭对话框" disabled={busy} onClick={onClose}/></header>{feedback}<div ref={setAlertTarget}/></div><ModalControls.Provider value={{onClose,busy}}><ModalAlertTarget.Provider value={alertTarget}>{children}</ModalAlertTarget.Provider></ModalControls.Provider></dialog>;
 }
+
+export function ModalActions({children}:{children:ReactNode}){const controls=useContext(ModalControls);return <div className="modal-actions">{controls&&<button type="button" className="button quiet" disabled={controls.busy} onClick={controls.onClose}>取消</button>}{children}</div>;}

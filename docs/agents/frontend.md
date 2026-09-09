@@ -85,3 +85,9 @@ node scripts/verify-workspace-ui.mjs
 PDF 以按需加载的本地 PDF.js 绘制分页画布，图片使用鉴权读取后的临时 Blob；关闭预览释放资源。文件内容不作为应用 HTML 执行，其他格式下载。静态站点 `_headers` 与 Worker 的 CSP 同步维护，包含 PDF 所需的本地 Worker、Blob 与 WASM；不放开外部脚本。
 
 验收包含 `verify-materials.mjs --remote --large` 的容量边界和实际字节、桌面/手机完整操作，以及 `verify-material-recovery.mjs --remote --backup` 的丢失响应、拖入多文件、彻底删除、Bearer 撤销和真实备份。常态页面不得加入备份保留期、协议版本或存储实现说明。
+
+## 词库清理（Issue #32）
+
+标签库沿用现有页面，增加“可用词库／含停用项／已删除”范围，已删除仅管理员可见；默认只列可用项，绑定选择不加载删除内容。类别和词条详情的管理员操作增加删除/恢复，复用原弹窗和共享 `TagDeletionForm`，完整确认态才说明影响。删除完成关闭详情并重读列表；切换词库范围清除旧列表，忽略迟到响应。
+
+`verify-tag-deletion.mjs` 覆盖真实 MCP 默认过滤、桌面删除及提交响应丢失重试、手机恢复和类别删除、名称搜索、引用保留和无溢出。仍运行历史原型对照及真实完整编辑/发布验收。`verification-client.mjs` 自动跟踪本次实际新建的类别/词条，结束时删除，重名复用的业务词义不清理；清理失败须明确报错并留下对应 ID。

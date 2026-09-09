@@ -1,6 +1,6 @@
 {
   "format": 1,
-  "count": 15,
+  "count": 16,
   "migrations": {
     "0001_identity.sql": {
       "sha256": "ceb732997de6972d3f88ae3a15b52b4df0def3418cc4b0834cd289ce55daff6a",
@@ -76,6 +76,11 @@
       "sha256": "fcc114e09735afc8ae19caed07d3e5a8cfb59144d52cb932f8bafb953c39394e",
       "backwards_compatible": true,
       "reason": "Adds independent material metadata and defaulted archive quota fields; retains all existing image and archive contracts."
+    },
+    "0016_tag_deletion.sql": {
+      "sha256": "d9c18fe8edf7a89ae84fbbccc5e3863898f28bce0c91a0805f399aeb5a9e7e3f",
+      "backwards_compatible": true,
+      "reason": "Adds defaulted deletion flags and indexes. Definitions, historical references and existing columns are retained."
     }
   }
 }

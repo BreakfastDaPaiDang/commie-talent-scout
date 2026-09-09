@@ -35,7 +35,7 @@ export class TaskReview {
    else if(['create_archive','update_archive','set_archive_state','reopen_archive','delete_archive','restore_archive'].includes(call.tool))add('archive',m.id,m.version);
    else if(call.tool==='update_archive_tags'){add('archive',m.archive_id,m.version);for(const id of [...(m.added as string[]??[]),...(m.removed as string[]??[])])add('tag',id);}
    else if(call.tool==='create_tag')add('tag',m.id,m.version);else if(call.tool==='create_tag_category')add('category',m.id,m.version);
-   else if(call.tool==='apply_tag_definition'||call.tool==='apply_tag_availability')add(m.entity_type==='category'?'category':'tag',m.id,m.version);
+   else if(call.tool==='apply_tag_definition'||call.tool==='apply_tag_availability'||call.tool==='apply_tag_deletion')add(m.entity_type==='category'?'category':'tag',m.id,m.version);
    else if(call.tool==='apply_tag_migration'){add('tag',m.from_tag_id);add('tag',m.to_tag_id);for(const row of m.completed as {archive_id:string;version?:number}[]??[])add('archive',row.archive_id,row.version);}
   }
   for(const [key,artifact] of artifacts){if(artifact.kind==='observation'){
