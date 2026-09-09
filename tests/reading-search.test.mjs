@@ -29,7 +29,9 @@ test('reading is personal, receipt-bound, idempotent and version-aware without t
 
 test('search returns the current version of an older observation, escaping LIKE, combining filters and excluding deleted body',async t=>{
  const f=fixture();t.after(f.close);const writer=member(f,'writer'),service=new Archives(f.env,writer,'web'),obs=new Observations(f.env,writer,'web'),reader=new Archives(f.env,f.actor,'web');
- const a=await create(service,'person','虚构搜索'),old=await observe(obs,a.id,'前文'.repeat(300)+'罕见命中_100%\\尾部'),newer=await observe(obs,a.id,'最新普通观察');
+ t.mock.timers.enable({apis:['Date'],now:new Date('2026-09-09T00:00:00.000Z')});
+ const a=await create(service,'person','虚构搜索'),old=await observe(obs,a.id,'前文'.repeat(300)+'罕见命中_100%\\尾部');
+ t.mock.timers.tick(1);const newer=await observe(obs,a.id,'最新普通观察');
  let r=await reader.list({type:'person',query:'命中_100%\\'});assert.equal(r.archives.length,1);assert.equal(r.archives[0].search_match.observation_id,old.id);assert.match(r.archives[0].search_match.excerpt,/命中_100%\\/);assert.equal(r.archives[0].latest_observation,'最新普通观察');
  assert.equal((await reader.list({type:'person',scope:'mine'})).archives.length,0);let current=await service.get(a.id);
  await service.setState({id:a.id,expected_version:current.version,status:'人事审核',member_ids:[f.actor.id],request_id:uuid()});assert.equal((await reader.list({type:'person',scope:'mine',member_id:f.actor.id,status:'人事审核',closed:'open',query:'罕见命中'})).archives.length,1);
