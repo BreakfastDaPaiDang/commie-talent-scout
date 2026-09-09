@@ -1,0 +1,17 @@
+# 更新记录
+
+## v0.1.1 · 2026-09-09
+
+- **档案绑定材料**：人物和组织档案支持多文件上传、取用、名称与说明维护、图片/PDF 预览、回收站、彻底删除和管理员扩容；网页与 MCP 使用相同权限。
+- **超期跟进提醒**：开启档案超过 30 天未更新自动置顶，提示“需更新或关闭”；人物的引荐中、人事审核、已加入待对接三个状态为 7 天。实际更新重新计时，关闭解除，阅读与草稿不会清除报警。
+- **词库清理**：管理员可以删除、恢复标签和类别；默认查询隐藏停用和删除内容，既有引用及历史继续保留。
+- **登录与材料整理改进**：首次设置正式密码后直接进入工作台，改善密码显示与页面恢复；Agent 先给建议和草稿，按确认范围发布，整理更注重实际变化、双方行动和类别含义。
+- **成员文档**：补齐[项目介绍](./docs/introduction.md)与[上手指南](./docs/member-guide.md)。
+
+功能交付范围：#26–#33；成员文档：#34。验证见[材料验收](./docs/validation/materials-0.1.1.md)、[词库删除验收](./docs/validation/tag-deletion-32.md)、[提醒验收](./docs/validation/archive-reminders-33.md)及[密码与页面恢复](./docs/validation/compression-and-browser-state.md)。64 项业务测试、8 项 DOM 测试及四组界面回归通过；正式发布包含备份与上线检查。
+
+## v0.1.0 · 2026-09-09
+
+首次正式上线：人物与组织档案、状态与负责成员、图文观察及历史、个人未读、标签库与依据、档案关闭与回收、账号权限、Agent 接入和任务审阅。建立自动检查与部署、私有备份和隔离恢复。
+
+见 [GitHub Release](https://github.com/BreakfastDaPaiDang/commie-talent-scout/releases/tag/v0.1.0) 与[首次上线验收](./docs/validation/v0.1.0-release-acceptance.md)。

@@ -14,7 +14,9 @@ npm run dev:worker
 
 浏览器打开 `http://127.0.0.1:8790/`。开发前端时另开 `npm run dev`，使用 `http://127.0.0.1:5190/`，接口代理到 8790。本地初始化凭证保存在 `secrets/bootstrap-staging-local-admin.json`，首次登录必须改密。不要重复初始化已有数据；失败但状态为 pending 时，应先检查数据库和私有恢复文件。
 
-检查使用 `npm run check`、`npm test`、`npm run build`。测试环境部署使用 `npx wrangler d1 migrations apply cts-staging --env staging --remote` 后运行 `npm run deploy:staging`。Wrangler 需要本机 Cloudflare 管理授权。生产与 CI 配置在上线切片完成，不能把 staging 数据库绑定到生产。
+检查使用 `npm run check`、`npm test`、`npm run test:dom`、`npm run build` 和 `node scripts/check-ui.mjs`；真实接口界面验收按 [前端约定](./agents/frontend.md)执行。重新构建后，如果本地 Worker 对新静态文件返回 HTML，请重启 `dev:worker` 使资源索引更新。
+
+测试环境发布先构建，再运行 `node scripts/release.mjs --env staging`，统一执行备份、迁移、部署与检查。Wrangler 需要本机 Cloudflare 管理授权。生产已由 main 的 GitHub Actions 自动发布，流程见[部署与恢复](./operations.md)；不能把 staging 数据库绑定到生产。
 
 `scripts/verify-auth.mjs` 接受明确的测试 URL 和私有凭证路径，会轮换测试密码并更新私有文件。`verify-auth-boundaries.mjs` 默认本地，加 `--remote` 检查隔离云端；`verify-auth-load.mjs` 仅检查 staging。它们会产生限流计数，避免连续重复运行。报告写入 `tmp/verification`；只将审核后的脱敏证据复制到 `docs/validation`。
 
@@ -30,6 +32,6 @@ MCP 行为检查：`node scripts/verify-mcp.mjs`（本地）或加 `--remote`（
 
 图片与头像验收使用 `node scripts/verify-images.mjs`，可加 `--remote`。`verify-image-boundaries.mjs` 验证 10 MiB、十图、并发引用和清理；本地先开 `npm run dev:scheduled`，云端保留自身清理样例等待真实 cron 后复核。测试只使用 `tests/fixtures/images` 的生成图形；不上传个人照片。QQ 的缓存时间、并发刷新和失败回退通过真实 SQLite 服务测试、替代外部网络响应验证。
 
-`verify-codex-images.mjs --remote` 是完整真实客户端验收脚本，要求该客户端同时具备本地文件读取和 HTTP PUT 能力。本轮隔离 CLI 的只读策略拒绝 PowerShell，未完成上传；不能将 SDK 集成通过当作真实 Codex 已通过，不修改维护者的真实客户端权限来绕过拒绝。完整诊断保留私有，当前结果见 S6 报告。
+`verify-codex-images.mjs --remote` 是完整真实客户端验收脚本，要求该客户端同时具备本地文件读取和 HTTP PUT 能力。早期 S6 曾因隔离 CLI 策略未完成上传；后续真实客户端及网页联验已完成，当前结论见[首次上线验收](./validation/v0.1.0-release-acceptance.md)。重跑条件与逐次确认流程见[部署与恢复](./operations.md)，不为普通文档维护重复执行整套外部模型测试。
 
 本地 Worker 显式使用 `dev.host=127.0.0.1:8790`，避免 Wrangler 把无 Origin 的本地 MCP URL 改写为云端域名。Vite 的同源开发代理涵盖 API、MCP、上传、图片和头像；只对明确的本地开发 Origin 改写上游 Origin。正式页面仍由同域 Worker 提供。
