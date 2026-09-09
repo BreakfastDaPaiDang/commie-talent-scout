@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import {
   initialEntities,
+  prototypeReminder,
   initialMembers,
   isWorkState,
   isClosed,
@@ -14,7 +15,9 @@ import {
 } from "./model.js";
 
 export function useWorkspace() {
-  const [entities, setEntities] = useState(initialEntities),
+  const [,refreshReminder]=useState(0);
+  useEffect(()=>{const timer=setInterval(()=>{if(document.visibilityState==='visible')refreshReminder(n=>n+1);},60000);return()=>clearInterval(timer);},[]);
+  const [entities, setEntities] = useState(()=>new URLSearchParams(location.search).has('reminders')?initialEntities.map(e=>({...e,updated_at:new Date(Date.now()-(isWorkState(e.type,e.state)&&e.type==='person'?9:35)*86400000).toISOString()})):initialEntities),
     [members, setMembers] = useState(initialMembers);
   const [actorId, setActorId] = useState("zhou"),
     [page, setPage] = useState(
@@ -208,7 +211,7 @@ export function useWorkspace() {
       const old = prev.find((e) => e.id === id);
       const next = change(structuredClone(old));
       return [
-        { ...next, updated: stamp() },
+        { ...next, updated: stamp(), updated_at: new Date().toISOString() },
         ...prev.filter((e) => e.id !== id),
       ];
     });
@@ -269,7 +272,7 @@ export function useWorkspace() {
           avatar: data.avatar,
           state: data.state,
           owners: { [data.state]: data.owners },
-          updated: stamp(),
+          updated: stamp(), updated_at: new Date().toISOString(),
           records: [],
           events: [],
         },
@@ -414,7 +417,7 @@ export function useWorkspace() {
         (lifeFilter === "closed") === isClosed(e.state)) &&
       (!ownerFilter.length ||
         (e.owners[e.state] ?? []).some((id) => ownerFilter.includes(id))),
-  );
+  ).sort((a,b)=>{const x=prototypeReminder(a),y=prototypeReminder(b);return Number(y.overdue)-Number(x.overdue)||(x.overdue&&y.overdue?Date.parse(x.due_at)-Date.parse(y.due_at):0);});
   useEffect(() => {
     if (
       ["person", "org"].includes(page) &&

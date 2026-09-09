@@ -1,6 +1,7 @@
 import React from "react";
 export function Icon({ name, size = 18, ...props }: React.SVGProps<SVGSVGElement>&{name:string;size?:number}) {
   const paths:Record<string,React.ReactNode> = {
+    warning: <><path d="M12 3 2 21h20L12 3Z"/><path d="M12 9v5M12 17v1"/></>,
     folder: <path d="M3 6h7l2 3h9v11H3zM3 6V4h7l2 2h9v3" />,
     file: <><path d="M5 3h9l5 5v13H5zM14 3v6h5M8 13h8M8 17h6"/></>,
     filter: (

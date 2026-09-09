@@ -1,3 +1,4 @@
+import {archiveReminder} from '../../../app/shared/archive-reminders.ts';
 // Fictional prototype fixtures. No real account or archive data.
 export const personStates = [
   "视奸观察",
@@ -272,3 +273,5 @@ export function itemKey(entityId, item) {
 export function updateActor(item) {
   return item.kind === "system" ? item.actor : item.versions.at(-1).actor;
 }
+
+export const prototypeReminder=e=>archiveReminder({type:e.type,status:e.state,closed:isClosed(e.state),updated_at:e.updated_at??""});

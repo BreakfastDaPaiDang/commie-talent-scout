@@ -757,3 +757,13 @@ a:focus-visible {
 .has-updates .row-foot time{color:#bb3128;font-weight:600}
 .has-updates:not(.completed) .record-excerpt{color:#333}
 @media(max-width:600px){.row-unread{top:20px;right:20px}.row-foot time{font-size:14px}}
+
+/* Time-based follow-up is independent of unread changes. */
+.entity-row.is-overdue{background:#fff8ec;box-shadow:inset 4px 0 #b36219}
+.entity-row.is-overdue.selected{background:#fff0d7}
+.row-reminder{display:flex;flex-wrap:wrap;align-items:center;gap:3px 10px;margin:0 0 9px;color:#934309;line-height:1.5;text-align:left}
+.row-reminder>span{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+.row-reminder strong{font-size:14px;font-weight:700}
+.row-reminder small{font-size:12px;white-space:nowrap}
+.is-overdue.has-updates .row-reminder{padding-right:74px}
+.is-overdue.has-updates .row-title{padding-right:0}

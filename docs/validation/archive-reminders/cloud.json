@@ -1,0 +1,15 @@
+{
+  "date": "2026-09-09T14:16:17.531Z",
+  "base": "https://scout-staging.dapaidang.org",
+  "checks": [
+    "real MCP sorts overdue people before pagination, applies all three HR states, excludes closed cards, and keeps organizations at 30 days",
+    "desktop and mobile shared cards visibly flag overdue records without overlapping unread badges or overflowing",
+    "publishing a real observation removes the alarm and recalculates card priority",
+    "the full mobile status editor closes the archive and clears its alarm without runtime errors"
+  ],
+  "recoveries": [],
+  "catalog_cleanup": {
+    "created": 0,
+    "errors": []
+  }
+}
