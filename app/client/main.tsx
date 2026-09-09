@@ -24,6 +24,7 @@ import './extensions.css';
 function Brand(){return <a href="/" className="login-brand"><img src="/art/brand-star-v4.svg" alt=""/><span>康米巨星<small>猎头系统</small></span></a>;}
 function App(){
   const[member,setMember]=useState<Member|null>(null),[loading,setLoading]=useState(true),[error,setError]=useState(''),[notice,setNotice]=useState(''),[busy,setBusy]=useState(false);
+  const[loginUsername,setLoginUsername]=useState('');
   const[path,setPath]=useState(location.pathname),[menuOpen,setMenuOpen]=useState(false),[unreadCount,setUnreadCount]=useState(0);
   useEffect(()=>{const update=()=>setPath(location.pathname),expired=()=>{clearUploadMemory();setMember(null);setNotice('登录已失效，请重新登录');};window.addEventListener('popstate',update);window.addEventListener('cts-session-expired',expired);return()=>{window.removeEventListener('popstate',update);window.removeEventListener('cts-session-expired',expired);};},[]);
   function navigate(next:string){setMenuOpen(false);history.pushState(null,'',next);setPath(next);setError('');document.querySelectorAll('details[open]').forEach(x=>x.removeAttribute('open'));}
@@ -31,24 +32,34 @@ function App(){
   async function login(event:FormEvent<HTMLFormElement>){
     event.preventDefault();setBusy(true);setError('');setNotice('');
     const form=new FormData(event.currentTarget);
+    setLoginUsername(String(form.get('username')??'').trim());
     try{const result=await api<{member:Member}>('/auth/login',{username:form.get('username'),password:form.get('password')});setMember(result.member);}catch(e){setError((e as Error).message);}finally{setBusy(false);}
   }
   async function change(event:FormEvent<HTMLFormElement>){
-    event.preventDefault();setError('');const data=new FormData(event.currentTarget);
+    event.preventDefault();setError('');setNotice('');const form=event.currentTarget,data=new FormData(form),username=member!.username;
     if(data.get('new_password')!==data.get('confirm_password')){setError('两次输入的新密码不一致');return;}
     setBusy(true);
-    try{await api('/auth/password',{current_password:data.get('current_password'),new_password:data.get('new_password')});navigate('/');setMember(null);setNotice('密码已更新，请使用新密码登录');}catch(e){setError((e as Error).message);}finally{setBusy(false);}
+    let passwordSaved=false;
+    try{
+      await api('/auth/password',{current_password:data.get('current_password'),new_password:data.get('new_password')});passwordSaved=true;form.reset();
+      const result=await api<{member:Member}>('/auth/login',{username,password:data.get('new_password')});
+      setLoginUsername(username);navigate('/');setMember(result.member);setNotice('密码已更新');
+    }catch(e){
+      if(passwordSaved){setLoginUsername(username);navigate('/');setMember(null);setError('密码已保存，但自动登录未完成。请使用刚设置的新密码登录。');}
+      else setError((e as Error).message);
+    }finally{setBusy(false);}
   }
   async function logout(){setBusy(true);try{if(member)await flushDrafts(member.id);clearUploadMemory();await api('/auth/logout',{});if(member)clearDraftMemory(member.id);setMember(null);setError('');}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
   async function refreshActor(message?:string){try{const r=await api<{member:Member}>('/auth/me');setMember(r.member);if(r.member.role!=='admin'&&path.startsWith('/admin/')){navigate('/');setNotice(message??'权限已更新');}return r.member;}catch(e){if(e instanceof ApiError&&e.status===401){setMember(null);setNotice(message??'登录已失效，请重新登录');return null;}throw e;}}
   if(loading)return <main className="initial-loading" role="status">正在打开工作台…</main>;
   if(!member||member.must_change_password||path==='/account/password')return <div className="login-page"><section className="login-scene" aria-hidden="true"><img src="/art/login-observatory-v4.png" alt=""/></section><main className="login-form"><Brand/>
     {member?<><h1 className="password-heading">{member.must_change_password?'设置你的密码':'修改密码'}</h1><p>{member.must_change_password?'首次登录，请更换临时密码。':'修改后，所有旧登录和连接会失效。'}</p><form aria-label="修改密码" onSubmit={change}>
+      <input type="hidden" name="username" autoComplete="username" value={member.username}/>
       <label>当前密码<input type="password" name="current_password" autoComplete="current-password" required maxLength={128}/></label>
       <label>新密码<input type="password" name="new_password" autoComplete="new-password" minLength={10} maxLength={128} required/></label>
       <label>再次输入新密码<input type="password" name="confirm_password" autoComplete="new-password" minLength={10} maxLength={128} required/></label>
       <small>至少 10 个字符，可使用中文、字母、数字和符号。</small><button className="button primary" disabled={busy}>{busy?'正在保存…':'保存新密码'}</button>
-    </form>{!member.must_change_password&&<button className="button quiet" onClick={()=>navigate('/')} disabled={busy}>返回工作台</button>}<button className="button quiet" onClick={logout} disabled={busy}>退出登录</button></>:<form aria-label="登录" onSubmit={login}><label>猎头账号<input name="username" autoComplete="username" required maxLength={80} autoFocus/></label><label>密码<input type="password" name="password" autoComplete="current-password" required maxLength={128}/></label><button className="button primary" disabled={busy}>{busy?'正在登录…':'登录'}<span aria-hidden="true">→</span></button></form>}
+    </form>{!member.must_change_password&&<button className="button quiet" onClick={()=>navigate('/')} disabled={busy}>返回工作台</button>}<button className="button quiet" onClick={logout} disabled={busy}>退出登录</button></>:<form aria-label="登录" onSubmit={login}><label>猎头账号<input name="username" autoComplete="username" defaultValue={loginUsername} required maxLength={80} autoFocus/></label><label>密码<input type="password" name="password" autoComplete="current-password" required maxLength={128}/></label><button className="button primary" disabled={busy}>{busy?'正在登录…':'登录'}<span aria-hidden="true">→</span></button></form>}
     {error&&<p className="form-error" role="alert">{error}</p>}{notice&&<p className="form-notice" role="status">{notice}</p>}
   </main></div>;
   const accountTools=<><button onClick={()=>navigate('/account/profile')}>猎头账号</button><button onClick={()=>navigate('/account/connections')}>我的连接</button><button onClick={()=>navigate('/account/password')}>修改密码</button>{member.role==='admin'&&<><button onClick={()=>navigate('/admin/members')}>猎头管理</button><button onClick={()=>navigate('/admin/calls')}>Agent 调用</button><button onClick={()=>navigate('/admin/trash')}>已删除档案</button></>}<button disabled={busy} onClick={logout}>退出登录</button></>;
