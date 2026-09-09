@@ -6,6 +6,21 @@ import {fixture} from './d1-fixture.mjs';
 import {Avatars} from '../app/server/avatars.ts';
 import {Images,boundedImageBody,cleanupImages} from '../app/server/images.ts';
 const png=readFileSync(new URL('./fixtures/images/shapes.png',import.meta.url));
+test('QQ fetch works in Workers and rejects upstream redirects without following them',async t=>{
+ const f=fixture();t.after(f.close);let redirect=false;const requests=[];
+ t.mock.method(globalThis,'fetch',async(url,init)=>{
+  // Workers supports follow/manual only; Node accepting error hid the production failure.
+  if(init?.redirect==='error')throw new TypeError('Invalid redirect value');
+  requests.push({url:String(url),redirect:init?.redirect});
+  return redirect?new Response(null,{status:302,headers:{Location:'https://untrusted.example/avatar'}}):new Response(png);
+ });
+ const service=new Avatars(f.env,f.actor,'web');assert.equal((await service.read('member',f.actor.id)).status,200);
+ assert.equal(requests[0].redirect,'manual');
+ f.sqlite.prepare('DELETE FROM qq_avatar_cache').run();redirect=true;
+ await assert.rejects(service.read('member',f.actor.id),{code:'AVATAR_UNAVAILABLE'});
+ assert.equal(requests.length,2);assert.ok(requests.every(r=>r.url.startsWith('https://q1.qlogo.cn/')));
+ assert.equal(f.sqlite.prepare('SELECT object_key FROM qq_avatar_cache').get().object_key,null);
+});
 test('QQ refresh uses the fixed origin, shares a 24-hour cache, preserves fallback on failure and does not alter activity',async t=>{
  const f=fixture();t.after(f.close);const urls=[];let fail=false;
  t.mock.method(globalThis,'fetch',async url=>{urls.push(String(url));if(fail)throw new Error('simulated upstream failure');return new Response(png,{headers:{'Content-Type':'image/png'}});});

@@ -52,7 +52,8 @@ export class Avatars{
    const claim=await this.stmt('UPDATE qq_avatar_cache SET refreshing_until=? WHERE qq=? AND refresh_after<=? AND (refreshing_until IS NULL OR refreshing_until<=?)',lease,qq,at,at).run();
    if(claim.meta.changes){
     try{
-     const response=await fetch(`https://q1.qlogo.cn/g?b=qq&nk=${qq}&s=640`,{signal:AbortSignal.timeout(3000),redirect:'error'});
+     // Workers does not implement redirect: 'error'; manual + ok rejects redirects too.
+     const response=await fetch(`https://q1.qlogo.cn/g?b=qq&nk=${qq}&s=640`,{signal:AbortSignal.timeout(3000),redirect:'manual'});
      if(!response.ok)throw new Error('QQ upstream unavailable');
      const length=Number(response.headers.get('Content-Length'));
      // Bound both known-length and chunked upstream bodies before inspecting their actual format.
