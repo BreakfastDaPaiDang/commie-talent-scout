@@ -301,7 +301,6 @@
 }
 .entity-identity > .avatar {
   margin-left: auto;
-  filter: grayscale(0.15);
 }
 .entity-identity > .icon-button {
   width: 25px;

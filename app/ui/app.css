@@ -298,9 +298,6 @@ a:focus-visible {
   font-size: 15px;
   margin-left: 4px;
 }
-.current-member .avatar {
-  filter: grayscale(1);
-}
 .prototype-tag {
   font-size: 12px;
   color: #a8a8a8;
@@ -674,9 +671,6 @@ a:focus-visible {
 .member-chip small {
   font-size: 12px;
   color: var(--muted);
-}
-.member-chip .avatar {
-  filter: grayscale(0.8);
 }
 .optional-label {
   font-size: 15px;
