@@ -1,3 +1,4 @@
+import {ArchiveLifecycleNotice} from '../../../app/ui/ArchiveLifecycle';
 import {CaughtUp,UpdateRow,ArchiveRow,ScopeToolbar,DetailFrame,EntityHeader,TimelineTabs,ComposerFrame,ObservationFrame,RecordBody} from '../../../app/ui/Workspace';
 import React, { useRef, useEffect, useLayoutEffect } from "react";
 import { Icon } from "./icons.jsx";
@@ -157,24 +158,7 @@ export function Detail({ w }) {
                 </Button>
               )}
 </>}/>
-          {locked && (
-            <div className="locked-notice">
-              <Icon name="lock" />
-              <span>只读档案，重新开启后可继续维护。</span>
-              <button
-                className="text-button"
-                onClick={() =>
-                  w.setDialog({
-                    type: "state",
-                    mode: "reopen",
-                    nextState: entity.lastOpenState ?? "视奸观察",
-                  })
-                }
-              >
-                重新开启
-              </button>
-            </div>
-          )}
+          <ArchiveLifecycleNotice deleted={false} closed={locked} onReopen={()=>w.setDialog({type:'state',mode:'reopen',nextState:entity.lastOpenState??'视奸观察'})}/>
           <TimelineTabs id={entity.id} value={w.recordView==='records'?'observations':w.recordView} onChange={value=>w.setRecordView(value==='observations'?'records':value)} deletedCount={w.deletedCount}/>
           {!locked && w.recordView !== "deleted" && (
             <ComposerFrame open={w.composeOpen} onOpen={()=>w.setComposeOpen(true)} textarea={{value:w.text,onChange:e=>w.setText(e.target.value),onPaste:e=>{const files=[...e.clipboardData.files];if(files.length){e.preventDefault();addImages(files);}}}}>

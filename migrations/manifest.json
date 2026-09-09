@@ -1,6 +1,6 @@
 {
   "format": 1,
-  "count": 12,
+  "count": 13,
   "migrations": {
     "0001_identity.sql": {
       "sha256": "ceb732997de6972d3f88ae3a15b52b4df0def3418cc4b0834cd289ce55daff6a",
@@ -61,6 +61,11 @@
       "sha256": "7fe3bc887c5dcfb7b9d846d5d3b9ea72ad49b9913efd4f0eb50791a30519f3b5",
       "backwards_compatible": true,
       "reason": "Adds nullable/defaulted metadata and summary tables; existing result data remains available to prior code."
+    },
+    "0013_archive_trash.sql": {
+      "sha256": "70d7e335292e0460f8b895b5b2b522442a1a2427d89637d486d5c8a462adb6e5",
+      "backwards_compatible": true,
+      "reason": "Adds defaulted/nullable archive deletion fields, an index and a lifecycle trigger. Preserves archive, observation and image data; only invalidates transient reading tickets when the new code changes deletion state."
     }
   }
 }

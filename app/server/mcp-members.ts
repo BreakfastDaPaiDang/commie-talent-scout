@@ -1,6 +1,6 @@
 import {McpServer} from '@modelcontextprotocol/server';
 import {z} from 'zod';
-import {Members,memberCreateInput,memberFrozenInput,memberRoleInput,memberResetInput,memberProfileInput} from './members.ts';
+import {Members,memberListInput,memberCreateInput,memberFrozenInput,memberRoleInput,memberResetInput,memberProfileInput} from './members.ts';
 import {registerJournalFields} from './mcp-journal.ts';
 import {getRequestResult,requestId} from './commands.ts';
 import {type Actor,type Env} from './types.ts';
@@ -9,14 +9,14 @@ export type McpContent={type:'text';text:string}|{type:'image';data:string;mimeT
 export type McpReply=(action:()=>Promise<Record<string,unknown>>,summary?:(result:Record<string,unknown>)=>Record<string,unknown>,content?:(result:Record<string,unknown>)=>Promise<McpContent[]>)=>Promise<{content:McpContent[];structuredContent:Record<string,unknown>;isError?:boolean}>;
 export const memberToolNames=['list_members','get_member','create_member','reset_member_password','set_member_frozen','set_member_role','update_member_profile','get_member_history','get_request_result'];
 const fields:Record<string,string[]>={
-  list_members:['before','limit'],get_member:['id'],create_member:['username','name','role','qq','request_id'],
+  list_members:['state','before','limit'],get_member:['id'],create_member:['username','name','role','qq','request_id'],
   reset_member_password:['id','expected_version','request_id'],set_member_frozen:['id','expected_version','frozen','request_id'],
   set_member_role:['id','expected_version','role','request_id'],update_member_profile:['id','expected_version','name','qq','request_id'],
   get_member_history:['id'],get_request_result:['request_id'],
 };
 for(const [name,keys] of Object.entries(fields))registerJournalFields(name,keys);
 export const memberGuides=[
-  '账号管理只供管理员使用。先 list_members 核对稳定 ID、当前版本与角色；人物档案不是登录成员账号。',
+  '账号管理只供管理员使用。先 list_members 核对稳定 ID、当前版本与角色；默认只列未冻结账号，查找已冻结账号使用 state:frozen，完整管理核对使用 state:all；人物档案不是登录成员账号。',
   '创建或重置账号时，由客户端产生至少 10 位的临时密码，先保存在用户授权的私有位置并私下交付。服务只保存带盐 scrypt 哈希，不返回密码，不在最终聊天或普通日志回显密码。',
   '重置密码会立即使旧网页会话和 MCP 凭证失效；成员重新登录后必须更换临时密码。重置自己同样会断开本连接，操作前确保新临时密码已妥善保存。',
   '冻结立即阻止登录和已有凭证，解冻也不会恢复旧凭证。冻结不删除成员或更改历史作者、负责人归属。',
@@ -30,7 +30,7 @@ export function registerMemberTools(server:McpServer,env:Env,actor:Actor,reply:M
   const destructive={...write,destructiveHint:true};
   const version=z.object({id:z.string(),version:z.number(),changed:z.boolean()}).passthrough();
   const summary=(r:Record<string,unknown>)=>({id:r.id,version:r.version,changed:r.changed});
-  server.registerTool('list_members',{description:'管理员查看猎头账号列表与当前版本，供创建前查重、冻结、重置和角色调整使用。普通成员不能调用；支持分页，不返回密码或哈希。',annotations:read,inputSchema:{before:z.string().optional(),limit:z.number().int().min(1).max(100).default(50)},outputSchema:z.object({members:z.array(z.object({id:z.string(),username:z.string(),name:z.string(),version:z.number()}).passthrough()),next_cursor:z.string().nullable()})},input=>reply(()=>service.list(input),r=>({count:(r.members as unknown[]).length,next_cursor:r.next_cursor})));
+  server.registerTool('list_members',{description:'管理员查看猎头账号列表与当前版本，默认仅未冻结账号；state:frozen 查看已冻结，state:all 包含全部。供创建前查重、冻结、重置和角色调整使用。普通成员不能调用；支持分页，不返回密码或哈希。',annotations:read,inputSchema:memberListInput,outputSchema:z.object({members:z.array(z.object({id:z.string(),username:z.string(),name:z.string(),version:z.number()}).passthrough()),next_cursor:z.string().nullable()})},input=>reply(()=>service.list(input),r=>({count:(r.members as unknown[]).length,next_cursor:r.next_cursor})));
   server.registerTool('get_member',{description:'管理员读取指定猎头账号的当前资料、角色、冻结状态与版本，用于冲突后核对。返回成员稳定 ID，不返回密码、哈希或个人连接秘密。',annotations:read,inputSchema:{id:z.uuid()},outputSchema:z.object({member:z.object({id:z.string(),username:z.string(),name:z.string(),version:z.number(),frozen:z.boolean()}).passthrough()})},input=>reply(()=>service.detail(input.id),r=>({id:(r.member as Record<string,unknown>).id})));
   server.registerTool('create_member',{description:'仅管理员在用户明确要求建号时创建猎头账号。temporary_password 由客户端生成并私下交付，服务不回显；首登必须改密。重复请求使用原 ID 和相同参数，不把人物档案误建成账号。',annotations:write,inputSchema:memberCreateInput,outputSchema:version},input=>reply(()=>service.create(input),summary));
   server.registerTool('reset_member_password',{description:'仅管理员在用户明确要求时重置指定成员密码，使该成员所有旧网页会话与 MCP 凭证立即失效。客户端先私下保存 temporary_password，不回显；目标首登须改密。先读取成员版本，重置自己会断开本连接。',annotations:destructive,inputSchema:memberResetInput,outputSchema:version},input=>reply(()=>service.resetPassword(input),summary));

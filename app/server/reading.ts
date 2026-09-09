@@ -12,7 +12,7 @@ export function eventVisibility(actor:Actor,alias='e'){
 }
 export function unreadPredicate(actor:Actor,alias='e'){
  const visible=eventVisibility(actor,alias);
- return {sql:`${alias}.actor_id<>? AND ${alias}.created_at>=(SELECT created_at FROM members WHERE id=?) AND NOT EXISTS(SELECT 1 FROM event_read_marks mark WHERE mark.member_id=? AND mark.event_id=${alias}.id) AND ${visible.sql}`,args:[actor.id,actor.id,actor.id,...visible.args]};
+ return {sql:`EXISTS(SELECT 1 FROM archives readable WHERE readable.id=${alias}.archive_id AND readable.deleted=0) AND ${alias}.actor_id<>? AND ${alias}.created_at>=(SELECT created_at FROM members WHERE id=?) AND NOT EXISTS(SELECT 1 FROM event_read_marks mark WHERE mark.member_id=? AND mark.event_id=${alias}.id) AND ${visible.sql}`,args:[actor.id,actor.id,actor.id,...visible.args]};
 }
 
 // A GET only creates a delivery receipt. The recipient confirms it after receiving/rendering
@@ -36,7 +36,7 @@ export class Reading{
  async confirm(input:unknown){
   const a=confirmReadingInput.parse(input),tickets=[...new Set(a.tickets)],visible=eventVisibility(this.actor),at=now();
   // INSERT SELECT makes version/visibility checks and the idempotent mark one atomic write.
-  await this.stmt(`INSERT OR IGNORE INTO event_read_marks(member_id,event_id,read_at) SELECT ?,e.id,? FROM reading_deliveries d JOIN archive_events e ON e.id=d.event_id LEFT JOIN observations o ON o.id=e.observation_id WHERE d.id IN (SELECT value FROM json_each(?)) AND d.credential_id=? AND d.member_id=? AND d.expires_at>? AND d.observation_version IS o.version AND ${visible.sql}`,this.actor.id,at,JSON.stringify(tickets),this.actor.credential_id,this.actor.id,at,...visible.args).run();
+  await this.stmt(`INSERT OR IGNORE INTO event_read_marks(member_id,event_id,read_at) SELECT ?,e.id,? FROM reading_deliveries d JOIN archive_events e ON e.id=d.event_id LEFT JOIN observations o ON o.id=e.observation_id WHERE d.id IN (SELECT value FROM json_each(?)) AND d.credential_id=? AND d.member_id=? AND d.expires_at>? AND d.observation_version IS o.version AND EXISTS(SELECT 1 FROM archives readable WHERE readable.id=e.archive_id AND readable.deleted=0) AND ${visible.sql}`,this.actor.id,at,JSON.stringify(tickets),this.actor.credential_id,this.actor.id,at,...visible.args).run();
   const rows=await this.stmt(`SELECT d.id ticket,d.event_id,EXISTS(SELECT 1 FROM event_read_marks m WHERE m.member_id=d.member_id AND m.event_id=d.event_id) confirmed FROM reading_deliveries d WHERE d.id IN (SELECT value FROM json_each(?)) AND d.credential_id=? AND d.member_id=?`,JSON.stringify(tickets),this.actor.credential_id,this.actor.id).all<{ticket:string;event_id:string;confirmed:number}>();
   return {confirmed:rows.results.filter(r=>r.confirmed).map(({ticket,event_id})=>({ticket,event_id})),unconfirmed:tickets.filter(t=>!rows.results.some(r=>r.ticket===t&&r.confirmed))};
  }

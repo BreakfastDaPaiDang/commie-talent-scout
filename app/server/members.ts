@@ -12,6 +12,7 @@ export const memberCreateInput=z.object({
   temporary_password:passwordInput.describe('客户端生成并私下交付的临时密码；服务只保存带盐的慢哈希，不回显。'),
   request_id:requestId,
 }).strict();
+export const memberListInput=z.object({state:z.enum(['active','frozen','all']).default('active'),before:z.string().max(100).optional(),limit:z.coerce.number().int().min(1).max(100).default(50)});
 export const memberResetInput=z.object({id:z.uuid(),expected_version:expectedVersion,temporary_password:passwordInput,request_id:requestId}).strict();
 export const memberFrozenInput=z.object({id:z.uuid(),expected_version:expectedVersion,frozen:z.boolean(),request_id:requestId}).strict();
 export const memberRoleInput=z.object({id:z.uuid(),expected_version:expectedVersion,role:z.enum(['admin','member']),request_id:requestId}).strict();
@@ -38,8 +39,8 @@ export class Members{
   private event(id:string,kind:string,before:unknown,after:unknown){return this.stmt('INSERT INTO member_events(id,actor_id,member_id,source,kind,before_json,after_json,created_at) VALUES(?,?,?,?,?,?,?,?)',uid(),this.actor.id,id,this.source,kind,JSON.stringify(before),JSON.stringify(after),now());}
   async list(input:unknown={}){
     assertAdmin(this.actor);
-    const a=z.object({before:z.string().max(100).optional(),limit:z.coerce.number().int().min(1).max(100).default(50)}).parse(input);
-    const rows=await this.stmt(`SELECT id,username,name,role,frozen,must_change_password,qq,avatar_id,version,created_at FROM members ${a.before?'WHERE username>?':''} ORDER BY username COLLATE NOCASE LIMIT ?`,...(a.before?[a.before]:[]),a.limit+1).all();
+    const a=memberListInput.parse(input),where=['1=1'],args:unknown[]=[];if(a.state!=='all')where.push(a.state==='frozen'?'frozen=1':'frozen=0');if(a.before){where.push('username COLLATE NOCASE>?');args.push(a.before);}
+    const rows=await this.stmt(`SELECT id,username,name,role,frozen,must_change_password,qq,avatar_id,version,created_at FROM members WHERE ${where.join(' AND ')} ORDER BY username COLLATE NOCASE LIMIT ?`,...args,a.limit+1).all();
     const members:Record<string,unknown>[]=rows.results.slice(0,a.limit).map(m=>({...m,frozen:!!m.frozen,must_change_password:!!m.must_change_password}));
     return {members,next_cursor:rows.results.length>a.limit?String(members.at(-1)?.username):null};
   }

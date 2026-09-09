@@ -19,7 +19,7 @@ type Subject=z.infer<typeof tagDetailInput>;
 type Change=z.infer<typeof tagPreviewInput>;
 type Category={id:string;type:'person'|'org';name:string;description:string;color:string;version:number;enabled:number;impact_version:number};
 const effectiveEvidence="CASE WHEN a.closed=1 THEN json_extract(s.data_json,'$.evidence') ELSE b.evidence_json END";
-const bindingSource='archive_tags b JOIN archives a ON a.id=b.archive_id JOIN tags t ON t.id=b.tag_id JOIN tag_categories c ON c.id=t.category_id LEFT JOIN archive_tag_snapshots s ON s.archive_id=a.id AND s.close_version=a.tag_snapshot_version AND s.tag_id=b.tag_id';
+const bindingSource='archive_tags b JOIN archives a ON a.id=b.archive_id AND a.deleted=0 JOIN tags t ON t.id=b.tag_id JOIN tag_categories c ON c.id=t.category_id LEFT JOIN archive_tag_snapshots s ON s.archive_id=a.id AND s.close_version=a.tag_snapshot_version AND s.tag_id=b.tag_id';
 // Impact counters also change for hidden sources. Keep them server-side, unlike public definition versions.
 export function publicTagDefinition<T>(value:T):Omit<T,'impact_version'>{const {impact_version:_,...definition}=value as T&{impact_version?:unknown};return definition;}
 

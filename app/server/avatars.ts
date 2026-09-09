@@ -12,7 +12,7 @@ export class Avatars{
  constructor(private env:Env,private actor:Actor,private source:Source){this.images=new Images(env,actor,source);}
  private stmt(sql:string,...args:unknown[]){return this.env.DB.prepare(sql).bind(...args);}
  private async subject(type:'archive'|'member',id:string){
-  z.uuid().parse(id);const row=await this.stmt(type==='archive'?'SELECT id,version,avatar_id,type,contacts_json FROM archives WHERE id=?':'SELECT id,version,avatar_id,qq FROM members WHERE id=?',id).first<Subject>();
+  z.uuid().parse(id);if(type==='archive')await this.images.archives.get(id);const row=await this.stmt(type==='archive'?'SELECT id,version,avatar_id,type,contacts_json FROM archives WHERE id=?':'SELECT id,version,avatar_id,qq FROM members WHERE id=?',id).first<Subject>();
   if(!row)throw new Failure(404,'NOT_FOUND','头像所属对象不存在');return row;
  }
  async set(value:unknown){
@@ -23,7 +23,7 @@ export class Avatars{
    const old=await this.subject(a.subject_type,a.id);if(old.version!==a.expected_version)throw new Failure(409,'VERSION_CONFLICT','资料已变化，请刷新后核对');
    if(isArchive)await this.images.archives.get(a.id,a.expected_version,true);
    const key=uid(),at=now(),changed=old.avatar_id!==a.attachment_id,table=isArchive?'archives':'members';
-   const statements=[this.stmt(`INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(SELECT 1 FROM ${table} WHERE id=? AND version=?${isArchive?' AND closed=0':''}) THEN 1 ELSE 0 END)`,key,a.id,a.expected_version)];
+   const statements=[this.stmt(`INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(SELECT 1 FROM ${table} WHERE id=? AND version=?${isArchive?' AND closed=0 AND deleted=0':''}) THEN 1 ELSE 0 END)`,key,a.id,a.expected_version)];
    if(changed&&a.attachment_id){
     const sql=`SELECT 1 FROM attachments WHERE id=? AND state='ready' AND owner_id=? AND purpose=? AND ${isArchive?'archive_id':'member_subject_id'}=?`;
     if(!await this.stmt(sql,a.attachment_id,this.actor.id,purpose,a.id).first())throw new Failure(400,'ATTACHMENT_UNAVAILABLE','头像图片未上传完成，或不属于本人及此对象');

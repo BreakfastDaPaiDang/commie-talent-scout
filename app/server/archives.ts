@@ -1,4 +1,5 @@
 import {z} from 'zod';
+import {assertAdmin} from './credentials.ts';
 import {command,requestId,expectedVersion,type Source} from './commands.ts';
 import {Failure,now,uid,type Actor,type Env} from './types.ts';
 import {statesFor,isClosedState,isWorkState,personStates,orgStates} from '../shared/archive-states.ts';
@@ -14,11 +15,12 @@ const memberIds=z.array(z.uuid()).max(50).transform(ids=>[...new Set(ids)].sort(
 export const archiveCreateInput=z.object({type:archiveType,...profile,status:statusInput.default('视奸观察'),member_ids:memberIds.default([]),request_id:requestId}).strict();
 export const archiveUpdateInput=z.object({id:z.uuid(),expected_version:expectedVersion,...profile,contacts:z.array(contact).max(20),links:z.array(link).max(20),request_id:requestId}).strict();
 export const archiveStateInput=z.object({id:z.uuid(),expected_version:expectedVersion,status:statusInput,member_ids:memberIds,request_id:requestId}).strict();
-export const archiveListInput=z.object({type:archiveType,query:z.string().trim().max(200).default(''),scope:z.enum(['all','mine','unread']).default('all'),status:z.string().max(80).default(''),member_id:z.union([z.uuid(),z.literal('')]).default(''),closed:z.enum(['all','open','closed']).default('all'),tag_ids:z.array(z.uuid()).max(30).default([]).describe('按当前词库类别分组：同类别任一标签匹配、不同类别同时匹配。关闭档案按冻结绑定匹配稳定标签 ID；仅计入当前成员可见的来源。'),limit:z.coerce.number().int().min(1).max(100).default(30),before:z.string().max(150).optional()});
-type Row={id:string;type:'person'|'org';name:string;contacts_json:string;links_json:string;status:string;closed:number;last_open_status:string|null;avatar_id:string|null;created_by:string;created_at:string;updated_at:string;version:number;tag_snapshot_version:number|null};
+export const archiveDeletionInput=z.object({id:z.uuid(),expected_version:expectedVersion,request_id:requestId}).strict();
+export const archiveListInput=z.object({type:archiveType,deleted:z.union([z.boolean(),z.enum(['true','false']).transform(v=>v==='true')]).default(false),query:z.string().trim().max(200).default(''),scope:z.enum(['all','mine','unread']).default('all'),status:z.string().max(80).default(''),member_id:z.union([z.uuid(),z.literal('')]).default(''),closed:z.enum(['all','open','closed']).default('all'),tag_ids:z.array(z.uuid()).max(30).default([]).describe('按当前词库类别分组：同类别任一标签匹配、不同类别同时匹配。关闭档案按冻结绑定匹配稳定标签 ID；仅计入当前成员可见的来源。'),limit:z.coerce.number().int().min(1).max(100).default(30),before:z.string().max(150).optional()});
+type Row={id:string;type:'person'|'org';name:string;contacts_json:string;links_json:string;status:string;closed:number;deleted:number;deleted_at:string|null;deleted_by:string|null;deleted_snapshot_version:number|null;last_open_status:string|null;avatar_id:string|null;created_by:string;created_at:string;updated_at:string;version:number;tag_snapshot_version:number|null};
 export type BoundMember={id:string;name:string;frozen:boolean};
-export type Archive=Omit<Row,'contacts_json'|'links_json'|'closed'>&{contacts:z.infer<typeof contact>[];links:z.infer<typeof link>[];closed:boolean;observation_count:number;latest_observation:string|null;members:BoundMember[];bindings:Record<string,BoundMember[]>;tags:TagBinding[];tag_summary?:{tags:TagLabel[];total:number}};
-function present(row:Row&{members_json?:string;observation_count?:number;latest_observation?:string|null}):Archive{const {contacts_json,links_json,members_json,...rest}=row;return {...rest,closed:!!row.closed,contacts:JSON.parse(contacts_json),links:JSON.parse(links_json),observation_count:row.observation_count??0,latest_observation:row.latest_observation??null,members:JSON.parse(members_json??'[]').map((m:BoundMember)=>({...m,frozen:!!m.frozen})),bindings:{},tags:[]};}
+export type Archive=Omit<Row,'contacts_json'|'links_json'|'closed'|'deleted'>&{contacts:z.infer<typeof contact>[];links:z.infer<typeof link>[];closed:boolean;deleted:boolean;observation_count:number;latest_observation:string|null;members:BoundMember[];bindings:Record<string,BoundMember[]>;tags:TagBinding[];tag_summary?:{tags:TagLabel[];total:number}};
+function present(row:Row&{members_json?:string;observation_count?:number;latest_observation?:string|null}):Archive{const {contacts_json,links_json,members_json,...rest}=row;return {...rest,closed:!!row.closed,deleted:!!row.deleted,contacts:JSON.parse(contacts_json),links:JSON.parse(links_json),observation_count:row.observation_count??0,latest_observation:row.latest_observation??null,members:JSON.parse(members_json??'[]').map((m:BoundMember)=>({...m,frozen:!!m.frozen})),bindings:{},tags:[]};}
 const observationSummary="(SELECT count(*) FROM observations o WHERE o.archive_id=a.id AND o.deleted=0) observation_count,(SELECT substr(v.body,1,240) FROM observations o JOIN observation_versions v ON v.observation_id=o.id AND v.version=o.content_version WHERE o.archive_id=a.id AND o.deleted=0 ORDER BY o.updated_at DESC,o.id DESC LIMIT 1) latest_observation";
 const currentMembers="(SELECT json_group_array(json_object('id',m.id,'name',m.name,'frozen',m.frozen)) FROM archive_bindings b JOIN members m ON m.id=b.member_id WHERE b.archive_id=a.id AND b.status=a.status) members_json";
 
@@ -29,18 +31,19 @@ export class Archives{
  stmt(sql:string,...args:unknown[]){return this.env.DB.prepare(sql).bind(...args);}
  async get(id:string,version?:number,open=false){
   z.uuid().parse(id);const row=await this.stmt(`SELECT a.*,${currentMembers},${observationSummary} FROM archives a WHERE a.id=?`,id).first<Row>();
-  if(!row)throw new Failure(404,'NOT_FOUND','档案不存在');
+  if(!row||(row.deleted&&this.actor.role!=='admin'))throw new Failure(404,'NOT_FOUND','档案不存在或无权读取');
+  if(row.deleted&&(open||version!==undefined))throw new Failure(409,'ARCHIVE_DELETED','档案已删除，请先恢复档案');
   if(open&&row.closed)throw new Failure(409,'ARCHIVE_CLOSED','档案已关闭，请先核对；修改不能替代显式重新开启');
   if(version!==undefined&&row.version!==version)throw new Failure(409,'VERSION_CONFLICT','档案已被更新，请重新读取后核对');
   const archive=present(row),bindings=await this.stmt('SELECT b.status,m.id,m.name,m.frozen FROM archive_bindings b JOIN members m ON m.id=b.member_id WHERE b.archive_id=? ORDER BY m.name,m.id',id).all<BoundMember&{status:string}>();
   for(const {status,...m} of bindings.results)(archive.bindings[status]??=[]).push({...m,frozen:!!m.frozen});
   return archive;
  }
- guard(id:string,version:number,key:string,open=true){return this.stmt(`INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(SELECT 1 FROM archives WHERE id=? AND version=? ${open?'AND closed=0':''}) THEN 1 ELSE 0 END)`,key,id,version);}
+ guard(id:string,version:number,key:string,open=true){return this.stmt(`INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(SELECT 1 FROM archives WHERE id=? AND version=? AND deleted=0 ${open?'AND closed=0':''}) THEN 1 ELSE 0 END)`,key,id,version);}
  event(id:string,kind:string,before:unknown,after:unknown,at=now(),observationId:string|null=null){return this.stmt('INSERT INTO archive_events(id,archive_id,actor_id,source,kind,before_json,after_json,observation_id,created_at) VALUES(?,?,?,?,?,?,?,?,?)',uid(),id,this.actor.id,this.source,kind,JSON.stringify(before),JSON.stringify(after),observationId,at);}
- async detail(id:string){const archive=await this.get(id);return {archive:{...archive,url:this.url(archive),tags:await new TagState(this.env,this.actor).list(id,archive.closed,archive.tag_snapshot_version)}};}
+ async detail(id:string){const archive=await this.get(id);return {archive:{...archive,url:this.url(archive),tags:await new TagState(this.env,this.actor).list(id,archive.closed||archive.deleted,archive.deleted?archive.deleted_snapshot_version:archive.tag_snapshot_version)}};}
  async list(input:unknown){
-  const a=archiveListInput.parse(input),where=['a.type=?'],args:unknown[]=[a.type],unread=unreadPredicate(this.actor);
+  const a=archiveListInput.parse(input);if(a.deleted)assertAdmin(this.actor);const where=['a.type=?','a.deleted=?'],args:unknown[]=[a.type,a.deleted?1:0],unread=unreadPredicate(this.actor);
   const value='%'+a.query.replace(/[\\%_]/g,'\\$&')+'%',match=`SELECT json_object('observation_id',o.id,'excerpt',substr(v.body,max(1,instr(lower(v.body),lower(?))-60),240)) FROM observations o JOIN observation_versions v ON v.observation_id=o.id AND v.version=o.content_version WHERE o.archive_id=a.id AND o.deleted=0 AND v.body LIKE ? ESCAPE '\\' ORDER BY o.updated_at DESC,o.id DESC LIMIT 1`;
   if(a.query){where.push(`(a.name LIKE ? ESCAPE '\\' OR a.contacts_json LIKE ? ESCAPE '\\' OR EXISTS(SELECT 1 FROM observations o JOIN observation_versions v ON v.observation_id=o.id AND v.version=o.content_version WHERE o.archive_id=a.id AND o.deleted=0 AND v.body LIKE ? ESCAPE '\\'))`);args.push(value,value,value);}
   if(a.status){where.push('a.status=?');args.push(a.status);}
@@ -62,6 +65,17 @@ export class Archives{
   const rows=await this.stmt(`SELECT a.*,${currentMembers},${observationSummary},(SELECT count(*) FROM archive_events e WHERE e.archive_id=a.id AND ${unread.sql}) unread_count,${a.query?'('+match+')':'NULL'} search_match_json FROM archives a WHERE ${where.join(' AND ')} ORDER BY a.updated_at DESC,a.id DESC LIMIT ?`,...unread.args,...(a.query?[a.query,value]:[]),...args,a.limit+1).all<Row&{unread_count:number;search_match_json:string|null}>();
   const items=rows.results.slice(0,a.limit).map(({search_match_json,...row})=>({...present(row),unread_count:row.unread_count,search_match:search_match_json?JSON.parse(search_match_json):null})),last=items.at(-1),summaries=await new TagState(this.env,this.actor).summaries(items.map(i=>i.id));
   return {counts:counts?{...counts}:undefined,archives:items.map(item=>{const {tags:_,...summary}=item;return {...summary,url:this.url(item),tag_summary:summaries.get(item.id)??{tags:[],total:0}};}),next_cursor:rows.results.length>a.limit&&last?`${last.updated_at}|${last.id}`:null};
+ }
+ async setDeleted(input:unknown,deleted:boolean){
+  const a=archiveDeletionInput.parse(input);return command(this.env,this.actor,{requestId:a.request_id,operation:deleted?'archive.delete':'archive.restore',parameters:a,requireAdmin:true},async()=>{
+   const old=await this.get(a.id);if(old.version!==a.expected_version)throw new Failure(409,'VERSION_CONFLICT','档案已被更新，请重新读取后核对');
+   const changed=old.deleted!==deleted,key=uid(),at=now(),statements=[this.stmt('INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(SELECT 1 FROM archives WHERE id=? AND version=? AND deleted=?) THEN 1 ELSE 0 END)',key,a.id,a.expected_version,old.deleted?1:0)];
+   if(changed){
+    if(deleted&&!old.closed)statements.push(new TagState(this.env,this.actor).snapshot(a.id,old.version+1));
+    statements.push(this.stmt('UPDATE archives SET deleted=?,deleted_at=?,deleted_by=?,deleted_snapshot_version=?,version=version+1,updated_at=? WHERE id=?',deleted?1:0,deleted?at:null,deleted?this.actor.id:null,deleted?(old.closed?old.tag_snapshot_version:old.version+1):null,at,a.id),this.event(a.id,deleted?'archive.deleted':'archive.restored',{deleted:old.deleted},{deleted},at));
+   }
+   statements.push(this.stmt('DELETE FROM mutation_guards WHERE id=?',key));return {result:{id:a.id,version:old.version+(changed?1:0),deleted,changed,archive_url:this.url(old)},statements};
+  });
  }
  async create(input:unknown){const a=archiveCreateInput.parse(input);return command(this.env,this.actor,{requestId:a.request_id,operation:'archive.create',parameters:{...a,request_id:undefined}},async()=>{
   const id=uid(),at=now(),plan=await this.planBindings(id,a.type,a.status,a.member_ids),closed=isClosedState(a.status);

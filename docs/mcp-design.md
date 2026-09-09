@@ -100,3 +100,13 @@ Codex 当前将 MCP 配置放在用户级 `~/.codex/config.toml` 或受信任项
 本地探针中有 instructions、主题指南、结构化结果和错误恢复的局部试作，尚未完成该次交付审查，不作为正式使用体验证据。历史已验收范围以 [验证报告](./technical-validation.md)为准，不因需求文档更新扩大结论。
 
 S2 交付接入、持久性、服务指引和调用留存基础；S3–S7 随档案与观察实现分页、生命周期、错误恢复和权限；S11 交付材料压缩及标签；S12/S14 交付词库维护；S13 完成任务审阅和留存清理。请求设计见 [请求留存](./mcp-request-data.md)，具体完成标准见 [任务拆解](./implementation-issues.md)。工具说明与业务功能一起交付，不留到网页完成之后。
+
+## 整张档案回收与账号范围（2026-09-09）
+
+- `list_archives` 默认 `deleted:false`；管理员用 `deleted:true` 读取回收列表，类型、查询与分页参数沿用。
+- `delete_archive` / `restore_archive` 输入 `id`、`expected_version`、`request_id`，可选 `task_id`；两者仅管理员可调用。结果返回 `id/version/deleted/changed/archive_url`，重放附带 `replayed:true`。
+- 对应 HTTP 为 `POST /api/archives/delete`、`POST /api/archives/restore`，与 MCP 共用事务命令。读取已删除内容只允许管理员；写入拒绝 `ARCHIVE_DELETED`，不能为了完成其他任务擅自恢复或重新开启。
+- 恢复不改变原关闭状态、观察删除标记或成员归属。图片和旧内容版本保留。已删除档案不能创建新任务上下文，恢复前不进入普通任务副本与产物展示。
+- `list_members` 默认 `state:active`，支持 `frozen` 和显式 `all`；对应 HTTP 为 `/api/admin/members?state=...`。搜索协作成员的目录仍保留冻结身份，供既有绑定说明；服务端禁止新分配冻结成员。
+
+验收：`node scripts/verify-archive-trash.mjs`；`--remote` 在隔离 staging 验证真实 HTTP/MCP、图片及桌面/手机操作，收尾把虚构档案移入回收列表并冻结验收成员。

@@ -28,7 +28,7 @@ export class Images{
   }else await this.archives.get(archiveId!,undefined,true);
  }
  subjectGuard(purpose:Upload['purpose'],archiveId:string|null,memberId:string|null,key:string){
-  return purpose==='member_avatar'?this.stmt("INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(SELECT 1 FROM members WHERE id=?) AND (?=? OR EXISTS(SELECT 1 FROM members WHERE id=? AND role='admin')) THEN 1 ELSE 0 END)",key,memberId,memberId,this.actor.id,this.actor.id):this.stmt('INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(SELECT 1 FROM archives WHERE id=? AND closed=0) THEN 1 ELSE 0 END)',key,archiveId);
+  return purpose==='member_avatar'?this.stmt("INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(SELECT 1 FROM members WHERE id=?) AND (?=? OR EXISTS(SELECT 1 FROM members WHERE id=? AND role='admin')) THEN 1 ELSE 0 END)",key,memberId,memberId,this.actor.id,this.actor.id):this.stmt('INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(SELECT 1 FROM archives WHERE id=? AND closed=0 AND deleted=0) THEN 1 ELSE 0 END)',key,archiveId);
  }
  async prepare(input:unknown){
   const a=prepareImageInput.parse(input),id=uid(),key=uid(),subjectKey=uid(),at=now(),expires=new Date(Date.now()+10*60000).toISOString();await this.subject(a.purpose,a.archive_id??null,a.member_id??null);
@@ -40,7 +40,7 @@ export class Images{
   ]);}catch(e){rejectGuard(e);}
   return {upload_id:id,attachment_id:id,method:'PUT',url:`${this.env.APP_ORIGIN}/uploads/${id}`,headers:{'Content-Type':a.mime_type,'X-Upload-Ticket':secret},expires_at:expires,byte_size:a.byte_size,sha256:a.sha256,limits:{max_bytes:MAX_IMAGE_BYTES,max_images_per_observation:10,max_pixels:40_000_000},recovery:'上传票据只用于这一次固定内容上传，不回显到聊天或记录。完成后查询上传状态取得可引用附件；准备响应丢失可重新准备，不会发布观察。'};
  }
- async status(id:string){z.uuid().parse(id);const row=await this.stmt('SELECT * FROM attachments WHERE id=? AND owner_id=?',id,this.actor.id).first<Upload>();if(!row)throw new Failure(404,'UPLOAD_NOT_FOUND','上传不存在或不属于本人');return {upload_id:id,state:row.state==='ready'?'ready':row.ticket_expires_at<=now()?'expired':row.state,attachment:row.state==='ready'?this.info(row):null,expires_at:row.ticket_expires_at,retry_after:row.state==='uploading'?row.lease_until:null};}
+ async status(id:string){z.uuid().parse(id);const row=await this.stmt('SELECT * FROM attachments WHERE id=? AND owner_id=?',id,this.actor.id).first<Upload>();if(!row)throw new Failure(404,'UPLOAD_NOT_FOUND','上传不存在或不属于本人');if(row.archive_id)await this.archives.get(row.archive_id);return {upload_id:id,state:row.state==='ready'?'ready':row.ticket_expires_at<=now()?'expired':row.state,attachment:row.state==='ready'?this.info(row):null,expires_at:row.ticket_expires_at,retry_after:row.state==='uploading'?row.lease_until:null};}
  static async receive(env:Env,id:string,request:Request){
   z.uuid().parse(id);const token=request.headers.get('X-Upload-Ticket');if(!token||token.length>100)throw new Failure(401,'UPLOAD_TICKET_INVALID','缺少有效上传票据');
   const row=await env.DB.prepare('SELECT * FROM attachments WHERE id=? AND ticket_hash=?').bind(id,await digest(token)).first<Upload>();if(!row)throw new Failure(401,'UPLOAD_TICKET_INVALID','上传票据不匹配');
@@ -96,6 +96,7 @@ export class Images{
  }
  async read(id:string){
   z.uuid().parse(id);const row=await this.stmt("SELECT * FROM attachments WHERE id=? AND state='ready'",id).first<Upload>();if(!row)throw new Failure(404,'IMAGE_NOT_FOUND','图片不存在或已清理');
+  if(row.archive_id)await this.archives.get(row.archive_id);
   if(row.observation_id){if(!await this.stmt("SELECT 1 FROM observations WHERE id=? AND (deleted=0 OR author_id=? OR ?='admin')",row.observation_id,this.actor.id,this.actor.role).first())throw new Failure(404,'IMAGE_NOT_FOUND','图片不存在或无权读取');}
   else if(row.purpose==='observation'){if(row.owner_id!==this.actor.id)throw new Failure(404,'IMAGE_NOT_FOUND','图片不存在或无权读取');}
   else {const used=await this.stmt('SELECT 1 FROM avatar_history WHERE attachment_id=? OR previous_attachment_id=? LIMIT 1',id,id).first();if(!used&&row.owner_id!==this.actor.id)throw new Failure(404,'IMAGE_NOT_FOUND','图片不存在或无权读取');}

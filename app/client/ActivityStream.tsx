@@ -1,6 +1,6 @@
 import React,{useState,type ReactNode} from 'react';
 import {groupActivities,type ActivityEvent,type ActivityGroup} from '../shared/activity-groups';
-const labels:Record<string,string>={'archive.created':'建档','archive.profile_changed':'资料','archive.state_changed':'状态','archive.members_changed':'成员','archive.closed':'关闭','archive.reopened':'重新开启','archive.avatar_changed':'头像','archive.tags_changed':'标签','observation.created':'新增观察','observation.edited':'编辑观察','observation.deleted':'删除观察','observation.restored':'恢复观察'};
+const labels:Record<string,string>={'archive.deleted':'删除档案','archive.restored':'恢复档案','archive.created':'建档','archive.profile_changed':'资料','archive.state_changed':'状态','archive.members_changed':'成员','archive.closed':'关闭','archive.reopened':'重新开启','archive.avatar_changed':'头像','archive.tags_changed':'标签','observation.created':'新增观察','observation.edited':'编辑观察','observation.deleted':'删除观察','observation.restored':'恢复观察'};
 type Event=ActivityEvent&{actor_name:string;observation:unknown};
 export function ActivityStream<T extends Event>({events,renderRecord,renderEvent}:{events:T[];renderRecord:(e:T)=>ReactNode;renderEvent:(e:T)=>ReactNode}){
  return <>{groupActivities(events).map(group=><ActivityBatch key={group.id} group={group} renderRecord={renderRecord} renderEvent={renderEvent}/>)}</>;
