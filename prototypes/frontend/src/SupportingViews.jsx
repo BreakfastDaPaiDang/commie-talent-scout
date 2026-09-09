@@ -7,6 +7,7 @@ import { MemberPicker } from "./MemberPicker.jsx";
 import { AvatarEditor } from "./AvatarEditor.jsx";
 import { isWorkState, uuid, canViewRecord } from "./model.js";
 import { protocolText } from "./protocol.js";
+import { AgentHandoff } from "../../../app/ui/AgentHandoff";
 
 export function Accounts({ w }) {
   return (
@@ -69,41 +70,7 @@ export function Accounts({ w }) {
   );
 }
 export function AgentPage({ w }) {
-  return (
-    <section className="agent-simple">
-      <div className="agent-copy">
-        <span className="eyebrow">使用说明</span>
-        <h2>复制，交给你的 Agent。</h2>
-        <p>
-          把提示词粘贴到你常用的 Agent，
-          <br />
-          再把需要整理的材料交给它。
-        </p>
-        <p className="agent-examples">
-          查找档案、整理近况、补充观察，
-          <br />
-          它会按你的成员权限协作。
-        </p>
-        <Button
-          variant="primary"
-          icon="copy"
-          onClick={async () => {
-            try {
-              await navigator.clipboard.writeText(protocolText);
-              w.notify("提示词已复制，粘贴给 Agent 即可");
-            } catch {
-              w.setDialog({ type: "protocol" });
-            }
-          }}
-        >
-          复制提示词给 Agent
-        </Button>
-      </div>
-      <div className="agent-art" aria-hidden="true">
-        <img src="/art/agent-handoff-v3.png" alt="" />
-      </div>
-    </section>
-  );
+  return <AgentHandoff onCopy={() => w.setDialog({ type: "protocol" })} />;
 }
 export function Dialogs({ w }) {
   const { dialog, entity, actor, locked, closeDialog } = w;

@@ -65,9 +65,13 @@ node --experimental-transform-types scripts/restore.mjs --snapshot snapshots/pro
 
 当前早期阈值：最近 24 小时 MCP 调用 10,000 次、新上传索引字节 1 GiB、就绪图片索引总量 5 GiB、D1 512 MiB。阈值和结果显示在工作流摘要；采集失败不能显示为正常。图片数值来自应用索引，含已删除业务仍保留的历史引用，不代表 R2 账单容量。
 
-这些是运行用量告警，不是实际账单告警，也不是每月 10 美元的硬性消费上限。Worker CPU 上限为每次 2,000 ms，采样日志为 10%，查询参数脱敏；Cloudflare 账单提醒尚须在有权限的账户设置中完成并验证。
+这些是运行用量告警，不是每月 10 美元的硬性消费上限。Worker CPU 上限为每次 2,000 ms，采样日志为 10%，查询参数脱敏。
+
+2026-09-09 已通过 Cloudflare 账户 API 核验已有 `billing_budget_alert`：启用，当前账期累计用量费用阈值 10 美元，收件人是账户所有者，email 通道 eligible/ready 均为 true。没有重复创建提醒、改变阈值或主动制造费用。此项证明提醒配置可用，未声称已收到超阈值邮件；提醒不停止消费，实际月账单还包括固定订阅等费用。参考 [Budget alerts](https://developers.cloudflare.com/billing/manage/budget-alerts/)。
 
 ## 开发测试身份与回收数据
+
+机器客户端入口：Cloudflare Configuration Rule `cts_machine_client_bic` 仅对 `scout.dapaidang.org`、`scout-staging.dapaidang.org` 的精确 `/mcp` 和 `/uploads/` 前缀关闭 Browser Integrity Check，避免默认 Python urllib 被 403/1010 拦截。全局 Browser Integrity Check 保持开启，应用认证、上传票据、权限和限流照常执行。`node scripts/verify-browserless-http.mjs --remote`（或明确 `--production`）检查有效请求、匿名请求及撤销边界。
 
 用户指定 production 的 `admin`（开发 Agent 专用测试号）供开发与验收使用，首次改密已完成。私有凭据保存于本机忽略的 `secrets/development-test-admin.json`；不得写入提交、Issue、截图或日志。日常开发优先使用隔离 staging，生产验收使用该测试号。
 

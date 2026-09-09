@@ -3,6 +3,7 @@ import {join,resolve,dirname} from 'node:path';
 import {spawn} from 'node:child_process';
 import {randomUUID} from 'node:crypto';
 import assert from 'node:assert/strict';
+import {bootstrapPrompt} from '../app/shared/agent-handoff.ts';
 
 const mode=process.argv[2]??'temporary';
 assert.ok(['unselected','temporary','persistent'].includes(mode));
@@ -24,14 +25,14 @@ assert.equal(login.status,200);cookie=login.headers.get('set-cookie').split(';')
 const member=(await login.json()).member;
 const saved=[];
 try{
-  if(mode!=='unselected'){
+  {
     const response=await fetch(base+'/api/connections',{method:'POST',headers:{Origin:base,Cookie:cookie,'Content-Type':'application/json'},body:JSON.stringify({name:`Codex ${mode} 验收 ${randomUUID().slice(0,8)}`,days:1})});assert.equal(response.status,200);credential=await response.json();
     writeFileSync(join(root,'connection.json'),JSON.stringify(credential,null,2),{mode:0o600});
   }
   let config=baseline+'\n';
   if(mode==='persistent')config+=`\n[mcp_servers.cts_staging]\nurl = ${JSON.stringify(base+'/mcp')}\nhttp_headers = { Authorization = ${JSON.stringify('Bearer '+credential.secret)} }\nstartup_timeout_sec = 30\n`;
   writeFileSync(configPath,config,{mode:0o600});
-  const prompt=readFileSync('app/shared/bootstrap-prompt.txt','utf8').replace('{{MCP_SERVER_URL}}',base+'/mcp').replace('{{AUTHORIZATION_GUIDE}}',base+'/account/connections');
+  const prompt=bootstrapPrompt(readFileSync('app/shared/bootstrap-prompt.txt','utf8'),base,credential);
   const modes=mode==='persistent'?['first','fresh']:['first'];
   for(const round of modes){
     // The private client root isolates acceptance configuration from the maintainer's real client.

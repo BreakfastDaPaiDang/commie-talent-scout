@@ -6,10 +6,11 @@ import {setDefaultAutoSelectFamily} from 'node:net';
 // This verification host advertises IPv6 DNS records but cannot reliably connect over IPv6.
 setDefaultResultOrder('ipv4first');
 setDefaultAutoSelectFamily(false);
-export async function verificationClient(name){
- const remote=process.argv.includes('--remote'),target=remote?'cloud':'local',base=remote?'https://scout-staging.dapaidang.org':'http://127.0.0.1:8790';
- assert.equal((await fetch(base+'/api/health',{headers:{Connection:'close'}}).then(r=>r.json())).environment,'staging');
- const admin=JSON.parse(readFileSync(`secrets/bootstrap-staging-${remote?'remote':'local'}-admin.json`));let cookie;const recoveries=[];
+export async function verificationClient(name,{environment='staging'}={}){
+ assert.ok(['staging','production'].includes(environment));const production=environment==='production';if(production)assert.ok(process.argv.includes('--production'),'production verification must be explicitly selected');
+ const remote=production||process.argv.includes('--remote'),target=production?'production':remote?'cloud':'local',base=production?'https://scout.dapaidang.org':remote?'https://scout-staging.dapaidang.org':'http://127.0.0.1:8790';
+ assert.equal((await fetch(base+'/api/health',{headers:{Connection:'close'}}).then(r=>r.json())).environment,environment);
+ const admin=JSON.parse(readFileSync(production?'secrets/development-test-admin.json':`secrets/bootstrap-staging-${remote?'remote':'local'}-admin.json`));let cookie;const recoveries=[];
  async function http(path,body){const r=await fetch(base+'/api'+path,{method:body===undefined?'GET':'POST',headers:{Connection:'close',Origin:base,'Content-Type':'application/json',...(cookie?{Cookie:cookie}:{})},body:body===undefined?undefined:JSON.stringify(body)});return {status:r.status,body:await r.json(),cookie:r.headers.get('set-cookie')?.split(';')[0]};}
  const login=await http('/auth/login',{username:admin.username,password:admin.password});assert.equal(login.status,200);cookie=login.cookie;
  const connection=await http('/connections',{name:'验收 '+name,days:1});assert.equal(connection.status,200);

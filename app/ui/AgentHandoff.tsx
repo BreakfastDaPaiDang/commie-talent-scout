@@ -1,0 +1,5 @@
+import React from 'react';
+
+export function AgentHandoff({onCopy,busy=false,copied=false,fallback='',error='',onNew}:{onCopy:()=>void;busy?:boolean;copied?:boolean;fallback?:string;error?:string;onNew?:()=>void}){
+ return <section className="agent-simple"><div className="agent-copy"><span className="eyebrow">让 Agent 帮你干活</span><h1>整理资料，交给 Agent。</h1><p>让它帮你查档案、整理材料、写观察，<br/>把值得留下的信息记到这里。</p><p>复制时自动创建专用连接。<br/>仅发给你要授权的 Agent，无需它操作浏览器。</p><button className="button primary" disabled={busy} onClick={onCopy}>{busy?'正在准备接入…':'复制提示词给 Agent'}</button>{error&&<p className="form-error" role="alert">{error}</p>}{copied&&<p role="status">接入信息已复制，粘贴给 Agent 即可。</p>}{fallback&&<div className="copy-fallback"><label>请选择下方接入信息复制<textarea readOnly value={fallback} onFocus={e=>e.currentTarget.select()} rows={12}/></label></div>}{onNew&&<div className="inline-actions"><button className="button quiet" disabled={busy} onClick={onNew}>为另一个 Agent 复制</button><a className="text-button" href="/account/connections">管理连接</a></div>}</div><div className="agent-art" aria-hidden="true"><img src="/art/agent-handoff-v3.png" alt=""/></div></section>;
+}

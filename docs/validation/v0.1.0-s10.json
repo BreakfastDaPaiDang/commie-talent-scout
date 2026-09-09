@@ -121,5 +121,24 @@
       "usage_check": true,
       "alerts": []
     }
+  },
+  "budget_alert_configuration": {
+    "verified_at": "2026-09-09T09:49:50.987461+00:00",
+    "source": "Cloudflare account alerting API",
+    "type": "billing_budget_alert",
+    "enabled": true,
+    "usage_spend_threshold_usd": 10,
+    "email_recipients": 1,
+    "recipient_matches_account_owner": true,
+    "email_eligible": true,
+    "email_ready": true,
+    "actual_threshold_email_delivery": "not_triggered",
+    "hard_spend_cap": false
+  },
+  "maintainer_network_report": {
+    "reported_at": "2026-09-09",
+    "proxy_enabled": false,
+    "verification_in_progress": true,
+    "operator_and_full_business_results": "awaiting_maintainer_feedback"
   }
 }

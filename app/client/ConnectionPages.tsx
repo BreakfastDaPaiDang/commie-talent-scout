@@ -1,18 +1,29 @@
-import React,{useContext,useEffect,useState,type FormEvent} from 'react';
+import React,{useContext,useEffect,useRef,useState,type FormEvent} from 'react';
 import {createPortal} from 'react-dom';
 import {ModalAlertTarget} from '../ui/Modal';
 import {api} from './api';
 import template from '../shared/bootstrap-prompt.txt?raw';
+import {bootstrapPrompt} from '../shared/agent-handoff';
+import {AgentHandoff} from '../ui/AgentHandoff';
 
 export function PageError({error,retry,retryLabel='重试'}:{error:string;retry?:()=>void;retryLabel?:string}){
   const target=useContext(ModalAlertTarget),content=error?<div className="form-error" role="alert">{error}{retry&&<button type="button" className="button quiet" onClick={retry}>{retryLabel}</button>}</div>:null;
   return target&&content?createPortal(content,target):content;
 }
 export function AgentPage(){
-  const[copied,setCopied]=useState(false),[fallback,setFallback]=useState(false);
-  const prompt=template.replace('{{MCP_SERVER_URL}}',location.origin+'/mcp').replace('{{AUTHORIZATION_GUIDE}}',location.origin+'/account/connections');
-  async function copy(){try{await navigator.clipboard.writeText(prompt);setCopied(true);}catch{setFallback(true);}}
-  return <main className="support-content"><section className="agent-simple"><div className="agent-copy"><span className="eyebrow">让 Agent 帮你干活</span><h1>整理资料，交给 Agent。</h1><p>让它帮你查档案、整理材料、写观察，<br/>把值得留下的信息记到这里。</p><button className="button primary" onClick={copy}>复制提示词给 Agent</button>{copied&&<p role="status">提示词已复制，粘贴给 Agent 即可。</p>}{fallback&&<div className="copy-fallback"><label>请选择下方正文复制<textarea readOnly value={prompt} onFocus={e=>e.currentTarget.select()} rows={12}/></label></div>}</div><div className="agent-art" aria-hidden="true"><img src="/art/agent-handoff-v3.png" alt=""/></div></section></main>;
+  const[copied,setCopied]=useState(false),[fallback,setFallback]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState(''),[ready,setReady]=useState(false);
+  const issued=useRef<{id:string;secret:string;expires_at:string}|null>(null),working=useRef(false);
+  async function copy(fresh=false){
+    if(working.current)return;working.current=true;setBusy(true);setError('');setCopied(false);setFallback('');
+    try{
+      if(fresh)issued.current=null;
+      if(issued.current){const items=(await api<{credentials:Connection[]}>('/connections')).credentials;if(!items.some(c=>c.id===issued.current?.id&&c.active))issued.current=null;}
+      if(!issued.current)issued.current=await api('/connections',{name:'Agent 接入 '+new Date().toLocaleString('zh-CN',{timeZone:'Asia/Shanghai',hour12:false}),days:90});
+      setReady(true);const prompt=bootstrapPrompt(template,location.origin,issued.current!);
+      try{await navigator.clipboard.writeText(prompt);setCopied(true);}catch{setFallback(prompt);}
+    }catch(e){setError((e as Error).message);}finally{working.current=false;setBusy(false);}
+  }
+  return <main className="support-content"><AgentHandoff onCopy={()=>void copy()} busy={busy} copied={copied} fallback={fallback} error={error} onNew={ready?()=>void copy(true):undefined}/></main>;
 }
 type Connection={id:string;name:string;created_at:string;expires_at:string;revoked_at:string|null;active:number;version:number};
 export function ConnectionsPage(){
@@ -23,7 +34,7 @@ export function ConnectionsPage(){
   async function revoke(item:Connection){setBusy(true);setError('');try{await api('/connections/revoke',{id:item.id});setNotice(`“${item.name}”已撤销，后续调用立即失效`);await load();}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
   return <main className="account-content"><div className="section-title"><p className="eyebrow">猎头账号</p><h1>我的连接</h1><p>每个客户端使用独立凭证，便于识别和撤销。</p></div><PageError error={error} retry={load}/>{notice&&<p role="status" className="form-notice">{notice}</p>}
     <form className="connection-form" onSubmit={create}><label>连接名称<input name="name" required maxLength={60} placeholder="例如：我的 Codex"/></label><label>有效期<select name="days" defaultValue="90"><option value="1">1 天</option><option value="30">30 天</option><option value="90">90 天</option><option value="365">1 年</option></select></label><button className="button primary" disabled={busy}>创建凭证</button></form>
-    {secret&&<section className="secret-panel"><h2>凭证只在这里显示一次</h2><p>保存到客户端支持的私有认证位置。请勿发送到聊天或提交到仓库。</p><label>个人凭证<textarea readOnly value={secret} aria-label="个人凭证" onFocus={e=>e.currentTarget.select()} rows={3}/></label><div className="inline-actions"><button className="button" onClick={async()=>{try{await navigator.clipboard.writeText(secret);setNotice('凭证已复制');}catch{setNotice('剪贴板不可用，请选择上方凭证复制');}}}>复制凭证</button><button className="button quiet" onClick={()=>setSecret('')}>我已保存，关闭显示</button></div></section>}
+    {secret&&<section className="secret-panel"><h2>凭证只在这里显示一次</h2><p>仅交给你要授权的客户端或 Agent，保存到私有认证位置，勿公开或提交到仓库。</p><label>个人凭证<textarea readOnly value={secret} aria-label="个人凭证" onFocus={e=>e.currentTarget.select()} rows={3}/></label><div className="inline-actions"><button className="button" onClick={async()=>{try{await navigator.clipboard.writeText(secret);setNotice('凭证已复制');}catch{setNotice('剪贴板不可用，请选择上方凭证复制');}}}>复制凭证</button><button className="button quiet" onClick={()=>setSecret('')}>我已保存，关闭显示</button></div></section>}
     {loading?<p role="status">正在读取连接…</p>:items.length===0?<p className="empty-state">还没有创建连接。</p>:<ul className="connection-list">{items.map(item=><li key={item.id}><div><strong>{item.name}</strong><span className="connection-state">{item.active?'有效':'已失效'}</span><p>到期 {new Date(item.expires_at).toLocaleDateString('zh-CN')}</p><small>连接标识：{item.id}</small></div>{!!item.active&&<button className="button quiet danger-text" disabled={busy} onClick={()=>void revoke(item)}>撤销</button>}</li>)}</ul>}
   </main>;
 }

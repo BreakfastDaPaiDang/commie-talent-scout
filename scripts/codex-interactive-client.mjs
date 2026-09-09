@@ -5,7 +5,8 @@ import {dirname} from 'node:path';
 
 // An actual app-server client. Approval requests wait for a human response in
 // <path>-reply.json; this harness never grants an approval automatically.
-export async function runInteractiveCodex({cli,clientHome,work,path,prompt}) {
+export async function runInteractiveCodex({cli,clientHome,work,path,prompt,requireMcp=true,serverName='cts_staging',sandbox='read-only',redactValues=[]}) {
+ const redact=value=>redactValues.reduce((text,secret)=>text.split(secret).join('[REDACTED_CREDENTIAL]'),value);
  const env={...process.env,CODEX_HOME:clientHome,PATH:dirname(cli)+';'+process.env.PATH};
  delete env.CTS_MCP_TEST_BEARER;
  const child=spawn(cli,['app-server'],{cwd:work,env,windowsHide:true,stdio:['pipe','pipe','pipe']});
@@ -71,23 +72,23 @@ export async function runInteractiveCodex({cli,clientHome,work,path,prompt}) {
  try{
   await request('initialize',{clientInfo:{name:'cts_acceptance',title:'CTS acceptance',version:'0.1.0'},capabilities:{experimentalApi:true}});
   send({method:'initialized'});
-  const started=await request('thread/start',{cwd:work,ephemeral:true,sandbox:'read-only',approvalPolicy:'on-request'});
+  const started=await request('thread/start',{cwd:work,ephemeral:true,sandbox,approvalPolicy:'on-request'});
   threadId=started.thread.id;
   const inventory=await request('mcpServerStatus/list',{threadId});
-  const server=inventory.data.find(server=>server.name==='cts_staging');
+  const server=inventory.data.find(server=>server.name===serverName);
   console.log(JSON.stringify({status:'mcp_inventory',connection:server?.runtimeStatus,tools:Object.keys(server?.tools??{}).length}));
-  assert.ok(server&&Object.keys(server.tools).length,'MCP server must connect before acceptance starts');
+  if(requireMcp)assert.ok(server&&Object.keys(server.tools).length,'MCP server must connect before acceptance starts');
   const turn=await request('turn/start',{threadId,input:[{type:'text',text:prompt}]});turnId=turn.turn.id;
   await completed;
-  writeFileSync(path+'-final.txt',final,{mode:0o600});
+  writeFileSync(path+'-final.txt',redact(final),{mode:0o600});
   const output=events.map(event=>JSON.stringify(event)).join('\n');
-  writeFileSync(path+'-events.jsonl',output,{mode:0o600});
+  writeFileSync(path+'-events.jsonl',redact(output),{mode:0o600});
   return {final,output};
  }finally{
   ended=true;clearInterval(timer);clearTimeout(timeout);
   writeFileSync(path+'-pending.json','[]',{mode:0o600});
-  writeFileSync(path+'-events.jsonl',events.map(event=>JSON.stringify(event)).join('\n'),{mode:0o600});
-  writeFileSync(path+'-stderr.txt',errors,{mode:0o600});
+  writeFileSync(path+'-events.jsonl',redact(events.map(event=>JSON.stringify(event)).join('\n')),{mode:0o600});
+  writeFileSync(path+'-stderr.txt',redact(errors),{mode:0o600});
   child.kill();
  }
 }
