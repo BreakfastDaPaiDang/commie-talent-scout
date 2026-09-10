@@ -7,12 +7,11 @@ export const qceTool = {
   localUrl: 'http://localhost:40653/qce',
 } as const;
 
-export const singleFileTool = {
-  name: 'SingleFile',
-  docsUrl: 'https://github.com/gildas-lormeau/SingleFile',
-  edgeUrl: 'https://microsoftedge.microsoft.com/addons/detail/efnbkdcfmcmnhlkaijjjmhjjgladedno',
-  chromeUrl: 'https://chromewebstore.google.com/detail/singlefile/mpiodijhokgodhhofbcjdecpffjipkle',
-  firefoxUrl: 'https://addons.mozilla.org/firefox/addon/single-file',
+export const waybackTool = {
+  name: '互联网档案馆',
+  url: 'https://web.archive.org/',
+  saveUrl: 'https://web.archive.org/save',
+  docsUrl: 'https://archivesupport.zendesk.com/hc/en-us/articles/360004651732-Using-The-Wayback-Machine',
 } as const;
 
 export const sixinTool = {

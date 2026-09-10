@@ -152,3 +152,5 @@ _Avoid_: 接触负责人、档案所有者
 辅助工具页推荐 QCE Windows Framework 版，提供最新 Releases 链接和启动/导出教程。成员直接将导出内容交给 AI；网站不内置聊天导入。MCP 的 `qq_export` 主题提供本机操作指南，由有本机权限的 Agent 检测、启动、认证并导出；云端不连接成员 localhost 或持有 QCE 令牌。具体决策见 [ADR 0013](./docs/adr/0013-local-qce-export-guidance.md)。
 
 Issue #38：顶栏在 Agent 接入旁增加辅助工具入口，保留原菜单；推荐页新增 SingleFile 本地网页留存、Sixin.cc 临时文字分享与官方链接和教程。后者区分阅读后销毁与定时销毁，不保证防复制截图。网页留存 HTML 可由成员按需绑定为材料；页面不自动保存网页或传送私信。
+
+Issue #39 用户进一步明确需要在线网页档案馆。网页留存推荐改为 Internet Archive 的 Wayback Machine，替代 #38 暂选的 SingleFile。提供查历史与保存当前公开网页入口，明确已失效页面需已有存档才可找回；QCE、Sixin.cc 和顶部入口保留。

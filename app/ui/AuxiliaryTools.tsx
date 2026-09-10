@@ -1,5 +1,5 @@
 import React from 'react';
-import {qceTool,singleFileTool,sixinTool} from '../shared/auxiliary-tools';
+import {qceTool,waybackTool,sixinTool} from '../shared/auxiliary-tools';
 import {Icon} from './icons';
 import './auxiliary-tools.css';
 
@@ -27,25 +27,25 @@ export function AuxiliaryTools(){
         <p className="auxiliary-tip">以后需要边聊天边导出时，通过 <code>{qceTool.launcher}</code> 启动 QQ 即可。</p>
       </section>
     </article>
-    <article className="auxiliary-card" aria-labelledby="singlefile-title">
+    <article className="auxiliary-card" aria-labelledby="wayback-title">
       <div className="auxiliary-intro">
         <span className="auxiliary-icon" aria-hidden="true"><Icon name="file" size={28}/></span>
-        <p className="auxiliary-platform">浏览器扩展 · 网页留存</p>
-        <h2 id="singlefile-title">{singleFileTool.name}</h2>
-        <p>把当前网页保存成一个 HTML 文件，留住正文、图片与排版。帖子日后删除或链接失效，仍可打开本地副本查看。</p>
-        <a className="button primary" href={singleFileTool.edgeUrl} target="_blank" rel="noopener noreferrer">安装 Edge 扩展<Icon name="arrow"/></a>
-        <div className="auxiliary-browser-links"><a href={singleFileTool.chromeUrl} target="_blank" rel="noopener noreferrer">Chrome 版</a><a href={singleFileTool.firefoxUrl} target="_blank" rel="noopener noreferrer">Firefox 版</a></div>
-        <a className="auxiliary-docs" href={singleFileTool.docsUrl} target="_blank" rel="noopener noreferrer">GitHub 与其他浏览器安装说明</a>
+        <p className="auxiliary-platform">Wayback Machine · 在线网页存档</p>
+        <h2 id="wayback-title">{waybackTool.name}</h2>
+        <p>输入原网址，查找网页过去的样子。帖子删除或网站打不开时，尝试查看已有的历史副本；也可以提前保存仍能访问的公开网页。</p>
+        <a className="button primary" href={waybackTool.url} target="_blank" rel="noopener noreferrer">查找网页历史<Icon name="arrow"/></a>
+        <a className="auxiliary-docs" href={waybackTool.saveUrl} target="_blank" rel="noopener noreferrer">保存当前网页 · Save Page Now</a>
+        <a className="auxiliary-docs" href={waybackTool.docsUrl} target="_blank" rel="noopener noreferrer">查看官方使用说明</a>
       </div>
-      <section className="auxiliary-tutorial" aria-labelledby="singlefile-steps">
-        <h3 id="singlefile-steps">保存一份网页</h3>
+      <section className="auxiliary-tutorial" aria-labelledby="wayback-steps">
+        <h3 id="wayback-steps">查历史，也提前留底</h3>
         <ol>
-          <li><strong>安装对应浏览器扩展</strong><p>选择你正在使用的浏览器，安装 SingleFile，并将它固定到扩展工具栏。</p></li>
-          <li><strong>打开帖子，展开要保留的内容</strong><p>展开全文和需要的评论，滚动页面，等图片加载完成。</p></li>
-          <li><strong>点击 SingleFile 保存</strong><p>点击工具栏里的扩展按钮，等待保存完成。文件通常会出现在浏览器的下载文件夹。</p></li>
-          <li><strong>打开副本，检查并留存</strong><p>用浏览器打开保存的 HTML，确认正文和图片齐全。需要归入档案时，可上传到“绑定材料”，并在说明中写下原链接与保存日期。</p></li>
+          <li><strong>找旧页面：粘贴原网址</strong><p>打开“查找网页历史”，输入帖子的完整原链接，查询是否已有存档。</p></li>
+          <li><strong>选择日期，查看历史副本</strong><p>选择有存档的年份、日期和时间。检查正文与图片，再复制这份历史副本的链接，记录它对应的存档日期。</p></li>
+          <li><strong>防删帖：趁页面可访问时保存</strong><p>打开 Save Page Now，填入要保留的公开网页链接并提交；按网站提示完成所需操作，等待保存结果。</p></li>
+          <li><strong>打开存档，确认内容保存成功</strong><p>检查返回的副本，保留原网址、存档链接和日期。未成功保存的页面可稍后重试；动态内容和登录后内容可能无法完整保存。</p></li>
         </ol>
-        <p className="auxiliary-tip">保存后检查一次副本；未加载的评论、视频等动态内容未必完整保留。</p>
+        <p className="auxiliary-tip">已删除的页面必须此前有存档才可能找回，无法恢复从未保存的内容。这里是公开存档服务，私人材料请留在档案的“绑定材料”。</p>
       </section>
     </article>
     <article className="auxiliary-card" aria-labelledby="sixin-title">

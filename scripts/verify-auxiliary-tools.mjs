@@ -38,25 +38,24 @@ try{
   assert.equal(await page.getByRole('link',{name:'本机导出页面'}).getAttribute('href'),'http://localhost:40653/qce');
   assert.equal(await page.locator('[aria-labelledby="qce-title"] .auxiliary-tutorial li').count(),5);
   const officialLinks={
-    '安装 Edge 扩展':'https://microsoftedge.microsoft.com/addons/detail/efnbkdcfmcmnhlkaijjjmhjjgladedno',
-    'Chrome 版':'https://chromewebstore.google.com/detail/singlefile/mpiodijhokgodhhofbcjdecpffjipkle',
-    'Firefox 版':'https://addons.mozilla.org/firefox/addon/single-file',
-    'GitHub 与其他浏览器安装说明':'https://github.com/gildas-lormeau/SingleFile',
+    '查找网页历史':'https://web.archive.org/',
+    '保存当前网页 · Save Page Now':'https://web.archive.org/save',
+    '查看官方使用说明':'https://archivesupport.zendesk.com/hc/en-us/articles/360004651732-Using-The-Wayback-Machine',
     '打开阅后即焚':'https://www.sixin.cc/',
     '查看使用与销毁说明':'https://www.sixin.cc/faq',
   };
   for(const [name,url] of Object.entries(officialLinks)){
     const link=page.getByRole('link',{name,exact:true});assert.equal(await link.getAttribute('href'),url);assert.equal(await link.getAttribute('target'),'_blank');assert.match(await link.getAttribute('rel'),/noopener/);
   }
-  assert.equal(await page.locator('[aria-labelledby="singlefile-title"] li').count(),4);
+  assert.equal(await page.locator('[aria-labelledby="wayback-title"] li').count(),4);
   assert.equal(await page.locator('[aria-labelledby="sixin-title"] li').count(),3);
   const sharedText=await page.locator('.auxiliary-tools').innerText();
   assert.match(sharedText,/NapCat-Framework-QCE-v版本号\.zip/);assert.match(sharedText,/D:\\QQ导出工具/);assert.match(sharedText,/napiLoader\.bat/);assert.match(sharedText,/TXT/);
-  assert.match(sharedText,/不能阻止收件人截图或复制/);assert.match(sharedText,/不要自己先打开链接/);
+  assert.match(sharedText,/无法恢复从未保存的内容/);assert.match(sharedText,/公开存档服务/);assert.match(sharedText,/不能阻止收件人截图或复制/);assert.match(sharedText,/不要自己先打开链接/);
   await page.evaluate(()=>document.fonts.ready);mkdirSync('tmp/verification',{recursive:true});
   await page.screenshot({path:`tmp/verification/auxiliary-tools-desktop-${v.target}.png`});
-  checks.push('desktop top navigation and account menu open /tools with selected state; direct reload, QCE Framework guide, SingleFile official browser links and Sixin destruction instructions work');
-  for(const id of ['singlefile','sixin']){await page.locator(`[aria-labelledby="${id}-title"]`).scrollIntoViewIfNeeded();await page.screenshot({path:`tmp/verification/auxiliary-tools-${id}-desktop-${v.target}.png`});}
+  checks.push('desktop top navigation and account menu open /tools with selected state; direct reload, QCE Framework guide, Wayback official history/save links and Sixin destruction instructions work');
+  for(const id of ['wayback','sixin']){await page.locator(`[aria-labelledby="${id}-title"]`).scrollIntoViewIfNeeded();await page.screenshot({path:`tmp/verification/auxiliary-tools-${id}-desktop-${v.target}.png`});}
 
   for(const width of [1024,390,360]){
     await page.setViewportSize({width,height:900});await page.goto(v.base);
@@ -72,7 +71,7 @@ try{
     for(const link of await page.locator('.auxiliary-tools a').all()){await link.scrollIntoViewIfNeeded();assert.ok(await link.isVisible());}
     for(const step of await page.locator('.auxiliary-tutorial li').all()){await step.scrollIntoViewIfNeeded();assert.ok(await step.isVisible());const box=await step.boundingBox();assert.ok(box.x>=0&&box.x+box.width<=width+1);}
     if(width===390){await page.locator('.auxiliary-tools').evaluate(e=>e.scrollTop=0);await page.screenshot({path:`tmp/verification/auxiliary-tools-mobile-top-${v.target}.png`});await page.locator('.auxiliary-tip').last().scrollIntoViewIfNeeded();await page.screenshot({path:`tmp/verification/auxiliary-tools-mobile-steps-${v.target}.png`});}
-    if(width===390)for(const id of ['singlefile','sixin']){await page.locator(`#${id}-title`).scrollIntoViewIfNeeded();await page.screenshot({path:`tmp/verification/auxiliary-tools-${id}-mobile-${v.target}.png`});}
+    if(width===390)for(const id of ['wayback','sixin']){await page.locator(`#${id}-title`).scrollIntoViewIfNeeded();await page.screenshot({path:`tmp/verification/auxiliary-tools-${id}-mobile-${v.target}.png`});await page.locator(`[aria-labelledby="${id}-title"] .auxiliary-tip`).scrollIntoViewIfNeeded();await page.screenshot({path:`tmp/verification/auxiliary-tools-${id}-mobile-steps-${v.target}.png`});}
   }
   checks.push('1024/390/360px navigation, complete tutorial and links remain reachable without horizontal overflow');
   assert.deepEqual(localRequests,[]);assert.deepEqual(errors,[]);
