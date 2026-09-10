@@ -1,0 +1,15 @@
+{
+  "date": "2026-09-10T07:00:49.091Z",
+  "base": "https://scout-staging.dapaidang.org",
+  "checks": [
+    "real MCP discovery, schema and overview expose qq_export; guide covers local capability, launch consent, authenticated export, task recovery and existing compression",
+    "desktop top navigation and account menu open /tools with selected state; direct reload, QCE Framework guide, SingleFile official browser links and Sixin destruction instructions work",
+    "1024/390/360px navigation, complete tutorial and links remain reachable without horizontal overflow",
+    "recommendation page makes no QCE requests and has no browser runtime errors"
+  ],
+  "recoveries": [],
+  "catalog_cleanup": {
+    "created": 0,
+    "errors": []
+  }
+}

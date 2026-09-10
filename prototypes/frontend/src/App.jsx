@@ -1,4 +1,4 @@
-import {TopBar,ArchiveHead} from '../../../app/ui/Workspace';
+import {TopBar,ArchiveHead,AuxiliaryToolsNav} from '../../../app/ui/Workspace';
 import {AuxiliaryTools} from '../../../app/ui/AuxiliaryTools';
 import React from "react";
 import { Icon, Mark } from "./icons.jsx";
@@ -59,6 +59,7 @@ export default function App() {
             </button>
           ))}
 </>} tools={<>
+          <AuxiliaryToolsNav active={w.page==='tools'} onClick={()=>w.navigate('tools')}/>
           <button
             className={`tool-link ${w.page === "agent" ? "active" : ""}`}
             onClick={() => w.navigate("agent")}

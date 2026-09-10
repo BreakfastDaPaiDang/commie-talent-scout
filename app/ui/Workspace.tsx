@@ -7,6 +7,9 @@ import {Icon,Mark} from './icons';
 export function IconButton({name,label,...props}:{name:string;label:string}&React.ButtonHTMLAttributes<HTMLButtonElement>){
  return <button type="button" className="icon-button" aria-label={label} title={label} {...props}><Icon name={name}/></button>;
 }
+export function AuxiliaryToolsNav({active,onClick}:{active:boolean;onClick:()=>void}){
+ return <button type="button" className={'tool-link '+(active?'active':'')} aria-label="辅助工具" title="辅助工具" aria-current={active?'page':undefined} onClick={onClick}><Icon name="folder"/><span>辅助工具</span></button>;
+}
 export function TopBar({navigation,tools,mobileTools,onHome}:{navigation:ReactNode;tools:ReactNode;mobileTools?:ReactNode;onHome:()=>void}){
  return <header className="topbar"><a className="brand" href="/" onClick={e=>{e.preventDefault();onHome();}}><Mark/><span>康米巨星<small>猎头系统</small></span></a><nav className="primary-nav" aria-label="主要导航">{navigation}</nav><div className="topbar-tools">{tools}</div>{mobileTools}</header>;
 }
