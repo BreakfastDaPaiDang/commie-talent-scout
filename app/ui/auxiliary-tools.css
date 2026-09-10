@@ -1,8 +1,6 @@
 .auxiliary-tools{height:calc(100dvh - var(--nav-height));overflow-y:auto;padding:42px 40px 70px;margin:0 auto;max-width:1220px;box-sizing:border-box}
 .auxiliary-heading{margin-bottom:32px}
-.auxiliary-heading .eyebrow{font-size:14px;color:#777;letter-spacing:0}
-.auxiliary-heading h1{font-size:36px;line-height:1.3;margin:10px 0 14px}
-.auxiliary-heading>p:last-child{font-size:17px;color:#626262;line-height:1.8;margin:0}
+.auxiliary-heading h1{font-size:36px;line-height:1.3;margin:0}
 .auxiliary-card{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.3fr);border:1px solid #ddd;background:#fff}
 .auxiliary-card+.auxiliary-card{margin-top:28px}
 .auxiliary-intro{padding:34px 32px;background:#fafaf8;border-right:1px solid #e5e5e1;min-width:0}
@@ -11,16 +9,15 @@
 .auxiliary-intro h2{font-size:27px;line-height:1.4;margin:0 0 18px;overflow-wrap:anywhere}
 .auxiliary-intro>p:not(.auxiliary-platform){font-size:17px;color:#626262;line-height:1.9;margin:0 0 26px}
 .auxiliary-intro .button{display:inline-flex;gap:12px;text-decoration:none;min-height:46px}
-.auxiliary-docs{display:block;width:fit-content;margin-top:20px;font-size:15px;color:#626262;text-underline-offset:4px}
 .auxiliary-tutorial{padding:32px;min-width:0}
 .auxiliary-tutorial h3{font-size:21px;margin:0 0 25px}
 .auxiliary-tutorial ol{list-style:none;counter-reset:qce-step;margin:0;padding:0}
 .auxiliary-tutorial li{counter-increment:qce-step;position:relative;padding-left:38px;margin-bottom:23px}
+.auxiliary-tutorial li:last-child{margin-bottom:0}
 .auxiliary-tutorial li::before{content:counter(qce-step);position:absolute;left:0;top:0;display:grid;place-items:center;width:25px;height:25px;border:1px solid #d7d7d0;border-radius:50%;font-size:13px;color:#666}
 .auxiliary-tutorial strong{font-size:17px;line-height:1.6;font-weight:600}
 .auxiliary-tutorial li p{font-size:16px;line-height:1.8;color:#626262;margin:7px 0 0;overflow-wrap:anywhere}
 .auxiliary-tools code{font-size:.9em;background:#f1f1ed;padding:2px 4px;overflow-wrap:anywhere}
 .auxiliary-tutorial a{color:inherit;text-decoration:underline;text-underline-offset:3px}
-.auxiliary-tip{font-size:14px;line-height:1.8;color:#777;margin:28px 0 0;padding-top:20px;border-top:1px solid #e5e5e1}
 @media(max-width:800px){.auxiliary-tools{padding:30px 24px 60px}.auxiliary-card{grid-template-columns:1fr}.auxiliary-intro{border-right:0;border-bottom:1px solid #e5e5e1}.auxiliary-intro,.auxiliary-tutorial{padding:26px}.auxiliary-heading h1{font-size:31px}.auxiliary-intro h2{font-size:25px}}
 @media(max-width:480px){.auxiliary-tools{padding:26px 18px 50px}.auxiliary-intro,.auxiliary-tutorial{padding:23px 20px}.auxiliary-tutorial li{padding-left:34px}.auxiliary-intro .button{font-size:15px}}

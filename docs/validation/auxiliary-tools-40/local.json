@@ -1,0 +1,16 @@
+{
+  "date": "2026-09-10T07:24:26.743Z",
+  "base": "http://127.0.0.1:8790",
+  "checks": [
+    "real MCP discovery, schema and overview expose qq_export; guide covers local capability, launch consent, authenticated export, task recovery and existing compression",
+    "desktop top navigation and account menu open /tools with selected state; direct reload, QCE Framework guide, Wayback main link and Sixin destruction instructions work",
+    "1024/390/360px navigation, complete tutorial and links remain reachable without horizontal overflow",
+    "recommendation page makes no QCE requests and has no browser runtime errors",
+    "prototype reaches the same shared auxiliary page and renders identical tutorial content"
+  ],
+  "recoveries": [],
+  "catalog_cleanup": {
+    "created": 0,
+    "errors": []
+  }
+}
