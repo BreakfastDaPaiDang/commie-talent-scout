@@ -40,7 +40,9 @@ try{
     const childEnv={...process.env,CODEX_HOME:clientHome,PATH:dirname(cli)+';'+process.env.PATH};
     delete childEnv.CTS_MCP_TEST_BEARER;
     const args=['exec','--ephemeral','--skip-git-repo-check','--sandbox','read-only','--json','--output-last-message',join(root,round+'-final.txt'),'-C',work];
-    if(mode==='temporary'){
+    // Both default and explicitly temporary cases have an ephemeral native tool;
+    // neither requires the member to choose persistence before verifying identity.
+    if(mode!=='persistent'){
       childEnv.CTS_MCP_TEST_BEARER=credential.secret;
       args.push('-c',`mcp_servers.cts_staging.url=${JSON.stringify(base+'/mcp')}`,'-c','mcp_servers.cts_staging.bearer_token_env_var="CTS_MCP_TEST_BEARER"','-c','mcp_servers.cts_staging.startup_timeout_sec=30');
     }
@@ -57,14 +59,14 @@ try{
     const final=readFileSync(join(root,round+'-final.txt'),'utf8');
     saved.push({round,elapsedMs:Date.now()-start,final});
     assert.equal(readFileSync(configPath,'utf8'),config,'existing client configuration remains unchanged');
-    if(mode!=='unselected'){
+    {
       const calls=await fetch(base+'/api/admin/calls?limit=100',{headers:{Cookie:cookie}}).then(r=>r.json());
       assert.ok(calls.calls.some(x=>x.credential_id===credential.id&&x.tool==='whoami'&&x.outcome==='success'&&new Date(x.started_at).valueOf()>=start),'actual Codex identity call appears in the service journal');
       assert.ok(output.includes(member.id),'identity result belongs to the expected member');
-    }else{assert.match(final,/是否[^\n]*持久|持久[^\n]*[？?]/,'unselected persistence is asked, not silently saved');}
+    }
     console.log(JSON.stringify({mode,round,passed:true,elapsedMs:Date.now()-start}));
   }
-  const report={date:new Date().toISOString(),base,mode,client:'Codex CLI 0.153.0',configScope:'isolated private client root for product acceptance',temporaryBearerProvided:mode==='temporary',newIndependentProcessVerified:mode==='persistent',rounds:saved};
+  const report={date:new Date().toISOString(),base,mode,client:'Codex CLI 0.153.0',configScope:'isolated private client root for product acceptance',temporaryBearerProvided:mode!=='persistent',newIndependentProcessVerified:mode==='persistent',rounds:saved};
   mkdirSync('tmp/verification',{recursive:true});writeFileSync(`tmp/verification/codex-onboarding-${mode}.json`,JSON.stringify(report,null,2));
 }finally{
   if(credential)await fetch(base+'/api/connections/revoke',{method:'POST',headers:{Origin:base,Cookie:cookie,'Content-Type':'application/json'},body:JSON.stringify({id:credential.id})}).catch(()=>{});
