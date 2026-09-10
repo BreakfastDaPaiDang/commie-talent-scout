@@ -1,6 +1,7 @@
 import type {ArchiveReminder} from '../shared/archive-reminders';
 import React,{useEffect,useRef,type ReactNode,type RefObject} from 'react';
 import {Icon,Mark} from './icons';
+import {AvatarOrnament} from './AvatarOrnament';
 
 // Promoted from the approved prototype (531ab51). Both applications render these
 // components; persistence, permissions and data loading belong to their adapters.
@@ -36,7 +37,7 @@ export function DetailFrame({label,code,expanded,onExpand,onClose,onNextUnread,s
  return <aside className="detail-panel" aria-label={label+'详情'}><div className="detail-top"><span>{label}<span className="detail-number"> / {code}</span></span><div>{onNextUnread&&<button className="next-unread" onClick={onNextUnread}>下一处未读<Icon name="arrow" size={15}/></button>}{onExpand&&<IconButton name="expand" label={expanded?'收起阅读视图':'展开阅读视图'} onClick={onExpand}/>} {onClose&&<IconButton name="close" label="关闭档案详情" onClick={onClose}/>}</div></div><div className="detail-scroll" ref={scrollRef} onScroll={onScroll}><div className="detail-inner">{children}</div></div></aside>;
 }
 export function EntityHeader({name,state,avatar,actions,assignment,contacts,children}:{name:ReactNode;state:ReactNode;avatar:ReactNode;actions:ReactNode;assignment:ReactNode;contacts:ReactNode;children?:ReactNode}){
- return <header className="entity-header"><div className="entity-identity"><div className="entity-heading"><h1>{name}</h1>{state}</div>{avatar}{actions}</div>{assignment}<div className="contacts-bar">{contacts}</div>{children}</header>;
+ return <header className="entity-header"><div className="entity-identity"><div className="entity-heading"><h1>{name}</h1>{state}</div><AvatarOrnament>{avatar}</AvatarOrnament>{actions}</div>{assignment}<div className="contacts-bar">{contacts}</div>{children}</header>;
 }
 export function TabList({id,value,onChange,items,label='内容筛选'}:{id:string;value:string;onChange:(value:string)=>void;items:{key:string;label:string;count?:number}[];label?:string}){
  return <div className={'timeline-tabs observation-toolbar '+(items.some(i=>i.key==='materials')?'has-materials':'')} role="tablist" aria-label={label}>{items.map(({key,label,count})=><button role="tab" id={`${id}-tab-${key}`} aria-controls={`${id}-${key==='materials'?'materials':'timeline'}`} aria-selected={value===key} aria-pressed={value===key} tabIndex={value===key?0:-1} onKeyDown={e=>{const tabs=[...e.currentTarget.parentElement!.querySelectorAll<HTMLButtonElement>('[role="tab"]')],i=tabs.indexOf(e.currentTarget),n:Record<string,number>={ArrowRight:(i+1)%tabs.length,ArrowLeft:(i+tabs.length-1)%tabs.length,Home:0,End:tabs.length-1};if(n[e.key]!==undefined){e.preventDefault();tabs[n[e.key]].click();tabs[n[e.key]].focus();}}} className={(value===key?'active ':'')+(key==='materials'?'material-tab':'')} key={key} onClick={()=>onChange(key)}>{key==='materials'&&<Icon name="folder" size={17}/>} {label}{!!count&&<small>{count}</small>}</button>)}</div>;
