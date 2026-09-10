@@ -1,4 +1,5 @@
 import {TopBar,ArchiveHead} from '../../../app/ui/Workspace';
+import {AuxiliaryTools} from '../../../app/ui/AuxiliaryTools';
 import React from "react";
 import { Icon, Mark } from "./icons.jsx";
 import { Avatar, Placeholder } from "./Avatar.jsx";
@@ -100,6 +101,7 @@ export default function App() {
           <Button icon="agent" onClick={() => w.navigate("agent")}>
             Agent 接入
           </Button>
+          <Button onClick={() => w.navigate("tools")}>辅助工具</Button>
           {w.actor.role === "admin" && (
             <Button icon="settings" onClick={() => w.navigate("accounts")}>
               猎头管理
@@ -115,7 +117,7 @@ export default function App() {
           </Button>
         </div>
       )}
-      <div
+      {w.page === "tools" ? <AuxiliaryTools/> : <div
         className={`workspace ${["accounts", "agent"].includes(w.page) ? "support-workspace" : ""}`}
       >
         <main
@@ -186,7 +188,7 @@ export default function App() {
             </aside>
           )
         )}
-      </div>
+      </div>}
       {!w.dialog && <Feedback toast={w.toast} />}
       <FeedbackContext.Provider value={w.toast}>
         <Dialogs w={w} />

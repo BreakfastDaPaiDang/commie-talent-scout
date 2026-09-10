@@ -37,3 +37,5 @@ MCP 行为检查：`node scripts/verify-mcp.mjs`（本地）或加 `--remote`（
 本地 Worker 显式使用 `dev.host=127.0.0.1:8790`，避免 Wrangler 把无 Origin 的本地 MCP URL 改写为云端域名。Vite 的同源开发代理涵盖 API、MCP、上传、图片和头像；只对明确的本地开发 Origin 改写上游 Origin。正式页面仍由同域 Worker 提供。
 
 档案阅读验收使用 `node scripts/verify-reading-ui.mjs`，可加 `--remote` 验证隔离 staging。当前覆盖 Issue #36 邮件式阅读；S10 的旧逐条滚动证据仅保留历史含义。阅读边界见 [ADR 0012](./adr/0012-mail-style-archive-reading.md)。
+
+辅助工具页与 MCP QQ 导出指南：运行 `node scripts/verify-auxiliary-tools.mjs`，加 `--remote` 检查云端 staging。脚本仅使用验收连接读取指南与页面，不连接成员 QCE 或导出私人聊天；本地同时核对当前原型共享页面。

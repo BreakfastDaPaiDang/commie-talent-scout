@@ -241,6 +241,7 @@ export function Dialogs({ w }) {
       {dialog.type === "profile" && (
         <div className="modal-form">
           <HunterProfile key={actor.id} actor={actor} w={w} />
+          <Button variant="outline" onClick={() => { closeDialog(); w.navigate("tools"); }}>辅助工具</Button>
           <div className="prototype-switch">
             <label>
               预览身份<small>仅用于验证原型权限</small>
