@@ -42,6 +42,7 @@ app.use('*',async(c,next)=>{
   await next();
 });
 app.onError((error,c)=>{
+  c.header('Cache-Control','private, no-store');
   if(error instanceof SyntaxError) return c.json({error:{code:'INVALID_JSON',message:'请求内容不是有效的 JSON'}},400);
   if(error instanceof Failure) return c.json({error:{code:error.code,message:error.message}},error.status as 400);
   if(error instanceof ZodError) return c.json({error:{code:'INVALID_INPUT',message:error.issues.map(x=>`${x.path.join('.')}: ${x.message}`).join('；')}},400);
@@ -148,9 +149,9 @@ app.post('/api/avatars/set',async c=>c.json(await new Avatars(c.env,await authen
 app.post('/api/profile',async c=>c.json(await new Members(c.env,await authenticate(c.req.raw,c.env),'web').updateOwnProfile(await c.req.json())));
 app.all('/api/*',c=>c.json({error:{code:'NOT_FOUND',message:'接口不存在'}},404));
 app.all('/mcp',c=>handleMcp(c.req.raw,c.env,c.executionCtx as ExecutionContext));
-app.get('/images/:id',async c=>new Images(c.env,await authenticate(c.req.raw,c.env),'web').read(c.req.param('id')));
-app.get('/avatars/archives/:id',async c=>new Avatars(c.env,await authenticate(c.req.raw,c.env),'web').read('archive',c.req.param('id')));
-app.get('/avatars/members/:id',async c=>new Avatars(c.env,await authenticate(c.req.raw,c.env),'web').read('member',c.req.param('id')));
+app.get('/images/:id',async c=>new Images(c.env,await authenticate(c.req.raw,c.env),'web').read(c.req.param('id'),c.req.raw.headers));
+app.get('/avatars/archives/:id',async c=>new Avatars(c.env,await authenticate(c.req.raw,c.env),'web',task=>c.executionCtx.waitUntil(task)).read('archive',c.req.param('id'),c.req.raw.headers));
+app.get('/avatars/members/:id',async c=>new Avatars(c.env,await authenticate(c.req.raw,c.env),'web',task=>c.executionCtx.waitUntil(task)).read('member',c.req.param('id'),c.req.raw.headers));
 app.put('/uploads/:id',async c=>c.json(await Images.receive(c.env,c.req.param('id'),c.req.raw)));
 app.get('/materials/:id/content',async c=>new Materials(c.env,await authenticate(c.req.raw,c.env),'web').read(c.req.param('id'),c.req.query('preview')==='1'));
 app.put('/material-uploads/:id',async c=>c.json(await Materials.receive(c.env,c.req.param('id'),c.req.raw)));

@@ -1,0 +1,33 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {randomUUID,createHash} from 'node:crypto';
+import {fixture} from './d1-fixture.mjs';
+import {Images} from '../app/server/images.ts';
+import {Observations} from '../app/server/observations.ts';
+import worker from '../app/server/index.ts';
+import {digest} from '../app/server/types.ts';
+
+test('authorized repeated image reads revalidate without downloading the object; deleted archive still denies access',async t=>{
+ const f=fixture();t.after(f.close);const archive=randomUUID(),png=readFileSync('tests/fixtures/images/shapes.png');
+ f.sqlite.prepare("INSERT INTO archives(id,type,name,created_by,created_at,updated_at) VALUES(?,'person','测试图片',?,'2026-09-20','2026-09-20')").run(archive,f.actor.id);
+ const images=new Images(f.env,f.actor,'web'),ticket=await images.prepare({purpose:'observation',archive_id:archive,mime_type:'image/png',byte_size:png.length,sha256:createHash('sha256').update(png).digest('hex')});
+ await Images.receive(f.env,ticket.upload_id,new Request(ticket.url,{method:'PUT',headers:{...ticket.headers,'Content-Length':String(png.length)},body:png}));
+ let queries=0,objects=0;const prepare=f.env.DB.prepare,get=f.env.IMAGES.get;f.env.DB.prepare=sql=>{queries++;return prepare(sql);};f.env.IMAGES.get=key=>{objects++;return get(key);};
+ const first=await images.read(ticket.attachment_id);assert.equal(first.status,200);assert.match(first.headers.get('Cache-Control'),/private.*no-cache/);assert.ok(first.headers.get('ETag'));assert.equal(queries,1,'image permission check must not hydrate an entire archive');assert.equal(objects,1);
+ const second=await images.read(ticket.attachment_id,new Headers({'If-None-Match':first.headers.get('ETag')}));assert.equal(second.status,304);assert.equal(objects,1,'304 must not read R2 bytes');assert.equal(await second.text(),'');
+ const other=new Images(f.env,{...f.actor,id:randomUUID()},'web'),conditional=new Headers({'If-None-Match':first.headers.get('ETag')});
+ await assert.rejects(other.read(ticket.attachment_id,conditional),{status:404},'another member cannot read a private upload with a known ETag');
+ const record=await new Observations(f.env,f.actor,'web').create({archive_id:archive,body:'图文验收',attachment_ids:[ticket.attachment_id],request_id:randomUUID()});
+ assert.equal((await other.read(ticket.attachment_id,conditional)).status,304);
+ f.sqlite.prepare('UPDATE observations SET deleted=1 WHERE id=?').run(record.id);
+ await assert.rejects(other.read(ticket.attachment_id,conditional),{status:404});assert.equal((await images.read(ticket.attachment_id,conditional)).status,304,'the author can still view their deleted observation');
+ f.sqlite.prepare('UPDATE archives SET deleted=1 WHERE id=?').run(archive);
+ await assert.rejects(images.read(ticket.attachment_id,new Headers({'If-None-Match':first.headers.get('ETag')})),{status:404});
+ f.sqlite.prepare('UPDATE archives SET deleted=0 WHERE id=?').run(archive);
+ const token='fixture-token';f.sqlite.prepare('UPDATE credentials SET hash=? WHERE id=?').run(await digest(token),f.actor.credential_id);
+ const request=()=>new Request('https://fixture.invalid/images/'+ticket.attachment_id,{headers:{Authorization:'Bearer '+token,'If-None-Match':first.headers.get('ETag')}});
+ const response=await worker.fetch(request(),f.env);assert.equal(response.status,304);assert.equal(response.headers.get('Vary'),'Cookie, Authorization');
+ f.sqlite.prepare("UPDATE credentials SET revoked_at='2026-09-20' WHERE id=?").run(f.actor.credential_id);
+ const denied=await worker.fetch(request(),f.env);assert.equal(denied.status,401);assert.match(denied.headers.get('Cache-Control'),/no-store/);
+});

@@ -8,6 +8,7 @@ import { AvatarEditor } from "./AvatarEditor.jsx";
 import { isWorkState, uuid, canViewRecord } from "./model.js";
 import { protocolText } from "./protocol.js";
 import { AgentHandoff } from "../../../app/ui/AgentHandoff";
+import { ImageViewer } from "../../../app/ui/ImageViewer";
 
 export function Accounts({ w }) {
   return (
@@ -234,9 +235,7 @@ export function Dialogs({ w }) {
       )}
       {dialog.type === "image" &&
         (!dialog.record || canViewRecord(dialog.record, actor)) && (
-          <div className="lightbox">
-            <img src={dialog.image.url} alt={dialog.image.name} />
-          </div>
+          <ImageViewer key={dialog.image.url} src={dialog.image.url} alt={dialog.image.name}/>
         )}
       {dialog.type === "profile" && (
         <div className="modal-form">

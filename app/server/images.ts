@@ -11,7 +11,7 @@ export type AttachmentInfo={id:string;mime_type:string;byte_size:number;width:nu
 export function attachmentProjection(observation:string,version:string){return `(SELECT json_group_array(json_object('id',im.id,'mime_type',im.mime_type,'byte_size',im.byte_size,'width',im.width,'height',im.height)) FROM (SELECT a.id,a.mime_type,a.byte_size,a.width,a.height FROM version_attachments va JOIN attachments a ON a.id=va.attachment_id WHERE va.observation_id=${observation} AND va.content_version=${version} ORDER BY va.position) im)`;}
 type Upload={id:string;owner_id:string;auth_epoch:number;credential_id:string;purpose:'observation'|'archive_avatar'|'member_avatar';archive_id:string|null;member_subject_id:string|null;observation_id:string|null;mime_type:string;byte_size:number;sha256:string;ticket_expires_at:string;state:string;object_key:string;width:number|null;height:number|null;lease_until:string|null;upload_claim:string|null;created_at:string};
 let uploadActive=false;
-const privateHeaders=(mime:string)=>new Headers({'Content-Type':mime,'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff','Cross-Origin-Resource-Policy':'same-origin'});
+const privateHeaders=(mime:string)=>new Headers({'Content-Type':mime,'Cache-Control':'private, no-cache','Vary':'Cookie, Authorization','X-Content-Type-Options':'nosniff','Cross-Origin-Resource-Policy':'same-origin'});
 const rejectGuard=(e:unknown)=>{if(String(e).includes('CHECK constraint'))throw new Failure(409,'UPLOAD_PRECONDITION_CHANGED','账号、凭证、档案或上传状态已变化，请查询上传状态后核对');throw e;};
 
 // Upload tickets, immutable object ownership and all durable references live behind this boundary.
@@ -94,15 +94,25 @@ export class Images{
   }
   return {statements,cleanup};
  }
- async read(id:string){
-  z.uuid().parse(id);const row=await this.stmt("SELECT * FROM attachments WHERE id=? AND state='ready'",id).first<Upload>();if(!row)throw new Failure(404,'IMAGE_NOT_FOUND','图片不存在或已清理');
-  if(row.archive_id)await this.archives.get(row.archive_id);
-  if(row.observation_id){if(!await this.stmt("SELECT 1 FROM observations WHERE id=? AND (deleted=0 OR author_id=? OR ?='admin')",row.observation_id,this.actor.id,this.actor.role).first())throw new Failure(404,'IMAGE_NOT_FOUND','图片不存在或无权读取');}
-  else if(row.purpose==='observation'){if(row.owner_id!==this.actor.id)throw new Failure(404,'IMAGE_NOT_FOUND','图片不存在或无权读取');}
-  else {const used=await this.stmt('SELECT 1 FROM avatar_history WHERE attachment_id=? OR previous_attachment_id=? LIMIT 1',id,id).first();if(!used&&row.owner_id!==this.actor.id)throw new Failure(404,'IMAGE_NOT_FOUND','图片不存在或无权读取');}
-  return this.objectResponse(row.object_key,row.mime_type);
+ async read(id:string,requestHeaders?:Headers){
+  z.uuid().parse(id);
+  // This is an access check, not an archive detail request: avoid loading its
+  // observations, members and all historic state bindings for every image.
+  const row=await this.stmt(`SELECT a.* FROM attachments a
+   LEFT JOIN archives ar ON ar.id=a.archive_id LEFT JOIN observations o ON o.id=a.observation_id
+   WHERE a.id=? AND a.state='ready'
+   AND (a.archive_id IS NULL OR (ar.id IS NOT NULL AND (ar.deleted=0 OR ?='admin')))
+   AND ((a.observation_id IS NOT NULL AND o.id IS NOT NULL AND (o.deleted=0 OR o.author_id=? OR ?='admin'))
+    OR (a.observation_id IS NULL AND (a.owner_id=? OR (a.purpose<>'observation' AND EXISTS(SELECT 1 FROM avatar_history h WHERE h.attachment_id=a.id OR h.previous_attachment_id=a.id)))))`,id,this.actor.role,this.actor.id,this.actor.role,this.actor.id).first<Upload>();
+  if(!row)throw new Failure(404,'IMAGE_NOT_FOUND','图片不存在或无权读取');
+  return this.objectResponse(row.object_key,row.mime_type,requestHeaders,row.sha256);
  }
- async objectResponse(key:string,mime:string){const object=await this.env.IMAGES.get(key);if(!object)throw new Failure(404,'IMAGE_NOT_FOUND','图片对象暂不可读');const headers=privateHeaders(mime);headers.set('Content-Length',String(object.size));return new Response(object.body,{headers});}
+ async objectResponse(key:string,mime:string,requestHeaders?:Headers,contentHash?:string){
+  const headers=privateHeaders(mime),etag=`"${contentHash??await digest(key)}"`;headers.set('ETag',etag);
+  // Callers must authenticate and authorize before reaching this conditional response.
+  if(requestHeaders?.get('If-None-Match')?.split(',').some(value=>value.trim().replace(/^W\//,'')===etag))return new Response(null,{status:304,headers});
+  const object=await this.env.IMAGES.get(key);if(!object)throw new Failure(404,'IMAGE_NOT_FOUND','图片对象暂不可读');headers.set('Content-Length',String(object.size));return new Response(object.body,{headers});
+ }
 }
 
 export async function boundedImageBody(stream:ReadableStream<Uint8Array>|null,expected:number,deadlineMs=60000){

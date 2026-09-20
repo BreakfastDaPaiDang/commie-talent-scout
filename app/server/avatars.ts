@@ -9,10 +9,10 @@ type Subject={id:string;version:number;avatar_id:string|null;type?:'person'|'org
 type Cache={object_key:string|null;mime_type:string|null;refresh_after:string;refreshing_until:string|null};
 export class Avatars{
  private images:Images;
- constructor(private env:Env,private actor:Actor,private source:Source){this.images=new Images(env,actor,source);}
+ constructor(private env:Env,private actor:Actor,private source:Source,private defer?:(task:Promise<unknown>)=>void){this.images=new Images(env,actor,source);}
  private stmt(sql:string,...args:unknown[]){return this.env.DB.prepare(sql).bind(...args);}
  private async subject(type:'archive'|'member',id:string){
-  z.uuid().parse(id);if(type==='archive')await this.images.archives.get(id);const row=await this.stmt(type==='archive'?'SELECT id,version,avatar_id,type,contacts_json FROM archives WHERE id=?':'SELECT id,version,avatar_id,qq FROM members WHERE id=?',id).first<Subject>();
+  z.uuid().parse(id);const row=await this.stmt(type==='archive'?"SELECT id,version,avatar_id,type,contacts_json FROM archives WHERE id=? AND (deleted=0 OR ?='admin')":'SELECT id,version,avatar_id,qq FROM members WHERE id=?',id,...(type==='archive'?[this.actor.role]:[])).first<Subject>();
   if(!row)throw new Failure(404,'NOT_FOUND','头像所属对象不存在');return row;
  }
  async set(value:unknown){
@@ -37,16 +37,16 @@ export class Avatars{
    return {statements,result:{id:a.id,subject_type:a.subject_type,avatar_id:a.attachment_id,version:old.version+(changed?1:0),changed}};
   });
  }
- async read(type:'archive'|'member',id:string){
+ async read(type:'archive'|'member',id:string,requestHeaders?:Headers){
   const row=await this.subject(type,id);
-  if(row.avatar_id){try{return await this.images.read(row.avatar_id);}catch(e){if(!(e instanceof Failure&&e.status===404))throw e;}}
+  if(row.avatar_id){try{return await this.images.read(row.avatar_id,requestHeaders);}catch(e){if(!(e instanceof Failure&&e.status===404))throw e;}}
   const qq=type==='member'?row.qq:row.type==='person'?(JSON.parse(row.contacts_json??'[]') as {type:string;value:string}[]).find(c=>c.type.toUpperCase()==='QQ'&&/^\d{5,20}$/.test(c.value))?.value:null;
-  if(qq&&/^\d{5,20}$/.test(qq)){const response=await this.qq(qq);if(response)return response;}
+  if(qq&&/^\d{5,20}$/.test(qq)){const response=await this.qq(qq,requestHeaders);if(response)return response;}
   throw new Failure(404,'AVATAR_UNAVAILABLE','暂无可用头像');
  }
- private async qq(qq:string){
+ private async qq(qq:string,requestHeaders?:Headers){
   let cache=await this.stmt('SELECT * FROM qq_avatar_cache WHERE qq=?',qq).first<Cache>();const at=now();
-  if(!cache||cache.refresh_after<=at){
+  const refresh=async()=>{
    await this.stmt('INSERT OR IGNORE INTO qq_avatar_cache(qq,refresh_after) VALUES(?,?)',qq,at).run();
    const lease=new Date(Date.now()+10000).toISOString();
    const claim=await this.stmt('UPDATE qq_avatar_cache SET refreshing_until=? WHERE qq=? AND refresh_after<=? AND (refreshing_until IS NULL OR refreshing_until<=?)',lease,qq,at,at).run();
@@ -69,8 +69,9 @@ export class Avatars{
      if(saved.meta.changes){if(cache?.object_key?.startsWith('qq/'))await this.env.IMAGES.delete(cache.object_key);cache={object_key:key,mime_type:format.mime_type,refresh_after:'',refreshing_until:null};}else await this.env.IMAGES.delete(key);
     }catch{await this.stmt('UPDATE qq_avatar_cache SET refresh_after=?,refreshing_until=NULL WHERE qq=? AND refreshing_until=?',new Date(Date.now()+15*60000).toISOString(),qq,lease).run();}
    }
-  }
-  if(cache?.object_key&&cache.mime_type){try{return await this.images.objectResponse(cache.object_key,cache.mime_type);}catch(e){if(!(e instanceof Failure&&e.status===404))throw e;}}
+  };
+  if(!cache||cache.refresh_after<=at){if(cache?.object_key&&this.defer)this.defer(refresh().catch(()=>{}));else await refresh();}
+  if(cache?.object_key&&cache.mime_type){try{return await this.images.objectResponse(cache.object_key,cache.mime_type,requestHeaders);}catch(e){if(!(e instanceof Failure&&e.status===404))throw e;}}
   return null;
  }
 }
