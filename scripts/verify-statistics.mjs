@@ -23,11 +23,10 @@ try {
     const result=await v.http('/statistics?'+new URLSearchParams({group,search:'统计验收'+suffix}));
     assert.equal(result.status,200);return result.body;
   };
-  const tagged=await get('tag'),categoryStats=await get('category');
+  const tagged=await get('tag');
   assert.equal(tagged.total,3);assert.deepEqual(tagged.series.map(s=>s.total),[3,3]);
-  assert.equal(categoryStats.total,3);assert.equal(categoryStats.series[0].total,3);
   assert.equal((await v.http('/statistics?from=2026-09-20&to=2026-09-01')).status,400);
-  checks.push('authenticated HTTP aggregation, cross-tag deduplication, category deduplication and invalid dates');
+  checks.push('authenticated HTTP aggregation, cross-tag deduplication and invalid dates');
   browser=await chromium.launch({channel:process.env.CTS_TEST_BROWSER??'msedge',headless:true});
   const context=await browser.newContext({viewport:{width:1440,height:1000},timezoneId:'America/Los_Angeles'});
   const [name,...value]=v.sessionCookie.split('=');await context.addCookies([{name,value:value.join('='),url:v.base}]);
@@ -38,7 +37,7 @@ try {
   await page.getByLabel('搜索分组',{exact:true}).fill('统计验收'+suffix);await page.getByRole('button',{name:'应用筛选',exact:true}).click();
   await page.waitForFunction(()=>document.querySelector('.statistics-summary strong')?.textContent==='3');
   assert.equal(await page.locator('.statistics-details tbody tr').count(),2);
-  await page.getByLabel('区间累计',{exact:true}).check();
+  await page.getByRole('button',{name:'累计',exact:true}).click();
   await page.getByText('查看逐期数据',{exact:true}).click();
   assert.equal(await page.locator('.statistics-periods tbody tr').last().locator('td').first().textContent(),'3');
   await page.getByText('查看逐期数据',{exact:true}).click();

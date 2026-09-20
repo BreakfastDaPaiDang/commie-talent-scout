@@ -5,7 +5,7 @@ import {defaultStatisticsQuery, shiftDate, statisticsDates, type StatisticsResul
 
 const date = z.iso.date();
 export const statisticsInput = z.object({
-  from: date, to: date, group: z.enum(['user','tag','category','type']).default('user'),
+  from: date, to: date, group: z.enum(['user','tag','type']).default('user'),
   interval: z.enum(['day','week','month']).default('day'),
   archive_type: z.enum(['all','person','org']).default('all'), search: z.string().trim().max(100).default(''),
 }).refine(q => q.from <= q.to, '开始日期不能晚于结束日期')
@@ -28,9 +28,9 @@ export async function statistics(env: Env, actor: Actor, input: Record<string, s
     JOIN tag_categories c ON c.id=t.category_id
     WHERE t.deleted=0 AND c.deleted=0 AND ${evidenceVisibilitySql("json_extract(s.data_json,'$.evidence')")}
   )`;
-  const groupedByLabel = q.group === 'tag' || q.group === 'category';
-  const id = {user:'o.author_id', tag:"coalesce(l.tag_id,'untagged')", category:"coalesce(l.category_id,'untagged')", type:'a.type'}[q.group];
-  const name = {user:"m.name||'（@'||m.username||'）'", tag:"coalesce(l.category_name||'：'||l.tag_name,'未标注标签')", category:"coalesce(l.category_name||'（'||CASE a.type WHEN 'person' THEN '人物' ELSE '组织' END||'）','未标注类别')", type:"CASE a.type WHEN 'person' THEN '人物' ELSE '组织' END"}[q.group];
+  const groupedByLabel = q.group === 'tag';
+  const id = {user:'o.author_id', tag:"coalesce(l.tag_id,'untagged')", type:'a.type'}[q.group];
+  const name = {user:"m.name||'（@'||m.username||'）'", tag:"coalesce(l.category_name||'：'||l.tag_name,'未标注标签')", type:"CASE a.type WHEN 'person' THEN '人物' ELSE '组织' END"}[q.group];
   const day = "date(o.created_at,'+8 hours')";
   const bucket = q.interval === 'day' ? day : q.interval === 'month' ? "strftime('%Y-%m-01',o.created_at,'+8 hours')" : `date(${day},'-'||((cast(strftime('%w',${day}) AS integer)+6)%7)||' days')`;
   const sql = `WITH ${groupedByLabel ? labels + ',' : ''} records AS (

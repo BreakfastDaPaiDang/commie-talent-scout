@@ -1,4 +1,4 @@
-export type StatisticsGroup = 'user' | 'tag' | 'category' | 'type';
+export type StatisticsGroup = 'user' | 'tag' | 'type';
 export type StatisticsInterval = 'day' | 'week' | 'month';
 export type StatisticsQuery = {
   from: string; to: string; group: StatisticsGroup; interval: StatisticsInterval;

@@ -2,7 +2,7 @@ import React,{useEffect,useMemo,useState} from 'react';
 import {defaultStatisticsQuery,shanghaiDate,shiftDate,type StatisticsQuery,type StatisticsResult,type StatisticsGroup} from '../shared/statistics';
 import './statistics.css';
 
-const groups: [StatisticsGroup,string][] = [['user','用户优先'],['tag','标签优先'],['category','类别优先'],['type','人物／组织优先']];
+const groups: [StatisticsGroup,string][] = [['user','用户优先'],['tag','标签优先'],['type','人物／组织优先']];
 const colors = ['#9b482f','#326a83','#58834c','#8662a1','#b38025','#287f79'];
 type Props = {load:(query:StatisticsQuery)=>Promise<StatisticsResult>;getLink?:()=>Promise<string>};
 
@@ -45,7 +45,7 @@ export function StatisticsDashboard({load,getLink}:Props) {
     {data&&<>
       <section className="statistics-summary" aria-label="统计概览">{[[data.total,'观察记录'],[data.members,'提交成员'],[data.archives,'涉及档案'],[data.groups,'统计分组']].map(([value,label])=><div key={label}><strong>{Number(value).toLocaleString('zh-CN')}</strong><span>{label}</span></div>)}</section>
       <section className="statistics-chart-card" aria-label="提交趋势">
-        <header><div><h2>提交趋势</h2><p>{query.from} — {query.to} · 东八区</p></div><label><input type="checkbox" checked={cumulative} onChange={e=>setCumulative(e.target.checked)}/> 区间累计</label></header>
+        <header><div><h2>提交趋势</h2><p>{query.from} — {query.to} · 东八区</p></div><div className="statistics-cumulative" role="group" aria-label="折线模式"><button type="button" aria-pressed={!cumulative} onClick={()=>setCumulative(false)}>新增</button><button type="button" aria-pressed={cumulative} onClick={()=>setCumulative(true)}>累计</button></div></header>
         {!data.total?<p className="statistics-empty">此范围内暂无观察记录，试试扩大时间范围或清除搜索。</p>:<>
           {!lines.length?<p className="statistics-empty">在下方明细中选择要对比的分组。</p>:<>
             <div className="statistics-chart-scroll"><svg className="statistics-chart" viewBox="0 0 920 320" role="img" aria-label={`${cumulative?'累计':'新增'}观察记录折线图，精确值见下方逐期数据表`} onMouseLeave={()=>setHover(null)}>

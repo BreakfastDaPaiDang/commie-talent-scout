@@ -36,15 +36,13 @@ test('statistics counts identities, fills zero days and uses Shanghai submission
     assert.equal(day.total,1);
   }finally{db.close();}
 });
-test('tags overlap but category and overall counts deduplicate; hidden evidence never leaks',async()=>{
+test('tags overlap but overall counts deduplicate; hidden evidence never leaks',async()=>{
   const {db,env,actor,query}=fixture();try{
     const tags=await statistics(env,actor,{...query,group:'tag'});
     assert.equal(tags.total,3);assert.equal(tags.series.find(s=>s.id==='t1')?.total,2);
     assert.equal(tags.series.find(s=>s.id==='t2')?.total,2);
     assert.ok(!tags.series.some(s=>s.id==='secret'));
     assert.equal(tags.series.find(s=>s.id==='untagged')?.total,1);
-    const categories=await statistics(env,actor,{...query,group:'category'});
-    assert.equal(categories.series.find(s=>s.id==='cat')?.total,2);
     const owner=await statistics(env,{...actor,id:'u1'},{...query,group:'tag'});
     assert.equal(owner.series.find(s=>s.id==='secret')?.total,2);
   }finally{db.close();}
@@ -61,6 +59,7 @@ test('filters, empty results, week/month boundaries and literal search',async()=
     assert.throws(()=>statisticsInput.parse({...query,from:'2026-02-30'}));
     assert.throws(()=>statisticsInput.parse({...query,to:'2026-08-31'}));
     assert.throws(()=>statisticsInput.parse({...query,to:'2027-10-01'}));
+    assert.throws(()=>statisticsInput.parse({...query,group:'category'}));
   }finally{db.close();}
 });
 test('closed archives use snapshots; deleted catalog entries are excluded',async()=>{

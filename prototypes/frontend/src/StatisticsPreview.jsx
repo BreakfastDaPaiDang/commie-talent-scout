@@ -11,7 +11,7 @@ export async function loadStatisticsPreview(query) {
     if(day<query.from||day>query.to||(query.archive_type!=='all'&&query.archive_type!==type))continue;
     const member=['周宁（@zhouning）','沈舟（@shenzhou）','许禾（@xuhe）'][i%3];
     const labels=type==='org'?['已有能力：内容制作']:i%2?['技能：视频剪辑','技能：资料整理']:['协作方式：稳定参与'];
-    const names=[...new Set(query.group==='user'?[member]:query.group==='type'?[type==='person'?'人物':'组织']:query.group==='tag'?labels:labels.map(s=>s.split('：')[0]+(type==='person'?'（人物）':'（组织）')))];
+    const names=[...new Set(query.group==='user'?[member]:query.group==='type'?[type==='person'?'人物':'组织']:labels)];
     for(const name of names.filter(n=>n.includes(query.search))){
       const line=grouped.get(name)??{id:name,name,total:0,points:dates.map(()=>0)};
       line.total++;line.points[dates.indexOf(bucketDate(day,query.interval))]++;grouped.set(name,line);
