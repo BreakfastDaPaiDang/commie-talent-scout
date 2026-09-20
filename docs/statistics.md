@@ -1,6 +1,6 @@
 # 统计仪表盘
 
-本地开发新增功能，尚未发布到正式站。登录后从顶栏“统计”或账号／手机工具菜单进入 `/statistics`。
+已上线。登录后从顶栏“统计”或账号／手机工具菜单进入 `/statistics`。
 
 ## 使用
 
@@ -23,7 +23,7 @@
 
 ## 实现与验证
 
-共享界面：`app/ui/StatisticsDashboard.tsx`；正式适配器：`app/client/StatisticsPage.tsx`；原型使用独立虚构数据适配器。鉴权接口 `GET /api/statistics` 在数据库中聚合，不依赖列表分页，也不写阅读回执。未增加数据库迁移或图表依赖。
+共享界面：`app/ui/StatisticsDashboard.tsx`；正式适配器：`app/client/StatisticsPage.tsx`；原型使用独立虚构数据适配器。鉴权接口 `GET /api/statistics` 在数据库中聚合，不依赖列表分页，也不写阅读回执；`GET /api/statistics/link` 返回统计页链接，供复制或打开。未增加数据库迁移或图表依赖。
 
 请求参数：`from`、`to`、`group=user|tag|category|type`、`interval=day|week|month`、`archive_type=all|person|org`、`search`。非法日期、倒置区间或超过 366 天返回 400。查询结果最多 50 组，`groups` 返回实际组数。
 

@@ -9,6 +9,8 @@ const out='tmp/verification/statistics';mkdirSync(out,{recursive:true});
 let browser;
 try {
   assert.equal((await fetch(v.base+'/api/statistics')).status,401);
+  assert.equal((await fetch(v.base+'/api/statistics/link')).status,401);
+  const link=await v.http('/statistics/link');assert.equal(link.status,200);assert.equal(link.body.url,v.base+'/statistics');
   const suffix=randomUUID().slice(0,8),category=await v.call('create_tag_category',{type:'person',name:'统计验收'+suffix,request_id:randomUUID()});
   const tags=[];
   for(const name of ['整理','写作'])tags.push(await v.call('create_tag',{category_id:category.id,name,description:'虚构统计验收标签',request_id:randomUUID()}));
