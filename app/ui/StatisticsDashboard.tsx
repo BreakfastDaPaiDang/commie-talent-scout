@@ -9,9 +9,9 @@ type Props = {load:(query:StatisticsQuery)=>Promise<StatisticsResult>;getLink?:(
 export function StatisticsDashboard({load,getLink}:Props) {
   const [draft,setDraft]=useState(defaultStatisticsQuery),[query,setQuery]=useState(defaultStatisticsQuery);
   const [data,setData]=useState<StatisticsResult|null>(null),[loading,setLoading]=useState(true),[error,setError]=useState('');
-  const [revision,setRevision]=useState(0),[selected,setSelected]=useState<string[]>([]),[cumulative,setCumulative]=useState(false),[hover,setHover]=useState<number|null>(null),[copied,setCopied]=useState(false);
+  const [revision,setRevision]=useState(0),[selected,setSelected]=useState<string[]>([]),[cumulative,setCumulative]=useState(false),[hover,setHover]=useState<number|null>(null),[lineHover,setLineHover]=useState<string|null>(null),[copied,setCopied]=useState(false);
   useEffect(()=>{
-    let active=true;setLoading(true);setData(null);setError('');setHover(null);
+    let active=true;setLoading(true);setData(null);setError('');setHover(null);setLineHover(null);
     load(query).then(result=>{if(active){setData(result);setSelected(result.series.slice(0,5).map(s=>s.id));}})
       .catch(e=>{if(active)setError(e instanceof Error?e.message:'统计加载失败');})
       .finally(()=>{if(active)setLoading(false);});
@@ -27,7 +27,7 @@ export function StatisticsDashboard({load,getLink}:Props) {
   const x=(i:number)=>60+(data!.dates.length===1?410:i*820/(data!.dates.length-1));
   const y=(n:number)=>270-n/ceiling*220;
   const focusDay=hover===null?null:data?.dates[hover];
-  function toggle(id:string){setSelected(old=>old.includes(id)?old.filter(x=>x!==id):[...old,id]);}
+  function toggle(id:string){setLineHover(null);setSelected(old=>old.includes(id)?old.filter(x=>x!==id):[...old,id]);}
   return <main className="statistics-page">
     <header className="statistics-heading"><div><p>协作记录 · 数据概览</p><h1>统计仪表盘</h1></div><div className="statistics-heading-actions">{getLink&&<button className="button quiet" type="button" onClick={copyLink}>{copied?'已复制':'复制链接'}</button>}<button className="button" onClick={()=>setRevision(v=>v+1)} disabled={loading}>刷新统计</button></div></header>
     <div className="statistics-modes" aria-label="统计分组">{groups.map(([key,label])=><button key={key} aria-pressed={query.group===key} onClick={()=>apply({...draft,group:key,search:''})}>{label}</button>)}</div>
@@ -48,15 +48,14 @@ export function StatisticsDashboard({load,getLink}:Props) {
         <header><div><h2>提交趋势</h2><p>{query.from} — {query.to} · 东八区</p></div><div className="statistics-cumulative" role="group" aria-label="折线模式"><button type="button" aria-pressed={!cumulative} onClick={()=>setCumulative(false)}>新增</button><button type="button" aria-pressed={cumulative} onClick={()=>setCumulative(true)}>累计</button></div></header>
         {!data.total?<p className="statistics-empty">此范围内暂无观察记录，试试扩大时间范围或清除搜索。</p>:<>
           {!lines.length?<p className="statistics-empty">在下方明细中选择要对比的分组。</p>:<>
-            <div className="statistics-chart-scroll"><svg className="statistics-chart" viewBox="0 0 920 320" role="img" aria-label={`${cumulative?'累计':'新增'}观察记录折线图，精确值见下方逐期数据表`} onMouseLeave={()=>setHover(null)}>
+            <div className="statistics-chart-scroll"><svg className="statistics-chart" viewBox="0 0 920 320" role="img" aria-label={`${cumulative?'累计':'新增'}观察记录折线图，精确值见下方逐期数据表`} onMouseLeave={()=>{setHover(null);setLineHover(null);}} onMouseMove={e=>{const svg=e.currentTarget;const point=svg.createSVGPoint();point.x=e.clientX;point.y=e.clientY;const local=point.matrixTransform(svg.getScreenCTM()!.inverse());setHover(Math.max(0,Math.min(data.dates.length-1,Math.round((local.x-60)/820*(data.dates.length-1)))));}}>
               {[0,1,2,3,4].map(i=><g key={i}><line x1="60" x2="880" y1={y(i*ceiling/4)} y2={y(i*ceiling/4)} stroke="#e6e5df"/><text x="45" y={y(i*ceiling/4)+4} textAnchor="end">{i*ceiling/4}</text></g>)}
               <text x="60" y="25">记录数（条）</text>
               {data.dates.map((date,i)=>(i===0||i===data.dates.length-1||i%Math.max(1,Math.ceil(data.dates.length/6))===0)&&<text key={date} x={x(i)} y="302" textAnchor="middle">{date.slice(5)}</text>)}
-              {lines.map((line,index)=><g key={line.id}><polyline fill="none" stroke={colors[index % colors.length]} strokeWidth="2.5" points={line.points.map((n,i)=>`${x(i)},${y(n)}`).join(' ')}/>{line.points.map((n,i)=><circle key={i} cx={x(i)} cy={y(n)} r={data.dates.length>90?1.5:3} fill={colors[index % colors.length]}><title>{line.name} · {data.dates[i]}：{n} 条</title></circle>)}</g>)}
+              {lines.map((line,index)=>{const active=lineHover===line.id,dim=lineHover!==null&&!active,color=colors[index % colors.length],pts=line.points.map((n,i)=>`${x(i)},${y(n)}`).join(' ');return <g key={line.id} onMouseEnter={()=>setLineHover(line.id)} onMouseLeave={()=>setLineHover(null)}><polyline fill="none" stroke="transparent" strokeWidth="16" points={pts} style={{pointerEvents:'stroke'}}/><polyline fill="none" stroke={color} strokeWidth={active?4.5:2.5} points={pts} className="statistics-line" style={{opacity:dim?0.2:1,pointerEvents:'none'}}/>{line.points.map((n,i)=><circle key={i} cx={x(i)} cy={y(n)} r={(data.dates.length>90?1.5:3)+(active?1.6:0)} fill={color} style={{opacity:dim?0.2:1,pointerEvents:'none'}}/>)}</g>;})}
               {hover!==null&&<line x1={x(hover)} x2={x(hover)} y1="42" y2="270" stroke="#888" strokeDasharray="4 4"/>}
-              <rect x="50" y="40" width="840" height="240" fill="transparent" onMouseMove={e=>{const svg=e.currentTarget.ownerSVGElement!;const point=svg.createSVGPoint();point.x=e.clientX;point.y=e.clientY;const local=point.matrixTransform(svg.getScreenCTM()!.inverse());setHover(Math.max(0,Math.min(data.dates.length-1,Math.round((local.x-60)/820*(data.dates.length-1)))));}}/>
             </svg></div>
-            <div className="statistics-legend" aria-live="polite">{focusDay&&<strong>{focusDay}</strong>}{lines.map((line,i)=><span key={line.id}><i style={{background:colors[i % colors.length]}}/>{line.name}{hover!==null&&<b>{line.points[hover]} 条</b>}</span>)}</div>
+            <div className="statistics-legend" aria-live="polite">{focusDay&&<strong>{focusDay}</strong>}{lines.map((line,i)=>{const active=lineHover===line.id,dim=lineHover!==null&&!active;return <span key={line.id} className={active?'statistics-legend-active':dim?'statistics-legend-dim':undefined}><i style={{background:colors[i % colors.length]}}/>{line.name}{hover!==null&&<b>{line.points[hover]} 条</b>}</span>;})}</div>
           </>}
         </>}
       </section>
