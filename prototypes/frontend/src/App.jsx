@@ -1,5 +1,6 @@
 import {TopBar,ArchiveHead,AuxiliaryToolsNav} from '../../../app/ui/Workspace';
 import {AuxiliaryTools} from '../../../app/ui/AuxiliaryTools';
+import {StatisticsPreview} from './StatisticsPreview';
 import React from "react";
 import { Icon, Mark } from "./icons.jsx";
 import { Avatar, Placeholder } from "./Avatar.jsx";
@@ -45,6 +46,7 @@ export default function App() {
             ["person", "人物"],
             ["org", "组织"],
             ["unread", "未读更新"],
+            ["statistics", "统计"],
           ].map(([key, label]) => (
             <button
               className={w.page === key ? "active" : ""}
@@ -103,6 +105,7 @@ export default function App() {
             Agent 接入
           </Button>
           <Button onClick={() => w.navigate("tools")}>辅助工具</Button>
+          <Button onClick={() => w.navigate("statistics")}>统计仪表盘</Button>
           {w.actor.role === "admin" && (
             <Button icon="settings" onClick={() => w.navigate("accounts")}>
               猎头管理
@@ -118,7 +121,7 @@ export default function App() {
           </Button>
         </div>
       )}
-      {w.page === "tools" ? <AuxiliaryTools/> : <div
+      {w.page === "statistics" ? <StatisticsPreview/> : w.page === "tools" ? <AuxiliaryTools/> : <div
         className={`workspace ${["accounts", "agent"].includes(w.page) ? "support-workspace" : ""}`}
       >
         <main

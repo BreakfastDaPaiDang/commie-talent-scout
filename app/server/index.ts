@@ -1,4 +1,5 @@
 import {TagDeletion} from './tag-deletion.ts';
+import {statistics} from './statistics.ts';
 import {TagMaintenance} from './tag-maintenance.ts';
 import {TagMigration} from './tag-migration.ts';
 import {Reading} from './reading.ts';
@@ -70,6 +71,7 @@ app.post('/api/auth/logout',async c=>{
   return c.json({ok:true});
 });
 app.get('/api/workspace',async c=>{const actor=await authenticate(c.req.raw,c.env);return c.json({member:publicMember(actor)});});
+app.get('/api/statistics',async c=>c.json(await statistics(c.env,await authenticate(c.req.raw,c.env),c.req.query())));
 app.get('/api/connections',async c=>c.json(await listCredentials(c.env,await authenticate(c.req.raw,c.env))));
 app.post('/api/connections',async c=>c.json(await createCredential(c.env,await authenticate(c.req.raw,c.env),await c.req.json())));
 app.post('/api/connections/revoke',async c=>c.json(await revokeCredential(c.env,await authenticate(c.req.raw,c.env),await c.req.json())));
