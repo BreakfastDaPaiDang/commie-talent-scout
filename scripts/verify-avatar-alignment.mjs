@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {mkdirSync,writeFileSync} from 'node:fs';
+import {mkdirSync,writeFileSync,readFileSync} from 'node:fs';
 import {preview} from 'vite';
 import {chromium} from 'playwright-core';
 import {fixture,archives,errors} from './ui-review-fixtures.mjs';
@@ -10,10 +10,12 @@ const out='tmp/verification/avatar-alignment';mkdirSync(out,{recursive:true});
 const server=await preview({preview:{host:'127.0.0.1',port:8793,strictPort:true}}),browser=await chromium.launch({channel:'msedge',headless:true}),checks=[];
 try{
  for(const [i,[id,aspect,ax,ay]] of art.entries()){
+  assert.ok(readFileSync(`public/art/avatar-ornaments/${id}.webp`).length<128*1024,'ornament delivery must stay below 128 KiB');
   const context=await browser.newContext({viewport:{width:1920,height:1000}});await context.addInitScript(seed=>Math.random=()=>seed,(i+.5)/art.length);
   const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));await page.route('**/api/**',fixture);await page.route('**/avatars/**',r=>r.fulfill({path:'tests/fixtures/images/shapes.png',contentType:'image/png'}));
   for(const [scenario,name,width] of [['short','Maki',1920],['compact','端wood赐',1660],['long','美国民主社会主义者（DSA）',1920],['mobile','Maki',390]]){
    await page.setViewportSize({width,height:1000});archives[0].name=name;await page.goto('http://127.0.0.1:8793/?archive='+archives[0].id,{waitUntil:'domcontentloaded'});await page.locator('.entity-avatar img').waitFor();await page.evaluate(()=>document.fonts.ready);await page.waitForTimeout(60);
+   if(scenario==='short'){const decoded=await page.evaluate(async id=>{const image=new Image();image.src=`/art/avatar-ornaments/${id}.webp`;await image.decode();const canvas=document.createElement('canvas');canvas.width=image.width;canvas.height=image.height;const ctx=canvas.getContext('2d');ctx.drawImage(image,0,0);const rgba=ctx.getImageData(0,0,image.width,image.height).data;let clear=0,ink=0;for(let i=3;i<rgba.length;i+=4){if(rgba[i]===0)clear++;if(rgba[i]>128)ink++;}return {width:image.width,height:image.height,clear,ink};},id);assert.equal(decoded.width,720);assert.equal(decoded.width/decoded.height,aspect);assert.ok(decoded.clear>1000&&decoded.ink>1000);}
    const geometry=await page.locator('.avatar-ornament').evaluate((e,{aspect,ax,ay})=>{
     const r=e.getBoundingClientRect(),avatar=e.closest('.entity-avatar').querySelector('.avatar').getBoundingClientRect(),header=e.closest('.entity-header'),heading=header.querySelector('.entity-heading').getBoundingClientRect(),button=header.querySelector('.archive-edit-entry').getBoundingClientRect();
     const width=Math.min(r.width,r.height*aspect),height=width/aspect;

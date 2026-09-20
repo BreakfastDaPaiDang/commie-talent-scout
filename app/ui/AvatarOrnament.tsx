@@ -36,5 +36,5 @@ export function AvatarOrnament({children}:{children:ReactNode}){
   };
   const observer=new ResizeObserver(fit);for(const node of [header,element,heading,actions])if(node)observer.observe(node);fit();return()=>observer.disconnect();
  },[ornament]);
- return <div ref={shell} className="entity-avatar avatar-hero"><span className="avatar-composition"><span className="avatar-ornament" aria-hidden="true" data-ornament={ornament.id} style={{backgroundImage:`url("/art/avatar-ornaments/${ornament.id}.png")`}}/>{children}</span></div>;
+ return <div ref={shell} className="entity-avatar avatar-hero"><span className="avatar-composition"><span className="avatar-ornament" aria-hidden="true" data-ornament={ornament.id} style={{backgroundImage:`url("/art/avatar-ornaments/${ornament.id}.webp")`}}/>{children}</span></div>;
 }
