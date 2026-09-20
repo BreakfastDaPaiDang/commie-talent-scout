@@ -72,6 +72,7 @@ app.post('/api/auth/logout',async c=>{
 });
 app.get('/api/workspace',async c=>{const actor=await authenticate(c.req.raw,c.env);return c.json({member:publicMember(actor)});});
 app.get('/api/statistics',async c=>c.json(await statistics(c.env,await authenticate(c.req.raw,c.env),c.req.query())));
+app.get('/api/statistics/link',async c=>{await authenticate(c.req.raw,c.env);return c.json({url:c.env.APP_ORIGIN+'/statistics'});});
 app.get('/api/connections',async c=>c.json(await listCredentials(c.env,await authenticate(c.req.raw,c.env))));
 app.post('/api/connections',async c=>c.json(await createCredential(c.env,await authenticate(c.req.raw,c.env),await c.req.json())));
 app.post('/api/connections/revoke',async c=>c.json(await revokeCredential(c.env,await authenticate(c.req.raw,c.env),await c.req.json())));

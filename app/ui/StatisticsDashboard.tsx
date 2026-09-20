@@ -4,12 +4,12 @@ import './statistics.css';
 
 const groups: [StatisticsGroup,string][] = [['user','用户优先'],['tag','标签优先'],['category','类别优先'],['type','人物／组织优先']];
 const colors = ['#9b482f','#326a83','#58834c','#8662a1','#b38025','#287f79'];
-type Props = {load:(query:StatisticsQuery)=>Promise<StatisticsResult>};
+type Props = {load:(query:StatisticsQuery)=>Promise<StatisticsResult>;getLink?:()=>Promise<string>};
 
-export function StatisticsDashboard({load}:Props) {
+export function StatisticsDashboard({load,getLink}:Props) {
   const [draft,setDraft]=useState(defaultStatisticsQuery),[query,setQuery]=useState(defaultStatisticsQuery);
   const [data,setData]=useState<StatisticsResult|null>(null),[loading,setLoading]=useState(true),[error,setError]=useState('');
-  const [revision,setRevision]=useState(0),[selected,setSelected]=useState<string[]>([]),[cumulative,setCumulative]=useState(false),[hover,setHover]=useState<number|null>(null);
+  const [revision,setRevision]=useState(0),[selected,setSelected]=useState<string[]>([]),[cumulative,setCumulative]=useState(false),[hover,setHover]=useState<number|null>(null),[copied,setCopied]=useState(false);
   useEffect(()=>{
     let active=true;setLoading(true);setData(null);setError('');setHover(null);
     load(query).then(result=>{if(active){setData(result);setSelected(result.series.slice(0,5).map(s=>s.id));}})
@@ -18,6 +18,7 @@ export function StatisticsDashboard({load}:Props) {
     return()=>{active=false;};
   },[query,revision,load]);
   function apply(next:StatisticsQuery){setDraft(next);setQuery(next);}
+  async function copyLink(){if(!getLink)return;try{await navigator.clipboard.writeText(await getLink());setCopied(true);setTimeout(()=>setCopied(false),2000);}catch{/* clipboard unavailable */}}
   const lines=useMemo(()=>data?.series.filter(s=>selected.includes(s.id)).map(s=>{
     let sum=0;return {...s,points:s.points.map(n=>cumulative?(sum+=n):n)};
   })??[],[data,selected,cumulative]);
@@ -28,7 +29,7 @@ export function StatisticsDashboard({load}:Props) {
   const focusDay=hover===null?null:data?.dates[hover];
   function toggle(id:string){setSelected(old=>old.includes(id)?old.filter(x=>x!==id):old.length<6?[...old,id]:old);}
   return <main className="statistics-page">
-    <header className="statistics-heading"><div><p>协作记录 · 数据概览</p><h1>统计仪表盘</h1></div><button className="button" onClick={()=>setRevision(v=>v+1)} disabled={loading}>刷新统计</button></header>
+    <header className="statistics-heading"><div><p>协作记录 · 数据概览</p><h1>统计仪表盘</h1></div><div className="statistics-heading-actions">{getLink&&<button className="button quiet" type="button" onClick={copyLink}>{copied?'已复制':'复制链接'}</button>}<button className="button" onClick={()=>setRevision(v=>v+1)} disabled={loading}>刷新统计</button></div></header>
     <div className="statistics-modes" aria-label="统计分组">{groups.map(([key,label])=><button key={key} aria-pressed={query.group===key} onClick={()=>apply({...draft,group:key,search:''})}>{label}</button>)}</div>
     <form className="statistics-filters" onSubmit={e=>{e.preventDefault();apply({...draft});}}>
       <label>开始日期<input type="date" required value={draft.from} onChange={e=>setDraft({...draft,from:e.target.value})}/></label>

@@ -21,4 +21,4 @@ export async function loadStatisticsPreview(query) {
   const series=[...grouped.values()].sort((a,b)=>b.total-a.total||a.name.localeCompare(b.name));
   return {query,dates,series,total:counted.size,members:members.size,archives:archives.size,groups:series.length};
 }
-export function StatisticsPreview(){return <StatisticsDashboard load={loadStatisticsPreview}/>;}
+export function StatisticsPreview(){return <StatisticsDashboard load={loadStatisticsPreview} getLink={async()=>location.origin+'/statistics'}/>;}
