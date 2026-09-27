@@ -1,0 +1,3 @@
+.unread-nav {position:relative;flex-shrink:0}
+.unread-nav[aria-current="page"] {color:var(--red)}
+.unread-nav .nav-unread {position:absolute;top:-3px;right:-8px;min-width:17px;padding:2px 4px;background:var(--red);color:white;font:12px var(--mono);line-height:1.2;text-align:center;pointer-events:none}

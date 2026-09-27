@@ -1,0 +1,9 @@
+.agent-onboarding {margin-top:28px;border-top:1px solid var(--line);padding-top:18px}
+.agent-onboarding > summary {cursor:pointer;font-size:16px;line-height:1.6;width:fit-content}
+.agent-onboarding > summary:focus-visible {outline:2px solid var(--red);outline-offset:4px}
+.agent-copy .agent-onboarding h2 {font-size:20px;line-height:1.5;white-space:normal;letter-spacing:normal;margin:18px 0 8px}
+.agent-copy .agent-onboarding p,.agent-copy .agent-onboarding li {font-size:15px;line-height:1.8;color:#585858}
+.agent-onboarding ol {padding-left:22px;margin:14px 0 0}
+.agent-onboarding li {padding-left:4px;margin:12px 0}
+.agent-onboarding a {color:var(--red);text-decoration:underline;text-underline-offset:3px}
+.agent-onboarding strong {color:var(--ink)}

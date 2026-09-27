@@ -2,6 +2,10 @@
 
 接入页保留短说明与“复制提示词给 Agent”按钮。首次消息默认只负责立即连接与最小身份核验；业务任务与规则由 MCP 按需提供。
 
+2026-09-28（Issue #51）：接入页新增默认收起的“还没有 Agent？”引导，推荐 DSH 桌面版，提供用户指定的 Windows x64 下载地址、DeepSeek 官方开放平台入口、先充 5 元 API 余额的试用建议、API Key 配置和粘贴本站接入提示词的步骤。原复制按钮与认证机制不变，原型和正式站共用引导。5 元是建议金额，不承诺固定可用时长。
+
+DSH 配置文案依据安装包发布当日的[官方桌面文档](https://github.com/deepseek-ai/deepseek-harness/blob/59d2e01575f4114fb323af89a60420628a06638f/apps/desktop/README.zh.md)核对：欢迎窗口提供 API Key 表单，通过“保存并继续”进入工作区。下载地址已确认 HTTP 200；本次未安装 DSH 或执行充值，不将官网文档核对与本站接入链路验证描述为 DSH 完整端到端验收。
+
 2026-09-09 用户修正接入要求：点击复制时自动创建当前成员的专用 MCP 凭据，复制的正文必须包括真实地址与完整认证配置，使没有浏览器能力的 Agent 也能接入。唯一模板见 [bootstrap-prompt.txt](../app/shared/bootstrap-prompt.txt)。认证配置用通用 `mcpServers` JSON 表达 HTTP 地址和 Authorization 请求头，Agent 按所在客户端转换格式；连接管理网址仅供成员撤销，不是 Agent 的前置认证步骤。
 
 正式站与原型共用 `app/ui/AgentHandoff.tsx`。正式按钮创建 90 天连接，凭据只在当前页面内存保留；重复复制和剪贴板失败后的重试复用同一份凭据，撤销后再次复制则换发。“为另一个 Agent 复制”创建独立连接。剪贴板不可用时显示可选中正文；成功复制后不常态显示认证值，不写入 localStorage/sessionStorage。原型只说明需在正式站操作，不生成假凭据。
