@@ -16,16 +16,18 @@ try{
  let failCreation=true;await page.route('**/api/connections',async route=>{if(route.request().method()==='POST'&&failCreation){failCreation=false;await route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:{code:'TEST_UNAVAILABLE',message:'验收模拟：暂时无法创建连接'}})});}else await route.continue();});
  await page.goto(v.base+'/agent',{waitUntil:'domcontentloaded'});
  const out='tmp/verification/agent-copy-'+v.target;mkdirSync(out,{recursive:true});
- await page.locator('.agent-onboarding summary').waitFor();assert.equal(await page.locator('.agent-onboarding').getAttribute('open'),null);
+ await page.locator('.agent-onboarding summary').waitFor();assert.equal(await page.locator('.agent-onboarding details').getAttribute('open'),null);
  assert.equal(await page.locator('.primary-nav').getByRole('button',{name:/未读更新/}).count(),0);
  assert.equal(await page.getByRole('button',{name:'猎头管理',exact:true}).count(),v.actor.role==='admin'?1:0);
  assert.equal(await page.locator('.unread-nav').isVisible(),true);
- await page.locator('.agent-onboarding summary').click();
+ assert.equal(await page.getByRole('link',{name:'下载 Windows x64 桌面版',exact:true}).isVisible(),true);
+ for(const width of [1440,390]){await page.setViewportSize({width,height:1000});await page.locator('.agent-onboarding').scrollIntoViewIfNeeded();assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.screenshot({path:out+'/guide-collapsed-'+width+'.png'});}
+ await page.setViewportSize({width:1440,height:1000});await page.locator('.agent-onboarding summary').click();
  assert.equal(await page.getByRole('link',{name:'下载 Windows x64 桌面版',exact:true}).getAttribute('href'),'https://download.deepseek.com/dsh-desk/bin/win-x64/deepseek-harness-0.1.7-rc.1.20260924.1-win-x64.exe');
  assert.equal(await page.getByRole('link',{name:'DeepSeek 官方开放平台',exact:true}).getAttribute('href'),'https://platform.deepseek.com/');
  for(const width of [1440,390]){await page.setViewportSize({width,height:1000});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.locator('.agent-onboarding').scrollIntoViewIfNeeded();await page.screenshot({path:out+'/guide-'+width+'.png'});}
  await page.getByRole('button',{name:'打开工具导航',exact:true}).click();await page.getByRole('button',{name:/^未读更新/}).waitFor();await page.getByRole('button',{name:'打开工具导航',exact:true}).click();
- await page.locator('.agent-onboarding summary').click();assert.equal(await page.locator('.agent-onboarding').getAttribute('open'),null);await page.setViewportSize({width:1440,height:1000});
+ await page.locator('.agent-onboarding summary').click();assert.equal(await page.locator('.agent-onboarding details').getAttribute('open'),null);await page.setViewportSize({width:1440,height:1000});
  checks.push('shared beginner guide expands on desktop/mobile with the selected installer and official API links; unread bell replaces primary navigation and remains accessible on mobile');
  const button=page.getByRole('button',{name:'复制提示词给 Agent',exact:true});await button.click();await page.getByRole('alert').filter({hasText:'暂时无法创建连接'}).waitFor();assert.equal((await current()).length,0);assert.equal(await page.evaluate(()=>window.__copiedPrompt),'');checks.push('failed creation neither copies incomplete credentials nor claims success');
  await button.evaluate(e=>{e.click();e.click();});const fallback=page.getByRole('textbox',{name:'请选择下方接入信息复制'});await fallback.waitFor();const firstPrompt=await fallback.inputValue(),first=parse(firstPrompt);assert.equal((await current()).length,1);assert.equal(first.url,v.base+'/mcp');assert.match(first.headers.Authorization,/^Bearer cts_[a-f0-9]{64}$/);assert.ok(!firstPrompt.includes('{{'));

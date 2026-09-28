@@ -1,9 +1,13 @@
-.agent-onboarding {margin-top:28px;border-top:1px solid var(--line);padding-top:18px}
-.agent-onboarding > summary {cursor:pointer;font-size:16px;line-height:1.6;width:fit-content}
-.agent-onboarding > summary:focus-visible {outline:2px solid var(--red);outline-offset:4px}
-.agent-copy .agent-onboarding h2 {font-size:20px;line-height:1.5;white-space:normal;letter-spacing:normal;margin:18px 0 8px}
+.agent-onboarding {margin-top:28px;border:1px solid #ead8d5;border-left:4px solid var(--red);background:#fff7f5;padding:20px 22px}
+.agent-onboarding-label {color:var(--red);font-size:13px;font-weight:650}
+.agent-onboarding summary {cursor:pointer;font-size:16px;font-weight:600;line-height:1.6;width:fit-content}
+.agent-onboarding summary:focus-visible {outline:2px solid var(--red);outline-offset:4px}
+.agent-onboarding details {margin-top:18px}
+.agent-copy .agent-onboarding h2 {font-size:22px;line-height:1.5;white-space:normal;letter-spacing:normal;margin:6px 0 8px}
 .agent-copy .agent-onboarding p,.agent-copy .agent-onboarding li {font-size:15px;line-height:1.8;color:#585858}
 .agent-onboarding ol {padding-left:22px;margin:14px 0 0}
 .agent-onboarding li {padding-left:4px;margin:12px 0}
 .agent-onboarding a {color:var(--red);text-decoration:underline;text-underline-offset:3px}
+.agent-onboarding .agent-download {display:inline-flex;max-width:100%;margin-top:16px;border:1px solid var(--red);background:white;color:var(--red);font-size:15px;font-weight:600;text-decoration:none;white-space:normal;text-align:left}
+.agent-onboarding .agent-download:hover {background:#ffebe6}
 .agent-onboarding strong {color:var(--ink)}

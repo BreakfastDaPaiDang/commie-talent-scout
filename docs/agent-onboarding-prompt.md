@@ -4,6 +4,10 @@
 
 2026-09-28（Issue #51）：接入页新增默认收起的“还没有 Agent？”引导，推荐 DSH 桌面版，提供用户指定的 Windows x64 下载地址、DeepSeek 官方开放平台入口、先充 5 元 API 余额的试用建议、API Key 配置和粘贴本站接入提示词的步骤。原复制按钮与认证机制不变，原型和正式站共用引导。5 元是建议金额，不承诺固定可用时长。
 
+同日用户反馈折叠入口不显眼（Issue #53）：改为常显的新手推荐卡片，标题、简介与下载按钮一直可见，只折叠安装和接入步骤。
+
+下载版本和链接集中在 `app/shared/dsh-desktop.ts`，暂保留用户实际使用过的 `0.1.7-rc.1.20260924.1`。维护时查看[官方 Windows 更新清单](https://download.deepseek.com/dsh-desk/feeds/win-x64/nightly.yml)，核对版本、安装包地址及配置流程后，明确修改这一处配置；不按每次访问自动追随 Nightly。2026-09-28 清单返回 `0.1.7-rc.2`，GitHub 对应 Release 没有安装包附件，因此不把 GitHub Release 当作新手下载页。官方桌面端文档提供应用菜单的“检查更新”，已安装者可使用该入口。本次没有安装或实际执行 DSH 更新，不承诺更新服务始终可用。
+
 DSH 配置文案依据安装包发布当日的[官方桌面文档](https://github.com/deepseek-ai/deepseek-harness/blob/59d2e01575f4114fb323af89a60420628a06638f/apps/desktop/README.zh.md)核对：欢迎窗口提供 API Key 表单，通过“保存并继续”进入工作区。下载地址已确认 HTTP 200；本次未安装 DSH 或执行充值，不将官网文档核对与本站接入链路验证描述为 DSH 完整端到端验收。
 
 2026-09-09 用户修正接入要求：点击复制时自动创建当前成员的专用 MCP 凭据，复制的正文必须包括真实地址与完整认证配置，使没有浏览器能力的 Agent 也能接入。唯一模板见 [bootstrap-prompt.txt](../app/shared/bootstrap-prompt.txt)。认证配置用通用 `mcpServers` JSON 表达 HTTP 地址和 Authorization 请求头，Agent 按所在客户端转换格式；连接管理网址仅供成员撤销，不是 Agent 的前置认证步骤。
