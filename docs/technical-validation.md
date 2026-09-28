@@ -1,6 +1,6 @@
 # 技术验证结果
 
-日期：2026-09-08（北京时间）。云端原始基线为 PRD v1.1；[现行 PRD v1.2](./PRD.md)的新增规则另行注明。本次验证使用独立 Cloudflare 资源与虚构数据，验证代码位于 [spikes/cloudflare-mcp](../spikes/cloudflare-mcp/)。前端原型与该验证服务分开运行。
+日期：2026-09-08（北京时间）。云端原始基线为 PRD v1.1；[现行 PRD v1.2](./PRD-0.1.1.md)的新增规则另行注明。本次验证使用独立 Cloudflare 资源与虚构数据，验证代码位于 [spikes/cloudflare-mcp](../spikes/cloudflare-mcp/)。前端原型与该验证服务分开运行。
 
 ## v1.2 增量验证
 

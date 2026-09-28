@@ -22,8 +22,9 @@
 | 向成员介绍项目 | [可转发介绍](./docs/introduction.md) |
 | 第一次使用、了解日常操作 | [成员上手指南](./docs/member-guide.md) |
 | 查看最近更新 | [更新记录](./CHANGELOG.md) / [GitHub Releases](https://github.com/BreakfastDaPaiDang/commie-talent-scout/releases) |
-| 了解规则与权限 | [PRD](./docs/PRD.md) / [领域词汇](./CONTEXT.md) |
+| 了解当前线上规则与权限 | [PRD · 0.1.1](./docs/PRD-0.1.1.md) / [领域词汇](./CONTEXT.md) |
 | 参与开发与运维 | [开发说明](./docs/development.md) / [部署与恢复](./docs/operations.md) |
+| 接手 1.0.0 开发、配合 AI 练习 | [1.0.0 从这里开始](./docs/releases/1.0.0/README.md) |
 | 查找设计、决策与验收证据 | [文档导航](./docs/README.md) |
 | 提交问题或建议 | [GitHub Issues](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues)；不便使用 GitHub 时联系管理员 |
 

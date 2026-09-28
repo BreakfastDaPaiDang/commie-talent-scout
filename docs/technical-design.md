@@ -1,6 +1,6 @@
 # 首版技术方案
 
-日期：2026-09-08。依据 [PRD](./PRD.md)、[技术验证结果](./technical-validation.md)与[设计说明](./design/README.md)。技术验证代码和前端原型提供证据与设计参考，均不是生产应用。
+日期：2026-09-08。依据 [PRD](./PRD-0.1.1.md)、[技术验证结果](./technical-validation.md)与[设计说明](./design/README.md)。技术验证代码和前端原型提供证据与设计参考，均不是生产应用。
 
 ## 技术选择
 
