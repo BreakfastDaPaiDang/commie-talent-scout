@@ -42,11 +42,11 @@ Issue 是具体工作与验收清单，PRD 是需求正文，ADR 是架构原因
 
 ## 实施路线
 
-共 **12 项实施 Issue**。S01 是必要的前置整理，S02 是用户明确要求的设计前置；其余功能项均要贯通所需存储、业务、网页、MCP 和验证。
+共 **12 项实施 Issue**。S01 就是此前确认的“小范围重构”：先调整真实业务代码，集中可执行规则并由代码生成视图；后续身份、任务与周期规则沿用这一结构。S02 是用户明确要求的设计前置；其余功能项均要贯通所需存储、业务、网页、MCP 和验证。
 
 | 编号 / Issue | 完成什么 | 需要先完成 |
 | --- | --- | --- |
-| S01 · [#55](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/55) | 集中可执行业务规则，验证现有档案开关行为不变 | 无 |
+| S01 · [#55](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/55) | 小范围重构：集中业务规则，并自动生成规则视图 | 无 |
 | S02 · [#56](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/56) | 从生图意向到可操作的任务看板与新版导航方案 | 无 |
 | S03 · [#57](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/57) | 通过网页和 MCP 创建、领取并完成一项人事任务 | [#55](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/55)、[#56](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/56) |
 | S04 · [#58](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/58) | 支持主动放弃、延期、重开与任务评论历史 | [#57](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/57) |
@@ -63,7 +63,7 @@ Issue 是具体工作与验收清单，PRD 是需求正文，ADR 是架构原因
 
 ```mermaid
 flowchart TD
-  S01["S01 规则整理"] --> S03["S03 创建、领取、完成"]
+  S01["S01 小范围重构"] --> S03["S03 创建、领取、完成"]
   S02["S02 生图与交互方案"] --> S03
   S03 --> S04["S04 放弃、延期、评论、重开"]
   S04 --> S05["S05 消息与到期收尾"]
