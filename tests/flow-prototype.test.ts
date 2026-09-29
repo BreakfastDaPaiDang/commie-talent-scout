@@ -3,6 +3,17 @@ import assert from 'node:assert/strict';
 import {advanceFlow,applyFlow,flowActors,initialFlow} from '../prototypes/frontend/src/flow-model.ts';
 const [zhou,shen,admin]=flowActors;
 
+test('prototype completes with existing archive references without copying notes or comments',()=>{
+ let s=applyFlow(initialFlow(),{type:'claim',taskId:'review-lin'},zhou);
+ const notes=structuredClone(s.notes);
+ assert.throws(()=>applyFlow(s,{type:'complete',taskId:'review-lin',noteIds:['missing']},zhou),/不属于当前档案或已不可用/);
+ s=applyFlow(s,{type:'complete',taskId:'review-lin',noteIds:['n1','n1']},zhou);
+ assert.deepEqual(s.notes,notes);assert.deepEqual(s.tasks.find(t=>t.id==='review-lin')!.noteIds,['n1']);
+ assert.deepEqual(s.tasks.find(t=>t.id==='review-lin')!.comments,[]);
+ let other=applyFlow(initialFlow(),{type:'claim',taskId:'monthly-lu'},zhou);
+ assert.throws(()=>applyFlow(other,{type:'complete',taskId:'monthly-lu',noteIds:['n1']},zhou),/不属于当前档案或已不可用/);
+});
+
 test('prototype separates audit completion, explicit membership and voluntary onboarding ownership while preserving the archive',()=>{
  let s=initialFlow();const tags=s.people[0].tags,notes=s.notes;
  s=applyFlow(s,{type:'claim',taskId:'review-lin'},zhou);

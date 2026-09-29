@@ -1,4 +1,4 @@
-import React,{useEffect,useState,type ReactNode} from 'react';
+import React,{useEffect,useRef,useState,type ReactNode} from 'react';
 import {TopBar,TabList} from './Workspace';
 import {Icon} from './icons';
 import {Modal,ModalActions} from './Modal';
@@ -16,6 +16,9 @@ function Status({task}:{task:FlowTask}){return <span className={'fw-status '+(!t
 
 export function FlowWorkspace({data,actor,actors,page,onPage,selectedId,onSelect,onAction,notice,error,controls,statistics}:Props){
  const[scope,setScope]=useState('all'),[query,setQuery]=useState(''),[type,setType]=useState('all'),[taskId,setTaskId]=useState<string|null>(null),[tab,setTab]=useState('overview'),[dialog,setDialog]=useState<Dialog|null>(null),[text,setText]=useState(''),[deadline,setDeadline]=useState(''),[note,setNote]=useState(''),[comment,setComment]=useState('');
+ const[resultNotes,setResultNotes]=useState<string[]>([]),[targetNote,setTargetNote]=useState<string|null>(null);
+ const noteElements=useRef(new Map<string,HTMLElement>());
+ useEffect(()=>{if(tab==='notes'&&targetNote){const node=noteElements.current.get(targetNote);node?.scrollIntoView({block:'center'});node?.focus({preventScroll:true});}},[tab,targetNote]);
  useEffect(()=>{setDialog(null);setComment('');},[actor.id]);
  const person=data.people.find(p=>p.id===selectedId);
  const related=data.tasks.filter(t=>t.personId===selectedId);
@@ -24,9 +27,10 @@ export function FlowWorkspace({data,actor,actors,page,onPage,selectedId,onSelect
  const notes=data.notes.filter(n=>n.personId===selectedId);
  const unread=data.messages.filter(m=>m.ownerId===actor.id&&!m.read).length;
  function navigate(next:FlowPage){onPage(next);onSelect(null);setTaskId(null);setQuery('');setTab('overview');}
- function select(p:FlowPerson,t?:FlowTask){onSelect(p.id);setTaskId(t?.id??null);setTab('overview');setNote('');setComment('');}
- function open(kind:Dialog['kind']){setText('');setDeadline(new Date(Math.max(Date.parse(data.now),Date.parse(task?.deadline??data.now))+7*86400000).toISOString().slice(0,10));setDialog({kind,task});}
- function submit(){if(!dialog||!person)return;const ok=dialog.kind==='join'?onAction({type:'join',personId:person.id}):onAction({type:dialog.kind,taskId:dialog.task!.id,body:text,deadline:deadline+'T18:00:00+08:00'});if(ok){setDialog(null);if(dialog.kind==='join')setTaskId(null);}}
+ function select(p:FlowPerson,t?:FlowTask){onSelect(p.id);setTaskId(t?.id??null);setTab('overview');setNote('');setComment('');setTargetNote(null);}
+ function showNote(id:string){setTargetNote(id);setTab('notes');}
+ function open(kind:Dialog['kind']){setText('');setResultNotes(task?.noteIds??[]);setDeadline(new Date(Math.max(Date.parse(data.now),Date.parse(task?.deadline??data.now))+7*86400000).toISOString().slice(0,10));setDialog({kind,task});}
+ function submit(){if(!dialog||!person)return;const ok=dialog.kind==='join'?onAction({type:'join',personId:person.id}):onAction({type:dialog.kind,taskId:dialog.task!.id,body:text,deadline:deadline+'T18:00:00+08:00',noteIds:resultNotes});if(ok){setDialog(null);if(dialog.kind==='join')setTaskId(null);}}
  const filteredTasks=data.tasks.filter(t=>{
   const p=data.people.find(p=>p.id===t.personId)!;
   return (scope==='all'||(scope==='mine'?t.ownerId===actor.id:t.open&&!t.ownerId))&&(type==='all'||t.type===type)&&`${t.title} ${p.name}`.includes(query);
@@ -68,12 +72,12 @@ export function FlowWorkspace({data,actor,actors,page,onPage,selectedId,onSelect
      <div className="fw-next"><div><span className="fw-eyebrow">下一步</span>{task?.open&&<Status task={task}/>}</div><h3>{confirmJoin&&auditDone&&!task?.open?'确认正式入社':task?.open?task.title:person.member&&onboardingDone?'继续了解与保持联系':task&&!task.open?flowResults[task.result!]:'发起一轮引荐'}</h3><p>{task?.open?(task.ownerId?`${actorName(task.ownerId)}正在负责 · ${day(task.deadline)} 前完成`:'工作已就绪，等待成员主动领取。'):confirmJoin&&auditDone?'审核已交代；正式入社仍需明确确认。':person.member?'档案继续开启，既有工作结果和材料保留。':'查看已有材料，再决定下一步安排。'}</p></div>
      <TabList id="flow-detail" label="档案内容" value={tab} onChange={setTab} items={[{key:'overview',label:'当前工作'},{key:'notes',label:`观察记录 · ${notes.length}`},{key:'history',label:'过程与历史'}]}/>
      <section className="fw-detail-body" role="tabpanel" id="flow-detail-timeline" aria-labelledby={`flow-detail-tab-${tab}`}>
-      {tab==='overview'&&<>{task&&<><section><h3>工作目的</h3><p>{task.purpose}</p></section><section><h3>交付要求</h3><p>{task.delivery}</p><button className="fw-text-button" onClick={()=>setTab('notes')}>查看档案记录 <Icon name="arrow" size={14}/></button></section>{task.noteIds.length>0&&<section><h3>已关联的结果</h3>{task.noteIds.map(id=><button className="fw-result-link" key={id} onClick={()=>setTab('notes')}>{data.notes.find(n=>n.id===id)?.body.slice(0,80)}<Icon name="arrow" size={14}/></button>)}</section>}</>}
+      {tab==='overview'&&<>{task&&<><section><h3>工作目的</h3><p>{task.purpose}</p></section><section><h3>交付要求</h3><p>{task.delivery}</p><button className="fw-text-button" onClick={()=>setTab('notes')}>查看档案记录 <Icon name="arrow" size={14}/></button></section>{task.noteIds.length>0&&<section><h3>已关联的结果</h3>{task.noteIds.map(id=>{const result=data.notes.find(n=>n.id===id&&n.personId===person.id);return <button className="fw-result-link" key={id} disabled={!result} onClick={()=>showNote(id)}>{result?.body.slice(0,80)??'原记录不可用'}<Icon name="arrow" size={14}/></button>;})}</section>}</>}
        <section><h3>关联工作 <small>{related.length}</small></h3>{related.map(t=><button key={t.id} className={'fw-related '+(t.id===task?.id?'selected':'')} onClick={()=>setTaskId(t.id)}><span>{t.title}</span><Status task={t}/></button>)}</section>
        {person.ambassadors&&<section><h3>组织大使</h3><p>{person.ambassadors.map(actorName).join('、')}</p></section>}
        {confirmJoin&&!(auditDone&&!task?.open)&&<section className="fw-separate-action"><Button onClick={()=>open('join')}>确认入社</Button></section>}
       </>}
-      {tab==='notes'&&<><form className="fw-note-form" onSubmit={e=>{e.preventDefault();if(onAction({type:'note',personId:person.id,body:note}))setNote('');}}><label>新的观察<textarea value={note} required rows={3} onChange={e=>setNote(e.target.value)} placeholder="记录实际情况、来源与后续关注事项…"/></label><button className="fw-button fw-primary">保存到档案</button></form>{notes.map(n=><article className="fw-note" key={n.id}><header><Avatar name={actorName(n.authorId)}/><strong>{actorName(n.authorId)}</strong><time>{fullTime(n.at)}</time></header><p>{n.body}</p></article>)}{!notes.length&&<p className="fw-help">尚未留下观察。作品与动态也可以据实记录。</p>}</>}
+      {tab==='notes'&&<><form className="fw-note-form" onSubmit={e=>{e.preventDefault();if(onAction({type:'note',personId:person.id,body:note}))setNote('');}}><label>新的观察<textarea value={note} required rows={3} onChange={e=>setNote(e.target.value)} placeholder="记录实际情况、来源与后续关注事项…"/></label><button className="fw-button fw-primary">保存到档案</button></form>{notes.map(n=><article className={'fw-note '+(targetNote===n.id?'fw-note-target':'')} key={n.id} tabIndex={-1} aria-label={`观察记录，${actorName(n.authorId)}，${fullTime(n.at)}`} ref={el=>{if(el)noteElements.current.set(n.id,el);else noteElements.current.delete(n.id);}}><header><Avatar name={actorName(n.authorId)}/><strong>{actorName(n.authorId)}</strong><time>{fullTime(n.at)}</time></header><p>{n.body}</p></article>)}{!notes.length&&<p className="fw-help">尚未留下观察。作品与动态也可以据实记录。</p>}</>}
       {tab==='history'&&<>{task?<><h3>{task.title}</h3><ol className="fw-history">{[...task.history].reverse().map(e=><li key={e.id}><i/><div><p>{e.text}</p><small>{e.actor} · {fullTime(e.at)}</small></div></li>)}</ol><h3>工作评论</h3>{task.comments.map(c=><article className="fw-comment" key={c.id}><strong>{actorName(c.authorId)}</strong><p>{c.body}</p><small>{fullTime(c.at)}</small></article>)}{task.open?<form onSubmit={e=>{e.preventDefault();if(onAction({type:'comment',taskId:task.id,body:comment}))setComment('');}}><label>补充工作说明<textarea rows={3} value={comment} required onChange={e=>setComment(e.target.value)} placeholder="讨论安排与困难；成果留在档案中"/></label><button className="fw-button">发表评论</button></form>:<p className="fw-readonly">任务已关闭，历史只读；重新开启后可继续讨论。</p>}</>:<p>发起工作后，这里会保留完整接续过程。</p>}</>}
      </section>
     </div>
@@ -82,6 +86,7 @@ export function FlowWorkspace({data,actor,actors,page,onPage,selectedId,onSelect
   </div>
   {dialog&&person&&<Modal title={modalTitles[dialog.kind]} onClose={()=>setDialog(null)}><form className="fw-action-form" onSubmit={e=>{e.preventDefault();submit();}}>
    {dialog.kind==='join'?<><p>确认 <strong>{person.name}</strong> 已正式取得社员身份。</p><ul className="fw-effect-list"><li>原档案转入社员列表，资料、观察和标签全部保留。</li><li>创建一项入社对接任务，初始为待接手。</li><li>审核负责人不会自动成为对接负责人。</li></ul><p className="fw-help">确认后直接打开社员档案，继续处理下一步。</p></>:<><p>{dialog.task?.title}</p>{['release','extend','reopen'].includes(dialog.kind)?<><label>{dialog.kind==='release'?'新的接取期限':'新的任务期限'}<input type="date" required min={data.now.slice(0,10)} value={deadline} onChange={e=>setDeadline(e.target.value)}/></label><p className="fw-help">{dialog.kind==='release'?'交还后等待其他成员主动领取，不记失败。':dialog.kind==='reopen'?'保留原关闭结果。原接取者可继续，管理员为他人重开时回到待领取。':'普通评论和查看不会延长期限。'}</p></>:<><label>{dialog.kind==='complete'?'留档结果（可选）':'取消原因'}<textarea rows={5} value={text} required={dialog.kind==='cancel'} onChange={e=>setText(e.target.value)} placeholder={dialog.kind==='complete'?'结果将保存到关联档案。已留档时可直接确认完成；联系不到也可据实交代。':'说明这项工作为什么不再适用'}/></label>{dialog.kind==='complete'&&<p className="fw-help">完成由接取者确认，不强制回复或新增观察；工作结果应在档案中留存。</p>}</>}</>}
+   {dialog.kind==='complete'&&notes.length>0&&<fieldset className="fw-result-picker"><legend>关联已有观察（可选）</legend><div>{notes.map(n=><div key={n.id}><label><input type="checkbox" checked={resultNotes.includes(n.id)} onChange={e=>setResultNotes(ids=>e.target.checked?[...ids,n.id]:ids.filter(id=>id!==n.id))}/><span><small>{actorName(n.authorId)} · {fullTime(n.at)}</small><span>{n.body.slice(0,180)}{n.body.length>180?'…':''}</span></span></label>{n.body.length>180&&<details><summary>展开全文</summary><p>{n.body}</p></details>}</div>)}</div></fieldset>}
    {error&&<p className="fw-error" role="alert">{error}</p>}<ModalActions><button className="fw-button fw-primary">{dialog.kind==='join'?'确认入社并查看下一步':dialog.kind==='complete'?'确认完成':dialog.kind==='release'?'确认交还':dialog.kind==='extend'?'保存新期限':dialog.kind==='reopen'?'确认重新开启':'确认取消'}</button></ModalActions>
   </form></Modal>}
  </div>;

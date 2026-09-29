@@ -22,5 +22,29 @@ try{
  await button('收起档案详情').click();await page.getByRole('textbox',{name:'搜索工作台',exact:true}).fill('不存在的虚构对象');assert.equal(await page.getByText('没有匹配的工作',{exact:true}).count(),3);await shot('empty-search');
  for(const width of [1440,1024,768,390]){await page.setViewportSize({width,height:900});await page.goto(base+'/?flow=1');await button('收起档案详情').click();await shot(`board-${width}`);await button('查看任务：了解林澈的入社意愿').click();await shot(`detail-${width}`);}
  await button('领取审核').click();await button('完成审核').click();await page.getByRole('textbox',{name:'留档结果（可选）',exact:true}).fill('手机端虚构长文验收。'.repeat(30));await shot('mobile-expanded-form');await button('确认完成').click();await button('确认入社').click();await button('确认入社并查看下一步').click();await button('领取对接').click();await button('完成对接').click();await button('确认完成').click();assert.match(await page.locator('.fw-profile').textContent(),/社员/);await shot('mobile-completed');checks.push('desktop 1600/1440/1024 and tablet/mobile 768/390 have no horizontal overflow; phone completes the entire audit-to-onboarding path with expanded long form');
+ await page.setViewportSize({width:1440,height:1000});await page.goto(base+'/?flow=1');await button('领取审核').click();
+ await button('延期').click();await page.getByLabel('新的任务期限',{exact:true}).fill('2026-09-30');await button('保存新期限').click();
+ await page.getByRole('alert').filter({hasText:'延期须晚于原期限'}).waitFor();await shot('desktop-error');
+ await page.setViewportSize({width:390,height:844});await shot('mobile-error');
+ await page.getByLabel('新的任务期限',{exact:true}).fill('2026-10-20');await button('保存新期限').click();assert.equal(await page.getByRole('dialog').count(),0);
+ await page.getByRole('tab',{name:/观察记录/}).click();
+ const long='虚构长文：说明联系背景、已确认事项和后续约定。\n'.repeat(70);
+ await page.getByRole('textbox',{name:'新的观察',exact:true}).fill(long);await button('保存到档案').click();
+ assert.equal(await page.locator('.fw-note').count(),2);
+ await button('完成审核').click();await page.getByRole('checkbox',{name:/9 月 28 日，林澈主动询问/}).check();
+ await shot('mobile-result-picker');await button('确认完成').click();
+ await page.getByRole('tab',{name:'当前工作',exact:true}).click();await page.locator('.fw-result-link').filter({hasText:'9 月 28 日'}).click();
+ assert.equal(await page.locator('.fw-note-target').count(),1);assert.match(await page.locator('.fw-note-target').textContent(),/9 月 28 日/);
+ assert.equal(await page.locator('.fw-note-target').evaluate(e=>e===document.activeElement),true);
+ assert.ok(await page.locator('.fw-note-target').evaluate(e=>{const r=e.getBoundingClientRect(),p=e.closest('.fw-detail-scroll').getBoundingClientRect();return r.top>=p.top&&r.bottom<=p.bottom;}),'result link scrolls the exact old record into view');
+ assert.equal(await page.locator('.fw-note').count(),2,'referencing a result must not duplicate the observation');await shot('mobile-exact-result');
+ await page.getByRole('tab',{name:'过程与历史',exact:true}).click();assert.equal(await page.locator('.fw-comment').count(),0);
+ checks.push('invalid extension is visible and recoverable on desktop/mobile; selecting an existing observation completes without duplicates, then focuses and scrolls to its exact source beneath a long later record');
+ await button('收起档案详情').click();await page.getByRole('button',{name:/消息提醒，/}).click();await page.locator('.fw-message-list>button').first().click();
+ assert.match(await page.locator('.fw-profile').textContent(),/大桥读书会/);assert.equal(await page.getByRole('button',{name:'完成任务',exact:true}).count(),1);
+ await page.getByRole('tab',{name:'当前工作',exact:true}).click();assert.match(await page.locator('.fw-detail-body').textContent(),/组织大使.*沈舟、许禾/);
+ await button('收起档案详情').click();await page.getByLabel('演示身份',{exact:true}).selectOption('shen');await page.getByRole('button',{name:/消息提醒，/}).click();await page.getByRole('heading',{name:'暂时没有新的提醒',exact:true}).waitFor();await button('去看任务').click();
+ await page.locator('.fw-account summary').click();await button('标签库').click();await page.getByRole('heading',{name:'人物词库',exact:true}).waitFor();
+ checks.push('bell opens the related work, task owner differs from organization ambassadors, another member has an empty inbox, and vocabulary stays in the account menu');
  assert.deepEqual(errors,[]);writeFileSync(`${out}/report.json`,JSON.stringify({date:new Date().toISOString(),base,checks,errors},null,2));console.log(JSON.stringify({checks:checks.length,errors}));
 }finally{await browser.close();}

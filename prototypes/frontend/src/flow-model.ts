@@ -54,6 +54,11 @@ export function applyFlow(data:FlowData,action:FlowAction,actor:FlowActor):FlowD
  if(action.type==='extend'){const deadline=future(action.deadline);if(Date.parse(deadline)<=Date.parse(t.deadline))throw new Error('延期须晚于原期限。');log(`主动延期：${t.deadline.slice(0,10)} → ${deadline.slice(0,10)}`,t);t.deadline=deadline;}
  if(action.type==='release'){t.ownerId=null;t.deadline=future(action.deadline);log('主动放弃，回到待领取，不记为失败',t);}
  if(action.type==='complete'||action.type==='cancel'){
+  if(action.type==='complete'){
+   const ids=action.noteIds??[];
+   if(ids.some(id=>!next.notes.some(n=>n.id===id&&n.personId===t.personId)))throw new Error('关联观察不属于当前档案或已不可用，请重新选择。');
+   t.noteIds=[...new Set([...t.noteIds,...ids])];
+  }
   if(action.type==='complete'&&action.body?.trim()){
    const n={id:crypto.randomUUID(),personId:t.personId,body:action.body.trim(),authorId:actor.id,at};next.notes.unshift(n);t.noteIds.push(n.id);
   }
