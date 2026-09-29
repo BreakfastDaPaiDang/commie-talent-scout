@@ -16,6 +16,8 @@ npm run dev:worker
 
 检查使用 `npm run check`、`npm test`、`npm run test:dom`、`npm run build` 和 `node scripts/check-ui.mjs`；真实接口界面验收按 [前端约定](./agents/frontend.md)执行。重新构建后，如果本地 Worker 对新静态文件返回 HTML，请重启 `dev:worker` 使资源索引更新。
 
+档案生命周期规则视图使用 `npm run rules:generate` 从执行定义生成，提交代码时一并提交结果；`npm run rules:check` 检查过期，CI 同样执行。真实网页/MCP 关闭与重开联验使用 `node scripts/verify-archive-lifecycle.mjs`（可加 `--remote` 检查隔离 staging）。新版接入和生产边界见 [1.0.0 集成方案](./releases/1.0.0/integration.md)。
+
 测试环境发布先构建，再运行 `node scripts/release.mjs --env staging`，统一执行备份、迁移、部署与检查。Wrangler 需要本机 Cloudflare 管理授权。生产已由 main 的 GitHub Actions 自动发布，流程见[部署与恢复](./operations.md)；不能把 staging 数据库绑定到生产。
 
 `scripts/verify-auth.mjs` 接受明确的测试 URL 和私有凭证路径，会轮换测试密码并更新私有文件。`verify-auth-boundaries.mjs` 默认本地，加 `--remote` 检查隔离云端；`verify-auth-load.mjs` 仅检查 staging。它们会产生限流计数，避免连续重复运行。报告写入 `tmp/verification`；只将审核后的脱敏证据复制到 `docs/validation`。
