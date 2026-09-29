@@ -1,6 +1,7 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App.jsx";
+import FlowPreview from "./FlowPreview.tsx";
 import "./app.css";
 import "./workspace.css";
 import "./brand.css";
@@ -40,5 +41,5 @@ function ResponsivePreview() {
   );
 }
 createRoot(document.getElementById("root")).render(
-  sizes[preview] ? <ResponsivePreview /> : <App />,
+  new URLSearchParams(location.search).has('flow') ? <FlowPreview /> : sizes[preview] ? <ResponsivePreview /> : <App />,
 );
