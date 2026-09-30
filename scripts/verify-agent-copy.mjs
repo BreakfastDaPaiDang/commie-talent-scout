@@ -20,10 +20,10 @@ try{
  assert.equal(await page.locator('.primary-nav').getByRole('button',{name:/未读更新/}).count(),0);
  assert.equal(await page.getByRole('button',{name:'猎头管理',exact:true}).count(),v.actor.role==='admin'?1:0);
  assert.equal(await page.locator('.unread-nav').isVisible(),true);
- assert.equal(await page.getByRole('link',{name:'下载 Windows x64 桌面版',exact:true}).isVisible(),true);
+ assert.equal(await page.getByRole('link',{name:'前往 DSH 官方下载页',exact:true}).isVisible(),true);
  for(const width of [1440,390]){await page.setViewportSize({width,height:1000});await page.locator('.agent-onboarding').scrollIntoViewIfNeeded();assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.screenshot({path:out+'/guide-collapsed-'+width+'.png'});}
  await page.setViewportSize({width:1440,height:1000});await page.locator('.agent-onboarding summary').click();
- assert.equal(await page.getByRole('link',{name:'下载 Windows x64 桌面版',exact:true}).getAttribute('href'),'https://download.deepseek.com/dsh-desk/bin/win-x64/deepseek-harness-0.1.7-rc.1.20260924.1-win-x64.exe');
+ assert.equal(await page.getByRole('link',{name:'前往 DSH 官方下载页',exact:true}).getAttribute('href'),'https://www.deepseek.com/harness/');
  assert.equal(await page.getByRole('link',{name:'DeepSeek 官方开放平台',exact:true}).getAttribute('href'),'https://platform.deepseek.com/');
  for(const width of [1440,390]){await page.setViewportSize({width,height:1000});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.locator('.agent-onboarding').scrollIntoViewIfNeeded();await page.screenshot({path:out+'/guide-'+width+'.png'});}
  await page.getByRole('button',{name:'打开工具导航',exact:true}).click();await page.getByRole('button',{name:/^未读更新/}).waitFor();await page.getByRole('button',{name:'打开工具导航',exact:true}).click();

@@ -3,8 +3,8 @@ import {dshDesktop} from '../shared/dsh-desktop';
 import './agent-onboarding.css';
 
 function AgentOnboarding(){
- return <section className="agent-onboarding" aria-labelledby="agent-onboarding-title"><span className="agent-onboarding-label">新手推荐</span><h2 id="agent-onboarding-title">还没有 Agent？试试 DSH 桌面版</h2><p>DeepSeek Harness（DSH）可以帮你整理材料、查档案、写观察。安装后用聊天的方式交代工作。</p><a className="button agent-download" href={dshDesktop.downloadUrl}>下载 Windows x64 桌面版 <span aria-hidden="true">↓</span></a><details><summary>查看安装与接入步骤</summary><ol>
-  <li><strong>下载安装。</strong> 点击上方下载按钮，安装后打开 DeepSeek Harness。以后可从应用菜单的“检查更新”获取新版本。</li>
+ return <section className="agent-onboarding" aria-labelledby="agent-onboarding-title"><span className="agent-onboarding-label">新手推荐</span><h2 id="agent-onboarding-title">还没有 Agent？试试 DSH 桌面版</h2><p>DeepSeek Harness（DSH）可以帮你整理材料、查档案、写观察。安装后用聊天的方式交代工作。</p><a className="button agent-download" href={dshDesktop.officialPageUrl} target="_blank" rel="noopener noreferrer">前往 DSH 官方下载页 <span aria-hidden="true">↗</span></a><details><summary>查看安装与接入步骤</summary><ol>
+  <li><strong>下载安装。</strong> 打开上方官方页面，按你的电脑平台选择桌面版，安装后打开 DeepSeek Harness。以后可从应用菜单的“检查更新”获取新版本。</li>
   <li><strong>开通 API 余额。</strong> 前往 <a href="https://platform.deepseek.com/" target="_blank" rel="noopener noreferrer">DeepSeek 官方开放平台</a>注册或登录，在充值页面先充 5 元试用，API 按实际用量扣费。</li>
   <li><strong>配置模型。</strong> 在开放平台的 API keys 页面创建并复制密钥，回到 DSH 的 API Key 配置入口填写并保存。密钥填写在 DSH 的配置界面，不用发到聊天里。</li>
   <li><strong>接入康米巨星。</strong> 点击上方“复制提示词给 Agent”，粘贴到 DSH 对话中发送。等它确认连接成功，再交给它需要整理的材料。</li>

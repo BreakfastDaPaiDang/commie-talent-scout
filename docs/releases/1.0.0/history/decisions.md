@@ -58,9 +58,9 @@
 
 ### 用户指定的下载地址
 
-[下载 Windows x64 桌面版](https://download.deepseek.com/dsh-desk/bin/win-x64/deepseek-harness-0.1.7-rc.1.20260924.1-win-x64.exe)
+[DSH 官方桌面下载页](https://www.deepseek.com/harness/)（当前推荐入口）
 
-- 文件版本：`0.1.7-rc.1.20260924.1`。
+- 当时记录的文件版本：`0.1.7-rc.1.20260924.1`；2026-10-01 已改用官方长期下载页，旧直链仅作为历史记录保留。
 - 2026-09-28 已核对该地址响应为 HTTP 200，类型为 Windows 可执行文件；未下载安装或验证完整运行流程。
 - 当前链接针对 Windows x64，不标为所有系统通用下载，也不宣称是最新稳定版。
 
