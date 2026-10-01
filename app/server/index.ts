@@ -23,6 +23,7 @@ import {Drafts} from './drafts.ts';
 import {Images,cleanupImages} from './images.ts';
 import {Materials,cleanupMaterials} from './materials.ts';
 import {Avatars} from './avatars.ts';
+import {WorkTasks} from './work-tasks.ts';
 
 const app=new Hono<{Bindings:Env}>();
 app.use('/api/*',bodyLimit({maxSize:1024*1024,onError:c=>c.json({error:{code:'REQUEST_TOO_LARGE',message:'请求内容过大'}},413)}));
@@ -149,6 +150,9 @@ app.post('/api/avatars/set',async c=>c.json(await new Avatars(c.env,await authen
 app.post('/api/profile',async c=>c.json(await new Members(c.env,await authenticate(c.req.raw,c.env),'web').updateOwnProfile(await c.req.json())));
 app.get('/api/profile/work-preference',async c=>c.json(await new Members(c.env,await authenticate(c.req.raw,c.env),'web').getOwnWorkPreference()));
 app.post('/api/profile/work-preference',async c=>c.json(await new Members(c.env,await authenticate(c.req.raw,c.env),'web').setOwnWorkPreference(await c.req.json())));
+app.get('/api/work-tasks',async c=>c.json(await new WorkTasks(c.env,await authenticate(c.req.raw,c.env),'web').list(c.req.query())));
+app.post('/api/work-tasks/create',async c=>c.json(await new WorkTasks(c.env,await authenticate(c.req.raw,c.env),'web').create(await c.req.json())));
+app.post('/api/work-tasks/claim',async c=>c.json(await new WorkTasks(c.env,await authenticate(c.req.raw,c.env),'web').claim(await c.req.json())));
 app.all('/api/*',c=>c.json({error:{code:'NOT_FOUND',message:'接口不存在'}},404));
 app.all('/mcp',c=>handleMcp(c.req.raw,c.env,c.executionCtx as ExecutionContext));
 app.get('/images/:id',async c=>new Images(c.env,await authenticate(c.req.raw,c.env),'web').read(c.req.param('id'),c.req.raw.headers));
