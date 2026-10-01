@@ -16,9 +16,11 @@ test('web and MCP share close/reopen behavior, request replay and unchanged-save
  const count=history(f).length;assert.equal((await mcp.setState(first)).replayed,true);assert.equal(history(f).length,count);
  const before=await web.get(a.id);assert.equal((await mcp.setState(request(before,'人事审核',[f.actor.id]))).changed,false);
  assert.equal((await web.get(a.id)).updated_at,before.updated_at);assert.equal(history(f).length,count);
- const closing=request(working,'已入伙',[f.actor.id]),closed=await mcp.setState(closing);
- assert.equal(closed.closed,true,'S01 must preserve the OLD 已入伙 closing rule');
- assert.equal((await web.get(a.id)).last_open_status,'人事审核');assert.equal((await web.get(a.id)).tag_snapshot_version,closed.version);
+ const joined=request(working,'已入伙',[f.actor.id]),joinedResult=await mcp.setState(joined);
+ assert.equal(joinedResult.closed,false,'1.0.0 keeps 已入伙 open');
+ assert.equal((await web.get(a.id)).last_open_status,null);assert.equal((await web.get(a.id)).tag_snapshot_version,null);
+ const closing=request(joinedResult,'已弃用'),closed=await mcp.setState(closing);
+ assert.equal(closed.closed,true);
  assert.equal((await web.setState(closing)).replayed,true);
  await assert.rejects(web.setState(request(closed,'视奸观察')),{code:'ARCHIVE_CLOSED'});
  await assert.rejects(new Observations(f.env,f.actor,'web').create({archive_id:a.id,body:'不能写入',request_id:uuid()}),{code:'ARCHIVE_CLOSED'});
@@ -26,7 +28,7 @@ test('web and MCP share close/reopen behavior, request replay and unchanged-save
  const reopening=request(closed,'个人接触'),opened=await web.reopen(reopening);assert.equal(opened.closed,false);
  assert.equal((await mcp.reopen(reopening)).replayed,true);
  await assert.rejects(mcp.reopen(request(opened,'视奸观察')),{code:'INVALID_REOPEN'});
- assert.deepEqual(history(f).map(e=>[e.kind,e.source]),[['archive.created','web'],['archive.state_changed','web'],['archive.state_changed','mcp'],['archive.closed','mcp'],['archive.state_changed','web'],['archive.reopened','web']]);
+ assert.deepEqual(history(f).map(e=>[e.kind,e.source]),[['archive.created','web'],['archive.state_changed','web'],['archive.state_changed','mcp'],['archive.state_changed','mcp'],['archive.closed','mcp'],['archive.state_changed','web'],['archive.reopened','web']]);
 });
 
 test('invalid states, required responsibility and retained frozen associations preserve baseline behavior',async t=>{

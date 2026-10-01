@@ -18,9 +18,10 @@ test('changing the executed policy, condition or effect changes both real servic
  const policy=archiveStatePolicy.find(p=>p.status==='已入伙'),closing=archiveTransitionRules.find(r=>r.id==='close'),reopening=archiveTransitionRules.find(r=>r.id==='reopen');
  const original={closed:policy.closed,when:closing.when,apply:closing.apply},view=renderBusinessRules();
  try{
-  policy.closed=false;
-  assert.equal((await transition(await make(),'已入伙')).closed,false);
-  assert.notEqual(renderBusinessRules(),view);assert.match(renderBusinessRules(),/已入伙 \| 人物 \| 否/);
+  policy.closed=!original.closed;
+  const changedJoined=await transition(await make(),'已入伙');
+  assert.equal(changedJoined.closed,policy.closed);
+  assert.notEqual(renderBusinessRules(),view);assert.match(renderBusinessRules(),/已入伙 \| 人物 \| 是/);
   policy.closed=original.closed;
   closing.when=reopening.when;
   const skipped=await transition(await make(),'已弃用');

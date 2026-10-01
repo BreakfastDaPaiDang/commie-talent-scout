@@ -11,7 +11,7 @@ test('associated scope includes current members in every person and organization
   const expected=[];for(const status of states){const a=await s.create({type,name:'关联范围 '+status,status,member_ids:[f.actor.id],request_id:uuid()});expected.push(a.id);}
   await s.create({type,name:'未关联的创建者',request_id:uuid()});
   let before,seen=[];do{const r=await s.list({type,scope:'mine',limit:2,...(before?{before}:{})});if(!before){assert.equal(r.counts.mine,states.length);assert.equal(r.counts.all,states.length+1);}seen.push(...r.archives.map(a=>a.id));before=r.next_cursor;}while(before);
-  assert.deepEqual(seen.sort(),expected.sort());const closed=await s.list({type,scope:'mine',closed:'closed'});assert.equal(closed.archives.length,type==='person'?2:1);assert.equal(closed.counts.mine,closed.archives.length);
+  assert.deepEqual(seen.sort(),expected.sort());const closed=await s.list({type,scope:'mine',closed:'closed'});assert.equal(closed.archives.length,1);assert.equal(closed.counts.mine,closed.archives.length);
   const selected=await s.list({type,scope:'mine',status:'个人接触',query:'关联范围',member_id:f.actor.id});assert.equal(selected.archives.length,1);assert.equal(selected.counts.mine,1);
  }
 });

@@ -16,7 +16,7 @@ const source=fn=>fn.toString().replace(/\r\n/g,'\n').split('\n').map(l=>l.trimEn
 
 export function renderBusinessRules(){
  const lines=['# 档案生命周期规则（自动生成）','','运行 `npm run rules:generate` 更新；`npm run rules:check` 检查。不要手工修改本文件。',
-  '','这是当前可执行的 0.1.x 行为，不是 1.0.0 的需求清单。已入伙仍自动关闭；身份与任务联动按 PRD 在后续功能中替换。',
+  '','这是当前分支可执行的档案生命周期行为。1.0.0 将入社身份变化与工作任务推进分开：已入伙保持开启，任务联动由各自的事务入口执行。',
   '','## 状态策略','','直接读取 [archiveStatePolicy](../../app/shared/archive-states.ts)：网页/MCP 可选状态、状态校验、关闭和负责成员要求均使用该定义。',
   '','| 状态 | 档案类型 | 自动关闭 | 要求负责成员 |','| --- | --- | --- | --- |'];
  for(const p of archiveStatePolicy)lines.push(`| ${p.status} | ${p.types.map(t=>t==='person'?'人物':'组织').join('、')} | ${p.closed?'是':'否'} | ${p.requiresMembers?'是':'否'} |`);
