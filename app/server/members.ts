@@ -4,6 +4,7 @@ import {hashPassword} from './password.ts';
 import {assertAdmin} from './credentials.ts';
 import {command,requestId,expectedVersion,type Source} from './commands.ts';
 import {Failure,now,uid,type Actor,type Env} from './types.ts';
+import {normalizePreference,pushableTaskKinds,type PushableTaskKind} from '../shared/task-preferences.ts';
 
 export const memberCreateInput=z.object({
   username:z.string().trim().regex(/^[a-zA-Z0-9_.-]{3,40}$/,'账号使用 3–40 位字母、数字、点、下划线或连字符'),
@@ -17,6 +18,7 @@ export const memberResetInput=z.object({id:z.uuid(),expected_version:expectedVer
 export const memberFrozenInput=z.object({id:z.uuid(),expected_version:expectedVersion,frozen:z.boolean(),request_id:requestId}).strict();
 export const memberRoleInput=z.object({id:z.uuid(),expected_version:expectedVersion,role:z.enum(['admin','member']),request_id:requestId}).strict();
 export const memberProfileInput=z.object({id:z.uuid(),expected_version:expectedVersion,name:z.string().trim().min(1).max(80),qq:z.string().regex(/^\d{5,20}$/).nullable(),request_id:requestId}).strict();
+export const memberWorkPreferenceInput=z.object({all:z.boolean(),kinds:z.array(z.enum(pushableTaskKinds)).max(pushableTaskKinds.length).default([]),expected_version:z.number().int().min(0).default(0),request_id:requestId}).strict();
 type ManagedMember={id:string;username:string;name:string;role:'admin'|'member';frozen:number;must_change_password:number;qq:string|null;avatar_id:string|null;version:number;auth_epoch:number};
 export class Members{
   constructor(private env:Env,private actor:Actor,private source:Source){}
@@ -109,6 +111,25 @@ export class Members{
   }
   async updateOwnProfile(input:unknown){
     const a=memberProfileInput.parse(input);if(a.id!==this.actor.id)throw new Failure(403,'OWN_PROFILE_REQUIRED','只能修改本人的资料');return this.profile(a,false);
+  }
+  async getOwnWorkPreference(){
+    const row=await this.stmt('SELECT all_work,kinds_json,version,updated_at FROM member_work_preferences WHERE member_id=?',this.actor.id).first<{all_work:number;kinds_json:string;version:number;updated_at:string}>();
+    const preference=normalizePreference({all:!!row?.all_work,kinds:row?JSON.parse(row.kinds_json) as PushableTaskKind[]:[]});
+    return {preference:{...preference,version:row?.version??0,updated_at:row?.updated_at??null}};
+  }
+  async setOwnWorkPreference(input:unknown){
+    const a=memberWorkPreferenceInput.parse(input),preference=normalizePreference(a);
+    return command(this.env,this.actor,{requestId:a.request_id,operation:'member.work_preference',parameters:{all:preference.all,kinds:preference.kinds,expected_version:a.expected_version}},async()=>{
+      const current=await this.stmt('SELECT version,all_work,kinds_json,updated_at FROM member_work_preferences WHERE member_id=?',this.actor.id).first<{version:number;all_work:number;kinds_json:string;updated_at:string}>(),version=current?.version??0;
+      if(version!==a.expected_version)throw new Failure(409,'VERSION_CONFLICT','工作倾向已被更新，请重新读取后重试');
+      const before=current?{all:!!current.all_work,kinds:JSON.parse(current.kinds_json)}:{all:false,kinds:[]},changed=JSON.stringify(preference)!==JSON.stringify(before);
+      const key=uid(),at=now(),next=version+1;
+      const guard=this.stmt('INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(SELECT 1 FROM members WHERE id=? AND frozen=0) AND NOT EXISTS(SELECT 1 FROM member_work_preferences WHERE member_id=? AND version<>?) THEN 1 ELSE 0 END)',key,this.actor.id,this.actor.id,version);
+      const statements=[guard];
+      if(changed)statements.push(current?this.stmt('UPDATE member_work_preferences SET all_work=?,kinds_json=?,version=version+1,updated_at=? WHERE member_id=? AND version=?',preference.all?1:0,JSON.stringify(preference.kinds),at,this.actor.id,version):this.stmt('INSERT INTO member_work_preferences(member_id,all_work,kinds_json,version,created_at,updated_at) VALUES(?,?,?,?,?,?)',this.actor.id,preference.all?1:0,JSON.stringify(preference.kinds),1,at,at),this.event(this.actor.id,'member.work_preference_changed',{...before,version},{...preference,version:next}));
+      statements.push(this.stmt('DELETE FROM mutation_guards WHERE id=?',key));
+      return {result:{...preference,version:changed?next:version,updated_at:changed?at:(current?.updated_at??null),changed},statements};
+    });
   }
   private async profile(input:unknown,admin:boolean){
     const a=memberProfileInput.parse(input);

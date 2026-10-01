@@ -36,6 +36,7 @@ docs/
 | 为什么集中规则、如何生成视图 | [ADR 0014](../../adr/0014-executable-business-rules.md)及[共享业务层 ADR](../../adr/0003-shared-worker-business-layer.md) |
 | 怎么启动、测试和部署 | [开发说明](../../development.md)、[部署与恢复](../../operations.md) |
 | 原型与正式页面怎么保持一致 | [前端约定](../../agents/frontend.md) |
+| 入社业务流如何在页面接续 | [可操作原型与设计记录](../../design/1.0.0-flow/README.md)、[原型验收](../../validation/1.0.0-flow-prototype.md)，仅虚构内存演示 |
 | 旧讨论的来龙去脉 | [归档备忘](./history/decisions.md)，只供追溯，不覆盖 PRD |
 
 Issue 是具体工作与验收清单，PRD 是需求正文，ADR 是架构原因。不要再为每个 Issue 复制完整 PRD，或另建一份手工同步的任务进度表。
@@ -137,6 +138,8 @@ flowchart TD
 5. 不提交真实资料、凭据、私有备份或大批临时产物；临时验证放在已忽略的 `tmp/verification`，公开证据整理到验证文档。
 
 ## 合并、发布与最后迁移
+
+S01 确定的[分阶段集成方案](./integration.md)说明 `integration/1.0.0`、可独立合入的兼容改动以及生产迁移边界。现有档案实现见[自动生成规则视图](../../generated/archive-rules.md)，对应[局部验收](../../validation/1.0.0-s01-executable-rules.md)。暂缓的 1.0.0.1 工作倾向推送提案单独保存在本地 `proposal/1.0.0.1-handoff`，本版仍按 PRD 修订 1 实施。
 
 当前 `main` 的推送会触发生产自动发布。开发使用功能分支和 PR；尚不兼容旧数据的改动应进入 1.0.0 集成分支或既定发布门控，具体方式由 S01 先说明。不能把“已经合并”当成“生产已具备完整新规则”。
 

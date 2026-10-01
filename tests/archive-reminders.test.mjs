@@ -36,7 +36,7 @@ test('reading and unchanged saves keep alarms, real observations clear them, clo
 });
 
 test('alarm priority respects search, responsible scope and deleted/closed filters without changing counts',async t=>{
- const f=setup(t),mine=await add(f,{name:'目标人事',status:'引荐中（待人事组接触）',age:8*DAY}),unassigned=await add(f,{name:'目标普通',age:90*DAY}),closed=await add(f,{name:'目标关闭',status:'已入伙',age:100*DAY});
+ const f=setup(t),mine=await add(f,{name:'目标人事',status:'引荐中（待人事组接触）',age:8*DAY}),unassigned=await add(f,{name:'目标普通',age:90*DAY}),closed=await add(f,{name:'目标关闭',status:'已弃用',age:100*DAY});
  const list=await f.s.list({type:'person',query:'目标',limit:1});assert.equal(list.counts.all,3);assert.equal(list.counts.mine,1);assert.equal(list.archives[0].id,unassigned);
  assert.deepEqual((await f.s.list({type:'person',query:'目标',scope:'mine'})).archives.map(a=>a.id),[mine]);assert.deepEqual((await f.s.list({type:'person',closed:'closed'})).archives.map(a=>a.id),[closed]);
  f.actor.role='admin';f.sqlite.prepare("UPDATE members SET role='admin' WHERE id=?").run(f.actor.id);await f.s.setDeleted({id:unassigned,expected_version:1,request_id:uuid()},true);f.sqlite.prepare('UPDATE archives SET updated_at=? WHERE id=?').run(new Date(NOW-200*DAY).toISOString(),unassigned);

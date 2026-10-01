@@ -9,7 +9,7 @@ import { bodyLimit } from 'hono/body-limit';
 import { ZodError } from 'zod';
 import { authenticate, changePassword, login, sessionCookie } from './auth.ts';
 import { PasswordBusy } from './password.ts';
-import { Failure, now, publicMember, type Env } from './types.ts';
+import { Failure, now, publicMember, type Env, type Actor } from './types.ts';
 import {createCredential,listCredentials,revokeCredential} from './credentials.ts';
 import {cleanupJournal,getCall,listCalls} from './mcp-journal.ts';
 import {TaskReview} from './task-review.ts';
@@ -23,6 +23,7 @@ import {Drafts} from './drafts.ts';
 import {Images,cleanupImages} from './images.ts';
 import {Materials,cleanupMaterials} from './materials.ts';
 import {Avatars} from './avatars.ts';
+import {WorkTasks} from './work-tasks.ts';
 
 const app=new Hono<{Bindings:Env}>();
 app.use('/api/*',bodyLimit({maxSize:1024*1024,onError:c=>c.json({error:{code:'REQUEST_TOO_LARGE',message:'请求内容过大'}},413)}));
@@ -147,6 +148,17 @@ app.post('/api/materials/quota',async c=>c.json(await new Materials(c.env,await 
 app.get('/api/images/uploads/:id',async c=>c.json(await new Images(c.env,await authenticate(c.req.raw,c.env),'web').status(c.req.param('id'))));
 app.post('/api/avatars/set',async c=>c.json(await new Avatars(c.env,await authenticate(c.req.raw,c.env),'web').set(await c.req.json())));
 app.post('/api/profile',async c=>c.json(await new Members(c.env,await authenticate(c.req.raw,c.env),'web').updateOwnProfile(await c.req.json())));
+app.get('/api/profile/work-preference',async c=>c.json(await new Members(c.env,await authenticate(c.req.raw,c.env),'web').getOwnWorkPreference()));
+app.post('/api/profile/work-preference',async c=>c.json(await new Members(c.env,await authenticate(c.req.raw,c.env),'web').setOwnWorkPreference(await c.req.json())));
+app.get('/api/work-tasks',async c=>c.json(await new WorkTasks(c.env,await authenticate(c.req.raw,c.env),'web').list(c.req.query())));
+app.post('/api/work-tasks/create',async c=>c.json(await new WorkTasks(c.env,await authenticate(c.req.raw,c.env),'web').create(await c.req.json())));
+app.post('/api/work-tasks/claim',async c=>c.json(await new WorkTasks(c.env,await authenticate(c.req.raw,c.env),'web').claim(await c.req.json())));
+app.post('/api/work-tasks/assign',async c=>c.json(await new WorkTasks(c.env,await authenticate(c.req.raw,c.env),'web').assign(await c.req.json())));
+app.get('/api/work-tasks/:id',async c=>c.json(await new WorkTasks(c.env,await authenticate(c.req.raw,c.env),'web').detail(c.req.param('id'))));
+app.post('/api/work-tasks/complete',async c=>c.json(await new WorkTasks(c.env,await authenticate(c.req.raw,c.env),'web').complete(await c.req.json())));
+app.post('/api/work-tasks/release',async c=>c.json(await new WorkTasks(c.env,await authenticate(c.req.raw,c.env),'web').release(await c.req.json())));
+app.post('/api/archives/refer',async c=>c.json(await new WorkTasks(c.env,await authenticate(c.req.raw,c.env),'web').refer(await c.req.json())));
+app.post('/api/archives/confirm-membership',async c=>c.json(await new WorkTasks(c.env,await authenticate(c.req.raw,c.env),'web').confirmMembership(await c.req.json())));
 app.all('/api/*',c=>c.json({error:{code:'NOT_FOUND',message:'接口不存在'}},404));
 app.all('/mcp',c=>handleMcp(c.req.raw,c.env,c.executionCtx as ExecutionContext));
 app.get('/images/:id',async c=>new Images(c.env,await authenticate(c.req.raw,c.env),'web').read(c.req.param('id'),c.req.raw.headers));
@@ -163,6 +175,8 @@ export default {
   fetch:app.fetch,
   async scheduled(_event:ScheduledController,env:Env) {
     await cleanupJournal(env);
+    const pushActor=await env.DB.prepare("SELECT id,username,name,role,frozen,auth_epoch,must_change_password,version,qq,avatar_id FROM members WHERE frozen=0 ORDER BY role='admin' DESC,id LIMIT 1").first();
+    if(pushActor) await new WorkTasks(env,pushActor as Actor,'mcp').duePushes();
     await env.DB.batch([
       env.DB.prepare('DELETE FROM observation_drafts WHERE updated_at<?').bind(new Date(Date.now()-30*86400000).toISOString()),
       env.DB.prepare('DELETE FROM reading_deliveries WHERE expires_at<?').bind(new Date().toISOString()),

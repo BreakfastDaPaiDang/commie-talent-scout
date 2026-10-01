@@ -9,6 +9,8 @@ import {PageError} from './ConnectionPages';
 import type {Archive,BoundMember} from '../server/archives';
 import {statesFor,isClosedState,isWorkState,memberLabel} from '../shared/archive-states';
 
+const taskManagedStates=['引荐中（待人事组接触）','人事审核','已加入待对接'];
+
 export function MemberPicker({value,onChange,label}:{value:BoundMember[];onChange:(items:BoundMember[])=>void;label:string}){
  const[items,setItems]=useState<BoundMember[]>([]),[error,setError]=useState(''),[loading,setLoading]=useState(true),[retry,setRetry]=useState(0);
  useEffect(()=>{let cancelled=false;setLoading(true);setError('');void(async()=>{let before:string|null=null,all:BoundMember[]=[];do{const r:{members:BoundMember[];next_cursor:string|null}=await api('/members?'+new URLSearchParams({limit:'100',...(before?{before}:{})}));all.push(...r.members);before=r.next_cursor;}while(before&&!cancelled);if(!cancelled)setItems(all);})().catch(e=>{if(!cancelled)setError(e.message);}).finally(()=>{if(!cancelled)setLoading(false);});return()=>{cancelled=true;};},[retry]);
@@ -16,7 +18,7 @@ export function MemberPicker({value,onChange,label}:{value:BoundMember[];onChang
  return <div className="form-field"><label>{label}</label><DirectoryPicker label={label} members={available} value={value.map(m=>m.id)} onChange={ids=>onChange(ids.map(id=>available.find(m=>m.id===id)!))} disabled={loading||!!error} renderAvatar={m=><Avatar name={m.name} src={avatarUrl('member',m.id,0)} size="tiny"/>}/>{loading&&<p role="status">正在读取成员…</p>}<PageError error={error} retry={()=>setRetry(n=>n+1)}/></div>;
 }
 export function StateFields({type,status,onStatus,members,onMembers,reopen=false}:{type:'person'|'org';status:string;onStatus:(s:string)=>void;members:BoundMember[];onMembers:(m:BoundMember[])=>void;reopen?:boolean}){
- return <section className="archive-state-fields"><StateChoices value={status} onChange={onStatus} choices={statesFor(type).filter(s=>!reopen||!isClosedState(s))}/><MemberPicker label={memberLabel(type,status)+(isWorkState(type,status)?' · 至少一人':' · 可选')} value={members} onChange={onMembers}/>{isWorkState(type,status)&&members.length===0&&<p className="responsible-hint">请明确选择至少一名负责成员。</p>}{isClosedState(status)&&<p className="archive-readonly">保存后会关闭档案，基础资料与观察内容将变为只读。</p>}</section>;
+ return <section className="archive-state-fields"><StateChoices value={status} onChange={onStatus} choices={statesFor(type).filter(s=>!taskManagedStates.includes(s)).filter(s=>!reopen||!isClosedState(s))}/>{taskManagedStates.includes(status)&&<p className="archive-readonly">当前阶段由关联任务推进，请在档案工作区完成审核或入社确认。</p>}<MemberPicker label={memberLabel(type,status)+(isWorkState(type,status)?' · 至少一人':' · 可选')} value={members} onChange={onMembers}/>{isWorkState(type,status)&&members.length===0&&<p className="responsible-hint">请明确选择至少一名负责成员。</p>}{isClosedState(status)&&<p className="archive-readonly">保存后会关闭档案，基础资料与观察内容将变为只读。</p>}</section>;
 }
 export function ArchiveStateForm({archive,busy,setBusy,onSaved,onReload}:{archive:Archive;busy:boolean;setBusy:(b:boolean)=>void;onSaved:(id:string,changed:boolean,message?:string)=>Promise<void>;onReload:()=>Promise<void>}){
  const initialStatus=archive.closed?archive.last_open_status??'视奸观察':archive.status;

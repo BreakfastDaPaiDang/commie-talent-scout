@@ -15,3 +15,5 @@ status: accepted
 本决定确定方向与范围，不指定配置语法、库、文件结构或完整执行器设计；这些在任务规则对齐后确定。PRD 继续维护用户目标与验收要求，自动生成的是实现规则视图，不是把产品需求从代码反推出来。
 
 实施需求见 [1.0.0 PRD](../PRD-1.0.0.md)，接手入口与 Issue 顺序见 [1.0.0 从这里开始](../releases/1.0.0/README.md)。
+
+2026-09-30，S01 首次落地于现有档案生命周期：`archiveStatePolicy` 和 `archiveTransitionRules` 参与真实执行；[规则视图](../generated/archive-rules.md)从同一对象及函数体生成，CI 检查漂移。命名函数产生 SQL，仍由现有 `command()` 一次提交，没有另建规则事务或通用引擎。[验收记录](../validation/1.0.0-s01-executable-rules.md)和[分阶段集成方案](../releases/1.0.0/integration.md)说明行为基线、扩展入口及生产兼容边界。

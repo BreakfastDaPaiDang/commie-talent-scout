@@ -4,7 +4,8 @@ import {z} from 'zod';
 import {assertAdmin} from './credentials.ts';
 import {command,requestId,expectedVersion,type Source} from './commands.ts';
 import {Failure,now,uid,type Actor,type Env} from './types.ts';
-import {statesFor,isClosedState,isWorkState,personStates,orgStates} from '../shared/archive-states.ts';
+import {isClosedState,personStates,orgStates} from '../shared/archive-states.ts';
+import {assertReopenAllowed,assertStateAndResponsibility,planArchiveEffects,transitionChanged} from './rules/archive-lifecycle.ts';
 import {TagState,evidenceVisibilitySql,type TagBinding,type TagLabel} from './tag-state.ts';
 import {Reading,eventVisibility,unreadPredicate} from './reading.ts';
 
@@ -43,12 +44,12 @@ export class Archives{
  }
  guard(id:string,version:number,key:string,open=true){return this.stmt(`INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(SELECT 1 FROM archives WHERE id=? AND version=? AND deleted=0 ${open?'AND closed=0':''}) THEN 1 ELSE 0 END)`,key,id,version);}
  event(id:string,kind:string,before:unknown,after:unknown,at=now(),observationId:string|null=null){return this.stmt('INSERT INTO archive_events(id,archive_id,actor_id,source,kind,before_json,after_json,observation_id,created_at) VALUES(?,?,?,?,?,?,?,?,?)',uid(),id,this.actor.id,this.source,kind,JSON.stringify(before),JSON.stringify(after),observationId,at);}
- async detail(id:string){const archive=await this.get(id);return {archive:{...archive,url:this.url(archive),tags:await new TagState(this.env,this.actor).list(id,archive.closed||archive.deleted,archive.deleted?archive.deleted_snapshot_version:archive.tag_snapshot_version)}};}
+ async detail(id:string){const archive=await this.get(id);const tasks=await this.stmt(`SELECT t.id,t.kind,t.title,t.purpose,t.delivery,t.status,t.owner_id,(SELECT name FROM members WHERE id=t.owner_id) owner_name,t.deadline_at,t.created_at,t.updated_at,t.version,t.result_kind,t.result_text FROM work_tasks t WHERE t.archive_id=? ORDER BY CASE WHEN t.status='open' THEN 0 ELSE 1 END,t.deadline_at DESC,t.created_at DESC,t.id DESC LIMIT 30`,id).all();return {archive:{...archive,url:this.url(archive),tags:await new TagState(this.env,this.actor).list(id,archive.closed||archive.deleted,archive.deleted?archive.deleted_snapshot_version:archive.tag_snapshot_version),work_tasks:tasks.results}};}
  async list(input:unknown){
   const a=archiveListInput.parse(input),position=archiveCursor(a.before);if(a.deleted)assertAdmin(this.actor);const where=['a.type=?','a.deleted=?'],args:unknown[]=[a.type,a.deleted?1:0],unread=unreadPredicate(this.actor);
   const value='%'+a.query.replace(/[\\%_]/g,'\\$&')+'%',match=`SELECT json_object('observation_id',o.id,'excerpt',substr(v.body,max(1,instr(lower(v.body),lower(?))-60),240)) FROM observations o JOIN observation_versions v ON v.observation_id=o.id AND v.version=o.content_version WHERE o.archive_id=a.id AND o.deleted=0 AND v.body LIKE ? ESCAPE '\\' ORDER BY o.updated_at DESC,o.id DESC LIMIT 1`;
   if(a.query){where.push(`(a.name LIKE ? ESCAPE '\\' OR a.contacts_json LIKE ? ESCAPE '\\' OR EXISTS(SELECT 1 FROM observations o JOIN observation_versions v ON v.observation_id=o.id AND v.version=o.content_version WHERE o.archive_id=a.id AND o.deleted=0 AND v.body LIKE ? ESCAPE '\\'))`);args.push(value,value,value);}
-  if(a.status){where.push('a.status=?');args.push(a.status);}
+  if(a.status){const statuses=[...new Set(a.status.split(',').map(status=>status.trim()).filter(Boolean))];if(statuses.length===1){where.push('a.status=?');args.push(statuses[0]);}else if(statuses.length>1){where.push(`a.status IN (${statuses.map(()=>'?').join(',')})`);args.push(...statuses);}}
   if(a.member_id){where.push('EXISTS(SELECT 1 FROM archive_bindings b WHERE b.archive_id=a.id AND b.status=a.status AND b.member_id=?)');args.push(a.member_id);}
   if(a.closed!=='all')where.push(`a.closed=${a.closed==='closed'?1:0}`);
   if(a.tag_ids.length){
@@ -84,8 +85,7 @@ export class Archives{
   return {result:{id,version:1,changed:true,archive_url:this.url({id,type:a.type})},statements:[...plan.guards,this.stmt('INSERT INTO archives(id,type,name,contacts_json,links_json,status,closed,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)',id,a.type,a.name,JSON.stringify(a.contacts),JSON.stringify(a.links),a.status,closed?1:0,this.actor.id,at,at),...plan.bindings,this.event(id,'archive.created',null,{type:a.type,name:a.name,contacts:a.contacts,links:a.links,status:a.status,members:plan.members},at),...(closed?[this.event(id,'archive.closed',null,{status:a.status},at)]:[]),...plan.cleanup]};
  });}
  private async planBindings(id:string,type:'person'|'org',status:string,ids:string[]){
-  if(!(statesFor(type) as readonly string[]).includes(status))throw new Failure(400,'INVALID_STATE','该状态不属于这类档案');
-  if(isWorkState(type,status)&&ids.length===0)throw new Failure(400,'RESPONSIBLE_REQUIRED','工作状态必须明确选择至少一名负责成员');
+  assertStateAndResponsibility(type,status,ids);
   const members:BoundMember[]=[],guards:D1PreparedStatement[]=[],bindings:D1PreparedStatement[]=[],cleanup:D1PreparedStatement[]=[];
   for(const memberId of ids){
    const member=await this.stmt('SELECT id,name,frozen FROM members WHERE id=?',memberId).first<BoundMember>();
@@ -103,18 +103,12 @@ export class Archives{
  private async transition(input:unknown,reopen:boolean){
   const a=archiveStateInput.parse(input);return command(this.env,this.actor,{requestId:a.request_id,operation:reopen?'archive.reopen':'archive.state',parameters:{...a,request_id:undefined}},async()=>{
    const old=await this.get(a.id,a.expected_version,!reopen),key=uid(),closed=isClosedState(a.status);
-   if(reopen&&(!old.closed||closed))throw new Failure(409,'INVALID_REOPEN','只能显式重新开启已关闭档案，并选择开启类状态');
-   const plan=await this.planBindings(a.id,old.type,a.status,a.member_ids),changed=reopen||a.status!==old.status||JSON.stringify(old.members.map(m=>m.id).sort())!==JSON.stringify(a.member_ids),at=now();
+   const transition={old,status:a.status,memberIds:a.member_ids,reopen};assertReopenAllowed(transition);
+   const plan=await this.planBindings(a.id,old.type,a.status,a.member_ids),changed=transitionChanged(transition),at=now();
    const tagState=new TagState(this.env,this.actor),definitionChanges:{tag_id:string;before:TagBinding;after:TagBinding}[]=[];
    if(reopen){const frozen=await tagState.list(a.id,true,old.tag_snapshot_version),current=await tagState.list(a.id);for(const b of frozen){const live=current.find(t=>t.tag_id===b.tag_id);if(live&&(live.definition_version!==b.definition_version||live.category_version!==b.category_version||!live.enabled||!live.category_enabled||live.merged_into))definitionChanges.push({tag_id:b.tag_id,before:b,after:live});}}
    const statements=[this.guard(a.id,a.expected_version,key,!reopen),...plan.guards];
-   if(changed){
-    statements.push(this.stmt('UPDATE archives SET status=?,closed=?,last_open_status=?,version=version+1,updated_at=? WHERE id=?',a.status,closed?1:0,closed?old.status:old.last_open_status,at,a.id),this.stmt('DELETE FROM archive_bindings WHERE archive_id=? AND status=?',a.id,a.status),...plan.bindings);
-    const before={status:old.status,members:old.members},after={status:a.status,members:plan.members};
-    statements.push(this.event(a.id,old.status!==a.status?'archive.state_changed':'archive.members_changed',before,after,at));
-    if(closed)statements.push(tagState.snapshot(a.id,old.version+1),this.stmt('UPDATE archives SET tag_snapshot_version=? WHERE id=?',old.version+1,a.id),this.event(a.id,'archive.closed',{status:old.status},{status:a.status,tag_snapshot_version:old.version+1},at));
-    if(reopen)statements.push(this.event(a.id,'archive.reopened',{status:old.status},{status:a.status},at));
-   }
+   statements.push(...planArchiveEffects({...transition,at,members:plan.members,bindings:plan.bindings,tags:tagState,stmt:this.stmt.bind(this),event:this.event.bind(this)}));
    statements.push(...plan.cleanup,this.stmt('DELETE FROM mutation_guards WHERE id=?',key));return {result:{id:a.id,version:old.version+(changed?1:0),status:a.status,closed,changed,archive_url:this.url(old),definition_changes:definitionChanges},statements};
   });
  }

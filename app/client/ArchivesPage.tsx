@@ -22,20 +22,22 @@ import {TagsSection,TagSummary} from './TagsSection';
 import {ObservationSection} from './ObservationSection';
 
 type Kind='person'|'org';
+type ArchiveTask={id:string;kind:'audit'|'onboarding'|'monthly'|'cooperation'|'custom';title:string;purpose:string;delivery:string;status:string;owner_id:string|null;owner_name?:string|null;deadline_at:string;version:number;result_kind?:string|null;result_text?:string|null};
+type ArchiveWithTasks=Archive&{work_tasks?:ArchiveTask[]};
 type Preference={query:string;selected:string|null;scope:'all'|'mine'|'unread';status:string;member_id:string;closed:'all'|'open'|'closed';tag_ids:string[]};
 const defaults:Preference={query:'',selected:null,scope:'all',status:'',member_id:'',closed:'all',tag_ids:[]};
 type ListArchive=Archive&{unread_count?:number;search_match?:{observation_id:string;excerpt:string}|null};
 function preferences(key:string):Preference{try{return {...defaults,...JSON.parse(localStorage.getItem(key)??'{}')};}catch{return {...defaults};}}
 const date=(value:string)=>new Date(value).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
 export function ArchiveTrashPage({actor}:{actor:Member}){const [type,setType]=useState<Kind>('person');return <ArchivesPage key={type} actor={actor} type={type} trash onTypeChange={next=>{history.replaceState(null,'',location.pathname);setType(next);}}/>;}
-export function ArchivesPage({actor,type,linked,detailOnly=false,onNextUnread,onClose,trash=false,onTypeChange}:{trash?:boolean;onTypeChange?:(type:Kind)=>void;actor:Member;type:Kind;linked?:{archiveId:string;focus:ObservationFocus};detailOnly?:boolean;onNextUnread?:()=>void;onClose?:()=>void}){
- const prefKey=`cts:${actor.id}:${type}:${trash?'trash':'archives'}`,[pref,setPref]=useState(()=>{const saved=preferences(prefKey),linked=new URLSearchParams(location.search).get('archive');return linked&&/^[0-9a-f-]{36}$/i.test(linked)?{...saved,selected:linked}:saved;});
+export function ArchivesPage({actor,type,linked,detailOnly=false,onNextUnread,onClose,trash=false,onTypeChange,pageLabel,initialStatus='',createStatus}:{trash?:boolean;onTypeChange?:(type:Kind)=>void;actor:Member;type:Kind;linked?:{archiveId:string;focus:ObservationFocus};detailOnly?:boolean;onNextUnread?:()=>void;onClose?:()=>void;pageLabel?:string;initialStatus?:string;createStatus?:string}){
+ const prefKey=`cts:${actor.id}:${type}:${trash?'trash':pageLabel??'archives'}`,[pref,setPref]=useState(()=>{const saved=preferences(prefKey),linked=new URLSearchParams(location.search).get('archive'),next={...saved,status:initialStatus||saved.status};return linked&&/^[0-9a-f-]{36}$/i.test(linked)?{...next,selected:linked}:next;});
  const[query,setQuery]=useState(pref.query),[items,setItems]=useState<ListArchive[]>([]),[cursor,setCursor]=useState<string|null>(null),[loading,setLoading]=useState(true),[error,setError]=useState(''),[notice,setNotice]=useState(''),[revision,setRevision]=useState(0);
  const[dialog,setDialog]=useState<'create'|Archive|null>(null),[stateDialog,setStateDialog]=useState<Archive|null>(null),[busy,setBusy]=useState(false),[selected,setSelected]=useState<Archive|null>(null),[draftIds,setDraftIds]=useState<string[]>([]);
  const[deletion,setDeletion]=useState<Archive|null>(null);
  const[counts,setCounts]=useState<Record<string,number>>(),[editTab,setEditTab]=useState('profile');
  const [filtersOpen,setFiltersOpen]=useState(false),[expanded,setExpanded]=useState(false),searchRef=useRef<HTMLInputElement>(null);
- const request=useRef(0),label=type==='person'?'人物':'组织';
+ const request=useRef(0),label=pageLabel??(type==='person'?'人物':'组织');
  const[focus,setFocus]=useState<ObservationFocus|undefined>(()=>{const p=new URLSearchParams(location.search);return p.has('event')||p.has('observation')?{event_id:p.get('event')??undefined,observation_id:p.get('observation')??undefined,query:p.get('highlight')??undefined,key:location.search}:undefined;}),[directory,setDirectory]=useState<BoundMember[]>([]),[directoryError,setDirectoryError]=useState(''),[directoryRetry,setDirectoryRetry]=useState(0);
  useEffect(()=>{if(linked){setPref(p=>({...p,selected:linked.archiveId}));setFocus(linked.focus);}},[linked?.archiveId,linked?.focus.key]);
  useEffect(()=>{let cancelled=false;setDirectoryError('');void (async()=>{let before:string|null=null,all:BoundMember[]=[];do{const r: {members:BoundMember[];next_cursor:string|null}=await api('/members?'+new URLSearchParams({limit:'100',...(before?{before}:{})}));all.push(...r.members);before=r.next_cursor;}while(before&&!cancelled);if(!cancelled)setDirectory(all);})().catch(e=>{if(!cancelled)setDirectoryError('成员筛选暂不可用：'+e.message);});return()=>{cancelled=true;};},[directoryRetry]);
@@ -63,11 +65,11 @@ export function ArchivesPage({actor,type,linked,detailOnly=false,onNextUnread,on
  useEffect(()=>{if(!['档案已保存','资料没有变化'].includes(notice))return;const timer=setTimeout(()=>setNotice(''),2800);return()=>clearTimeout(timer);},[notice]);
  async function refreshEditor(id:string){const r=await api<{archive:Archive}>('/archives/'+id);setDialog(current=>current&&current!=='create'&&current.id===id&&current.version<=r.archive.version?r.archive:current);setRevision(n=>n+1);}
 
- const activeFilters=!!(pref.status||pref.member_id||pref.closed!=='all'||pref.tag_ids.length);
+ const statusLocked=!!initialStatus,activeFilters=!!((!statusLocked&&pref.status)||pref.member_id||pref.closed!=='all'||pref.tag_ids.length);
  return <><WorkspaceFrame selected={!!pref.selected} expanded={expanded} detailOnly={detailOnly} list={<>
   <ArchiveHead label={trash?'已删除档案':label} count={String(items.length).padStart(2,'0')+(cursor?'＋':'')} query={query} onQuery={setQuery} onCreate={trash?undefined:()=>{setEditTab('profile');setDialog('create');}} searchRef={searchRef}/>
-  <ScopeToolbar scopeItems={trash?[['person','人物'],['org','组织']]:undefined} counts={trash?undefined:counts} scope={trash?type:pref.scope} onScope={scope=>trash?onTypeChange?.(scope as Kind):setPref(p=>({...p,scope:scope as Preference['scope']}))} filtersOpen={filtersOpen} onFilters={()=>setFiltersOpen(v=>!v)} activeFilters={activeFilters} onReset={query||activeFilters||pref.scope!=='all'?()=>{setQuery('');setPref(p=>({...defaults,selected:p.selected}));}:undefined} filters={<>
-   <select aria-label="筛选业务状态" value={pref.status} onChange={e=>setPref(p=>({...p,status:e.target.value}))}><option value="">全部状态</option>{statesFor(type).map(v=><option key={v}>{v}</option>)}</select>
+  <ScopeToolbar scopeItems={trash?[['person','人物'],['org','组织']]:undefined} counts={trash?undefined:counts} scope={trash?type:pref.scope} onScope={scope=>trash?onTypeChange?.(scope as Kind):setPref(p=>({...p,scope:scope as Preference['scope']}))} filtersOpen={filtersOpen} onFilters={()=>setFiltersOpen(v=>!v)} activeFilters={activeFilters} onReset={query||activeFilters||pref.scope!=='all'?()=>{setQuery('');setPref(p=>({...defaults,selected:p.selected,status:initialStatus}));}:undefined} filters={<>
+   {!statusLocked&&<select aria-label="筛选业务状态" value={pref.status} onChange={e=>setPref(p=>({...p,status:e.target.value}))}><option value="">全部状态</option>{statesFor(type).map(v=><option key={v}>{v}</option>)}</select>}
    <DirectoryPicker label="筛选绑定成员" placeholder="全部成员" multiple={false} members={directory} value={pref.member_id?[pref.member_id]:[]} onChange={ids=>setPref(p=>({...p,member_id:ids[0]??''}))} renderAvatar={m=><Avatar name={m.name} src={avatarUrl('member',m.id,0)} size="tiny"/>}/>
 
    <TagFilter type={type} ids={pref.tag_ids} onChange={tag_ids=>setPref(p=>({...p,tag_ids}))}/><select aria-label="筛选开启关闭" value={pref.closed} onChange={e=>setPref(p=>({...p,closed:e.target.value as Preference['closed']}))}><option value="all">全部档案</option><option value="open">开启中</option><option value="closed">已关闭</option></select><PageError error={directoryError} retry={()=>setDirectoryRetry(n=>n+1)}/>
@@ -80,7 +82,7 @@ export function ArchivesPage({actor,type,linked,detailOnly=false,onNextUnread,on
   {dialog&&<Modal title={dialog==='create'?`新建${label}档案`:'编辑档案'} busy={busy} onClose={()=>setDialog(null)}>
    {dialog!=='create'&&<TabList id="archive-editor" value={editTab} onChange={value=>{if(!busy)setEditTab(value);}} label="编辑内容" items={[{key:'profile',label:'资料'},{key:'state',label:'状态与成员'},{key:'tags',label:'标签'},{key:'avatar',label:'头像'}]}/>}
    <div className="archive-editor-panel" id="archive-editor-timeline" role={dialog!=='create'?'tabpanel':undefined} aria-labelledby={dialog!=='create'?`archive-editor-tab-${editTab}`:undefined}>
-   <div hidden={dialog!=='create'&&editTab!=='profile'}><ArchiveForm key={dialog==='create'?'create':dialog.id+dialog.version} type={type} initial={dialog==='create'?undefined:dialog} busy={busy} setBusy={setBusy} onSaved={saved} onReload={async()=>{if(dialog!=='create')await refreshEditor(dialog.id);}}/></div>
+   <div hidden={dialog!=='create'&&editTab!=='profile'}><ArchiveForm key={dialog==='create'?'create':dialog.id+dialog.version} type={type} initial={dialog==='create'?undefined:dialog} createStatus={dialog==='create'?createStatus:undefined} busy={busy} setBusy={setBusy} onSaved={saved} onReload={async()=>{if(dialog!=='create')await refreshEditor(dialog.id);}}/></div>
    {dialog!=='create'&&<div hidden={editTab!=='state'}><ArchiveStateForm key={dialog.id+dialog.version} archive={dialog} busy={busy} setBusy={setBusy} onSaved={saved} onReload={()=>refreshEditor(dialog.id)}/></div>}
    {dialog!=='create'&&editTab==='tags'&&<TagsSection archive={dialog} manage onChanged={()=>{void refreshEditor(dialog.id).catch(e=>setError(e.message));}}/>}
    {dialog!=='create'&&editTab==='avatar'&&<AvatarEditor actorId={actor.id} subjectType="archive" id={dialog.id} version={dialog.version} name={dialog.name} kind={dialog.type} avatarId={dialog.avatar_id} onSaved={()=>{void refreshEditor(dialog.id).catch(e=>setError(e.message));}}/>}
@@ -92,12 +94,12 @@ export function ArchivesPage({actor,type,linked,detailOnly=false,onNextUnread,on
  </>;
 }
 function ArchiveDetail({type,actor,onChanged,id,revision,onLoaded,onBack,onEdit,onState,notice,focus,expanded,onExpand,onNextUnread,onDelete}:{onDelete:()=>void;type:Kind;focus?:ObservationFocus;actor:Member;onChanged:()=>void;id:string;revision:number;onLoaded:(a:Archive)=>void;onBack?:()=>void;onEdit:()=>void;onState:()=>void;notice:string;expanded:boolean;onExpand?:()=>void;onNextUnread?:()=>void}){
- const[archive,setArchive]=useState<Archive|null>(null),[error,setError]=useState(''),[retry,setRetry]=useState(0),[copy,setCopy]=useState(''),scroll=useRef<HTMLDivElement>(null);
+ const[archive,setArchive]=useState<ArchiveWithTasks|null>(null),[error,setError]=useState(''),[retry,setRetry]=useState(0),[copy,setCopy]=useState(''),scroll=useRef<HTMLDivElement>(null);
  const[opening,setOpening]=useState<ArchiveReadDelivery|null>();
  const positionKey=`cts:${actor.id}:${id}:reading-position`;
  // A mounted detail represents one opening. Count, editor and content refreshes may
  // fetch newer data, but must never expand the original personal read snapshot.
- useEffect(()=>{let cancelled=false;setError('');api<{archive:Archive;archive_reading?:ArchiveReadDelivery|null}>('/archives/'+id).then(r=>{if(!cancelled){setArchive(r.archive);setOpening(old=>old===undefined?r.archive_reading??null:old);onLoaded(r.archive);}}).catch(e=>{if(!cancelled){setArchive(null);setError(e.message);}});return()=>{cancelled=true;};},[id,revision,retry]);
+ useEffect(()=>{let cancelled=false;setError('');api<{archive:ArchiveWithTasks;archive_reading?:ArchiveReadDelivery|null}>('/archives/'+id).then(r=>{if(!cancelled){setArchive(r.archive);setOpening(old=>old===undefined?r.archive_reading??null:old);onLoaded(r.archive);}}).catch(e=>{if(!cancelled){setArchive(null);setError(e.message);}});return()=>{cancelled=true;};},[id,revision,retry]);
  useLayoutEffect(()=>{if(archive&&!focus&&scroll.current){try{scroll.current.scrollTop=Number(localStorage.getItem(positionKey)||0);}catch{}}},[archive?.id,positionKey]);
  async function copyContact(value:string){try{await navigator.clipboard.writeText(value);setCopy('联系方式已复制');}catch{setCopy('复制未完成，请选择联系方式文字复制');}}
  return <DetailFrame label={(archive?.type??type)==='org'?'组织档案':'人物档案'} code={id.slice(0,6).toUpperCase()} expanded={expanded} onExpand={onExpand} onClose={onBack} onNextUnread={onNextUnread} scrollRef={scroll} onScroll={e=>{try{localStorage.setItem(positionKey,String(e.currentTarget.scrollTop));}catch{}}}>
@@ -108,10 +110,19 @@ function ArchiveDetail({type,actor,onChanged,id,revision,onLoaded,onBack,onEdit,
     {copy&&<p className="form-notice" role="status">{copy}</p>}{notice&&<p className="form-notice" role="status">{notice}</p>}
    </EntityHeader>
    <ArchiveLifecycleNotice deleted={archive.deleted} closed={archive.closed} onReopen={onState} onRestore={actor.role==='admin'?onDelete:undefined} onDelete={actor.role==='admin'?onDelete:undefined}/>
+   {!archive.deleted&&!archive.closed&&<ArchiveWorkflow archive={archive} onChanged={onChanged}/>}
    <TagsSection archive={archive} onChanged={onChanged}/><ObservationSection focus={focus} actor={actor} archive={archive} onChanged={onChanged}/>
 
   </ArchiveReadingScope.Provider>}
  </DetailFrame>;
+}
+
+function ArchiveWorkflow({archive,onChanged}:{archive:ArchiveWithTasks;onChanged:()=>void}){
+ const[busy,setBusy]=useState(false),[error,setError]=useState('');const tasks=archive.work_tasks??[],open=tasks.filter(t=>t.status==='open');
+ const deadline=()=>new Date(Date.now()+7*86400000).toISOString();
+ async function action(path:string,confirm:string){if(confirm&&!window.confirm(confirm))return;setBusy(true);setError('');try{await api(path,{archive_id:archive.id,expected_version:archive.version,deadline_at:deadline(),request_id:crypto.randomUUID()});onChanged();}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
+ const canRefer=archive.type==='person'&&['视奸观察','个人接触','外部社友'].includes(archive.status),canJoin=archive.type==='person'&&archive.status==='人事审核';
+ return <section className="archive-workflow"><header><div><p className="eyebrow">下一步工作</p><h2>{canRefer?'确认对方愿意继续后，提交人事审核':canJoin?'审核结果已确认后，明确是否正式入社':'关联任务'}</h2></div>{canRefer&&<button className="button primary" disabled={busy} onClick={()=>void action('/archives/refer','提交后会创建待领取的人事审核任务，确认继续？')}>提交人事审核</button>}{canJoin&&<button className="button primary" disabled={busy} onClick={()=>void action('/archives/confirm-membership','确认后会保留同一档案并创建待领取的入社对接任务，继续？')}>确认正式入社</button>}</header><p className="secondary-copy">任务负责人与档案关联人分开；待领取时由符合倾向的成员收到推荐，也可以从全组任务看板主动领取。</p>{error&&<p className="form-error" role="alert">{error}</p>}{open.length>0&&<div className="archive-task-list">{open.map(task=><article key={task.id}><strong>{task.title}</strong><span>{task.owner_name??'待接手'} · 截止 {new Date(task.deadline_at).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai',hour12:false,month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})}</span><p>{task.purpose}</p></article>)}</div>}{!open.length&&tasks.length>0&&<p className="secondary-copy">当前关联任务已结束，历史仍保留在任务页。</p>}</section>;
 }
 
 function ArchiveDeletionDialog({archive,busy,setBusy,onCancel,onSaved,onReload}:{archive:Archive;busy:boolean;setBusy:(v:boolean)=>void;onCancel:()=>void;onSaved:()=>void;onReload:()=>Promise<void>}){
@@ -120,13 +131,13 @@ function ArchiveDeletionDialog({archive,busy,setBusy,onCancel,onSaved,onReload}:
  return <ArchiveDeletionConfirmation name={archive.name} status={archive.status} deleted={archive.deleted} busy={busy} error={error} onCancel={onCancel} onConfirm={()=>void submit()} onReload={()=>void onReload().catch(e=>setError(e.message))}/>;
 }
 
-function ArchiveForm({type,initial,busy,setBusy,onSaved,onReload}:{type:Kind;initial?:Archive;busy:boolean;setBusy:(b:boolean)=>void;onSaved:(id:string,changed:boolean)=>Promise<void>;onReload:()=>Promise<void>}){
- const[name,setName]=useState(initial?.name??''),[contacts,setContacts]=useState(initial?.contacts??[]),[links,setLinks]=useState(initial?.links??[]),[error,setError]=useState(''),[requestId]=useState(()=>crypto.randomUUID()),[similar,setSimilar]=useState<Archive[]>([]),[status,setStatus]=useState('视奸观察'),[members,setMembers]=useState<BoundMember[]>([]);
+function ArchiveForm({type,initial,createStatus,busy,setBusy,onSaved,onReload}:{type:Kind;initial?:Archive;createStatus?:string;busy:boolean;setBusy:(b:boolean)=>void;onSaved:(id:string,changed:boolean)=>Promise<void>;onReload:()=>Promise<void>}){
+ const[name,setName]=useState(initial?.name??''),[contacts,setContacts]=useState(initial?.contacts??[]),[links,setLinks]=useState(initial?.links??[]),[error,setError]=useState(''),[requestId]=useState(()=>crypto.randomUUID()),[similar,setSimilar]=useState<Archive[]>([]),[status,setStatus]=useState(createStatus??'视奸观察'),[members,setMembers]=useState<BoundMember[]>([]);
  useEffect(()=>{if(initial||!name.trim()){setSimilar([]);return;}let cancelled=false;const timer=setTimeout(()=>{api<{archives:Archive[]}>('/archives?'+new URLSearchParams({type,query:name,limit:'3'})).then(r=>{if(!cancelled)setSimilar(r.archives);}).catch(()=>{});},350);return()=>{cancelled=true;clearTimeout(timer);};},[name,initial,type]);
  async function save(e:FormEvent){e.preventDefault();setBusy(true);setError('');try{const r=await api<{id:string;changed:boolean}>(initial?'/archives/update':'/archives/create',{...(initial?{id:initial.id,expected_version:initial.version}:{type}),name,contacts,links,...(!initial?{status,member_ids:members.map(m=>m.id)}:{}),request_id:requestId});await onSaved(r.id,r.changed);}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
  return <form className="manage-form archive-form" onSubmit={save}>
   <ProfileFields type={type} name={name} setName={setName} contacts={contacts} setContacts={setContacts} links={links} setLinks={setLinks}>{similar.length>0&&<p className="similar-archives">已有相似档案：{similar.map(a=>a.name).join('、')}。同名不同对象可以继续创建。</p>}</ProfileFields>
-  {!initial&&<StateFields type={type} status={status} onStatus={s=>{setStatus(s);setMembers([]);}} members={members} onMembers={setMembers}/>}
+   {!initial&&createStatus?<p className="archive-readonly">身份：社员。新建后保持开启，并沿用同一人物档案。</p>:!initial&&<StateFields type={type} status={status} onStatus={s=>{setStatus(s);setMembers([]);}} members={members} onMembers={setMembers}/>}
   <PageError error={error} retry={initial?()=>void onReload().catch(e=>setError(e.message)):undefined} retryLabel="重新读取并替换表单"/><ModalActions><button className="button primary" disabled={busy||(!initial&&isWorkState(type,status)&&members.length===0)}>{busy?'正在保存…':initial?'保存资料':'创建档案'}</button></ModalActions>
  </form>;
 }
