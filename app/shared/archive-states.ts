@@ -1,4 +1,4 @@
-// Executable 0.1.x policy. S06 changes identity semantics in the 1.0.0 integration branch.
+// Executable archive policy shared by the 1.0.0 web/MCP integration.
 export const archiveStatePolicy=[
  {status:'视奸观察',types:['person','org'],closed:false,requiresMembers:false},
  {status:'个人接触',types:['person','org'],closed:false,requiresMembers:false},
