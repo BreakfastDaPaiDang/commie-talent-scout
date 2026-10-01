@@ -1,6 +1,6 @@
 {
   "format": 1,
-  "count": 17,
+  "count": 18,
   "migrations": {
     "0001_identity.sql": {
       "sha256": "ceb732997de6972d3f88ae3a15b52b4df0def3418cc4b0834cd289ce55daff6a",
@@ -86,6 +86,11 @@
       "sha256": "3566b7378992441beaa501c29d15772a74b477e770c6611b96ca1730030b00a5",
       "backwards_compatible": true,
       "reason": "Adds short-lived archive opening snapshots and their event references; retains event read marks and MCP receipts. Trash transitions invalidate only transient opening tickets."
+    },
+    "0018_work_preferences.sql": {
+      "sha256": "efeae93019aa93dc5ea7d090f868842357221970f34e19608b203841358bfdd8",
+      "backwards_compatible": true,
+      "reason": "Adds an optional per-member work preference record; existing member accounts and task-related data remain unchanged."
     }
   }
 }

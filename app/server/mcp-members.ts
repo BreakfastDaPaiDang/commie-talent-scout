@@ -1,17 +1,17 @@
 import {McpServer} from '@modelcontextprotocol/server';
 import {z} from 'zod';
-import {Members,memberListInput,memberCreateInput,memberFrozenInput,memberRoleInput,memberResetInput,memberProfileInput} from './members.ts';
+import {Members,memberListInput,memberCreateInput,memberFrozenInput,memberRoleInput,memberResetInput,memberProfileInput,memberWorkPreferenceInput} from './members.ts';
 import {registerJournalFields} from './mcp-journal.ts';
 import {getRequestResult,requestId} from './commands.ts';
 import {type Actor,type Env} from './types.ts';
 
 export type McpContent={type:'text';text:string}|{type:'image';data:string;mimeType:string};
 export type McpReply=(action:()=>Promise<Record<string,unknown>>,summary?:(result:Record<string,unknown>)=>Record<string,unknown>,content?:(result:Record<string,unknown>)=>Promise<McpContent[]>)=>Promise<{content:McpContent[];structuredContent:Record<string,unknown>;isError?:boolean}>;
-export const memberToolNames=['list_members','get_member','create_member','reset_member_password','set_member_frozen','set_member_role','update_member_profile','get_member_history','get_request_result'];
+export const memberToolNames=['list_members','get_member','create_member','reset_member_password','set_member_frozen','set_member_role','update_member_profile','get_work_preference','set_work_preference','get_member_history','get_request_result'];
 const fields:Record<string,string[]>={
   list_members:['state','before','limit'],get_member:['id'],create_member:['username','name','role','qq','request_id'],
   reset_member_password:['id','expected_version','request_id'],set_member_frozen:['id','expected_version','frozen','request_id'],
-  set_member_role:['id','expected_version','role','request_id'],update_member_profile:['id','expected_version','name','qq','request_id'],
+  set_member_role:['id','expected_version','role','request_id'],update_member_profile:['id','expected_version','name','qq','request_id'],get_work_preference:[],set_work_preference:['all','kinds','expected_version','request_id'],
   get_member_history:['id'],get_request_result:['request_id'],
 };
 for(const [name,keys] of Object.entries(fields))registerJournalFields(name,keys);
@@ -37,6 +37,8 @@ export function registerMemberTools(server:McpServer,env:Env,actor:Actor,reply:M
   server.registerTool('set_member_frozen',{description:'仅管理员按明确要求冻结或解冻猎头账号。冻结立即阻止登录并使旧凭证失效，解冻不恢复旧凭证；不删除历史作者或负责人。先核对成员版本，系统拒绝冻结最后一名有效管理员。',annotations:destructive,inputSchema:memberFrozenInput,outputSchema:version},input=>reply(()=>service.setFrozen(input),summary));
   server.registerTool('set_member_role',{description:'仅管理员按明确授权调整指定账号的管理员/普通成员角色，后续请求立即使用新权限。不得为绕过其他操作限制而提权；先读取当前版本，不能降权最后一名有效管理员。',annotations:destructive,inputSchema:memberRoleInput,outputSchema:version},input=>reply(()=>service.setRole(input),summary));
   server.registerTool('update_member_profile',{description:'管理员维护猎头账号的显示名称和 QQ；不更改登录账号、角色、密码或人物档案。先 list_members 取得版本，提供完整目标字段；无变化不生成版本与审计事件。',annotations:write,inputSchema:memberProfileInput,outputSchema:version},input=>reply(()=>service.updateProfile(input),summary));
+  server.registerTool('get_work_preference',{description:'读取当前账号自己的工作倾向。倾向只表示愿意收到相应任务提醒，不是能力认证，也不限制从全组看板主动领取。',annotations:read,inputSchema:{},outputSchema:z.object({preference:z.object({all:z.boolean(),kinds:z.array(z.string()),version:z.number(),updated_at:z.string().nullable()})})},()=>reply(()=>service.getOwnWorkPreference(),r=>({version:(r.preference as Record<string,unknown>).version})));
+  server.registerTool('set_work_preference',{description:'修改当前账号自己的工作倾向；支持明确任务类型或全能。只影响后续匹配和推荐，不直接领取任务。先读取版本，重复请求使用同一 request_id。',annotations:write,inputSchema:memberWorkPreferenceInput,outputSchema:z.object({all:z.boolean(),kinds:z.array(z.string()),version:z.number(),changed:z.boolean()}).passthrough()},input=>reply(()=>service.setOwnWorkPreference(input),r=>({version:r.version,changed:r.changed})));
   server.registerTool('get_member_history',{description:'管理员读取指定猎头账号的管理历史，核对操作者、时间与入口。包含创建、角色、冻结、资料及重置事件；不返回密码或哈希，最多返回最近 100 项并声明是否完整。',annotations:read,inputSchema:{id:z.uuid()},outputSchema:z.object({events:z.array(z.record(z.string(),z.unknown())),complete:z.boolean()})},input=>reply(()=>service.history(input.id),r=>({count:(r.events as unknown[]).length,complete:r.complete})));
   server.registerTool('get_request_result',{description:'写入网络结果不明时，查询当前成员原 request_id 的已提交结果。completed 表示已提交；unknown 不证明仍在途的操作未发生，保留原 ID 与参数。管理员动作的结果仍要求当前管理员权限。',annotations:read,inputSchema:{request_id:requestId},outputSchema:z.object({status:z.enum(['completed','unknown']),result:z.record(z.string(),z.unknown()).nullable(),message:z.string().optional()})},input=>reply(()=>getRequestResult(env,actor,input.request_id),r=>({status:r.status})));
 }
