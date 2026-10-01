@@ -49,7 +49,7 @@ export class Archives{
   const a=archiveListInput.parse(input),position=archiveCursor(a.before);if(a.deleted)assertAdmin(this.actor);const where=['a.type=?','a.deleted=?'],args:unknown[]=[a.type,a.deleted?1:0],unread=unreadPredicate(this.actor);
   const value='%'+a.query.replace(/[\\%_]/g,'\\$&')+'%',match=`SELECT json_object('observation_id',o.id,'excerpt',substr(v.body,max(1,instr(lower(v.body),lower(?))-60),240)) FROM observations o JOIN observation_versions v ON v.observation_id=o.id AND v.version=o.content_version WHERE o.archive_id=a.id AND o.deleted=0 AND v.body LIKE ? ESCAPE '\\' ORDER BY o.updated_at DESC,o.id DESC LIMIT 1`;
   if(a.query){where.push(`(a.name LIKE ? ESCAPE '\\' OR a.contacts_json LIKE ? ESCAPE '\\' OR EXISTS(SELECT 1 FROM observations o JOIN observation_versions v ON v.observation_id=o.id AND v.version=o.content_version WHERE o.archive_id=a.id AND o.deleted=0 AND v.body LIKE ? ESCAPE '\\'))`);args.push(value,value,value);}
-  if(a.status){where.push('a.status=?');args.push(a.status);}
+  if(a.status){const statuses=[...new Set(a.status.split(',').map(status=>status.trim()).filter(Boolean))];if(statuses.length===1){where.push('a.status=?');args.push(statuses[0]);}else if(statuses.length>1){where.push(`a.status IN (${statuses.map(()=>'?').join(',')})`);args.push(...statuses);}}
   if(a.member_id){where.push('EXISTS(SELECT 1 FROM archive_bindings b WHERE b.archive_id=a.id AND b.status=a.status AND b.member_id=?)');args.push(a.member_id);}
   if(a.closed!=='all')where.push(`a.closed=${a.closed==='closed'?1:0}`);
   if(a.tag_ids.length){
