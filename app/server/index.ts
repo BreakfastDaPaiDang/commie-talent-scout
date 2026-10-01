@@ -9,7 +9,7 @@ import { bodyLimit } from 'hono/body-limit';
 import { ZodError } from 'zod';
 import { authenticate, changePassword, login, sessionCookie } from './auth.ts';
 import { PasswordBusy } from './password.ts';
-import { Failure, now, publicMember, type Env } from './types.ts';
+import { Failure, now, publicMember, type Env, type Actor } from './types.ts';
 import {createCredential,listCredentials,revokeCredential} from './credentials.ts';
 import {cleanupJournal,getCall,listCalls} from './mcp-journal.ts';
 import {TaskReview} from './task-review.ts';
@@ -169,6 +169,8 @@ export default {
   fetch:app.fetch,
   async scheduled(_event:ScheduledController,env:Env) {
     await cleanupJournal(env);
+    const pushActor=await env.DB.prepare("SELECT id,username,name,role,frozen,auth_epoch,must_change_password,version,qq,avatar_id FROM members WHERE frozen=0 ORDER BY role='admin' DESC,id LIMIT 1").first();
+    if(pushActor) await new WorkTasks(env,pushActor as Actor,'mcp').duePushes();
     await env.DB.batch([
       env.DB.prepare('DELETE FROM observation_drafts WHERE updated_at<?').bind(new Date(Date.now()-30*86400000).toISOString()),
       env.DB.prepare('DELETE FROM reading_deliveries WHERE expires_at<?').bind(new Date().toISOString()),
