@@ -7,6 +7,7 @@ import {matchesPreference,pushCandidates,pushStage,type PushableTaskKind} from '
 const taskKinds=['audit','onboarding','monthly','cooperation','custom'] as const;
 export const workTaskCreateInput=z.object({archive_id:z.uuid().nullable().default(null),kind:z.enum(taskKinds),title:z.string().trim().min(1).max(160),purpose:z.string().trim().min(1).max(4000),delivery:z.string().trim().min(1).max(4000),deadline_at:z.string().datetime(),source:z.enum(['manual','rule']).default('manual'),request_id:requestId}).strict();
 export const workTaskClaimInput=z.object({id:z.uuid(),expected_version:expectedVersion,request_id:requestId}).strict();
+export const workTaskAssignInput=z.object({id:z.uuid(),member_id:z.uuid(),expected_version:expectedVersion,reason:z.string().trim().min(1).max(500),request_id:requestId}).strict();
 type Row={id:string;archive_id:string|null;kind:typeof taskKinds[number];title:string;purpose:string;delivery:string;source:'manual'|'rule';status:'open'|'completed'|'expired'|'cancelled';owner_id:string|null;deadline_at:string;created_by:string;created_at:string;updated_at:string;version:number};
 
 export class WorkTasks {
@@ -46,6 +47,15 @@ export class WorkTasks {
       const task=await this.get(a.id,a.expected_version);if(task.status!=='open')throw new Failure(409,'TASK_NOT_OPEN','只有开启中的任务可以领取');if(task.owner_id)throw new Failure(409,'TASK_ALREADY_CLAIMED','任务已经有人领取');
       const key=uid(),at=now(),result={id:a.id,owner_id:this.actor.id,status:'open',version:task.version+1,changed:true};
       return {result,statements:[this.stmt('INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(SELECT 1 FROM work_tasks WHERE id=? AND version=? AND status=\'open\' AND owner_id IS NULL) THEN 1 ELSE 0 END)',key,a.id,a.expected_version),this.stmt('UPDATE work_tasks SET owner_id=?,version=version+1,updated_at=? WHERE id=? AND version=? AND status=\'open\' AND owner_id IS NULL',this.actor.id,at,a.id,a.expected_version),this.event(a.id,'task.claimed',{owner_id:null,version:task.version},{owner_id:this.actor.id,version:task.version+1}),this.stmt('DELETE FROM mutation_guards WHERE id=?',key)]};
+    });
+  }
+  async assign(input:unknown){
+    assertAdmin(this.actor);const a=workTaskAssignInput.parse(input);
+    return command(this.env,this.actor,{requestId:a.request_id,operation:'work_task.assign',parameters:{id:a.id,member_id:a.member_id,expected_version:a.expected_version,reason:a.reason},requireAdmin:true},async()=>{
+      const task=await this.get(a.id,a.expected_version);if(task.status!=='open')throw new Failure(409,'TASK_NOT_OPEN','只有开启中的任务可以指派');
+      const member=await this.stmt('SELECT id,frozen FROM members WHERE id=?',a.member_id).first<{id:string;frozen:number}>();if(!member||member.frozen)throw new Failure(409,'MEMBER_NOT_ELIGIBLE','只能指派给未冻结的成员');
+      const key=uid(),at=now(),result={id:a.id,owner_id:a.member_id,status:'open',version:task.version+1,changed:true,assigned:true};
+      return {result,statements:[this.stmt('INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(SELECT 1 FROM work_tasks WHERE id=? AND version=? AND status=\'open\') THEN 1 ELSE 0 END)',key,a.id,a.expected_version),this.stmt('UPDATE work_tasks SET owner_id=?,version=version+1,updated_at=? WHERE id=? AND version=? AND status=\'open\'',a.member_id,at,a.id,a.expected_version),this.event(a.id,'task.assigned',{owner_id:task.owner_id,version:task.version},{owner_id:a.member_id,version:task.version+1},a.reason),this.stmt('DELETE FROM mutation_guards WHERE id=?',key)]};
     });
   }
   async duePushes(at=now()){

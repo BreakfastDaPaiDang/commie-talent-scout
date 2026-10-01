@@ -24,3 +24,11 @@ test('due push records only matching active members and never assigns the task',
  assert.equal(f.sqlite.prepare('SELECT owner_id FROM work_tasks WHERE id=?').get(task.id).owner_id,null);
  assert.equal((await service.duePushes(task.created_at)).count,0);
 });
+
+test('administrator assignment records a reason and stops the unowned state',async t=>{
+ const f=fixture();t.after(f.close);f.sqlite.prepare("UPDATE members SET role='admin' WHERE id=?").run(f.actor.id);f.actor.role='admin';
+ const target=uuid(),at=new Date().toISOString();f.sqlite.prepare("INSERT INTO members(id,username,name,role,password_hash,must_change_password,qq,created_at) VALUES(?,?,?,'member','fixture',0,'00000',?)").run(target,'assigned','被指派人',at);
+ const service=new WorkTasks(f.env,f.actor,'web'),task=await service.create({kind:'onboarding',title:'入社对接',purpose:'说明后续安排',delivery:'留下交接记录',deadline_at:'2099-01-01T00:00:00.000Z',request_id:uuid()});
+ const assigned=await service.assign({id:task.id,member_id:target,expected_version:task.version,reason:'本周负责入社对接',request_id:uuid()});assert.equal(assigned.owner_id,target);
+ const event=f.sqlite.prepare("SELECT kind,reason FROM work_task_events WHERE task_id=? ORDER BY created_at DESC LIMIT 1").get(task.id);assert.equal(event.kind,'task.assigned');assert.equal(event.reason,'本周负责入社对接');
+});

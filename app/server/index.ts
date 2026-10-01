@@ -153,6 +153,7 @@ app.post('/api/profile/work-preference',async c=>c.json(await new Members(c.env,
 app.get('/api/work-tasks',async c=>c.json(await new WorkTasks(c.env,await authenticate(c.req.raw,c.env),'web').list(c.req.query())));
 app.post('/api/work-tasks/create',async c=>c.json(await new WorkTasks(c.env,await authenticate(c.req.raw,c.env),'web').create(await c.req.json())));
 app.post('/api/work-tasks/claim',async c=>c.json(await new WorkTasks(c.env,await authenticate(c.req.raw,c.env),'web').claim(await c.req.json())));
+app.post('/api/work-tasks/assign',async c=>c.json(await new WorkTasks(c.env,await authenticate(c.req.raw,c.env),'web').assign(await c.req.json())));
 app.all('/api/*',c=>c.json({error:{code:'NOT_FOUND',message:'接口不存在'}},404));
 app.all('/mcp',c=>handleMcp(c.req.raw,c.env,c.executionCtx as ExecutionContext));
 app.get('/images/:id',async c=>new Images(c.env,await authenticate(c.req.raw,c.env),'web').read(c.req.param('id'),c.req.raw.headers));
