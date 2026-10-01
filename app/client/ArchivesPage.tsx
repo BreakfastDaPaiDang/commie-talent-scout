@@ -22,6 +22,8 @@ import {TagsSection,TagSummary} from './TagsSection';
 import {ObservationSection} from './ObservationSection';
 
 type Kind='person'|'org';
+type ArchiveTask={id:string;kind:'audit'|'onboarding'|'monthly'|'cooperation'|'custom';title:string;purpose:string;delivery:string;status:string;owner_id:string|null;owner_name?:string|null;deadline_at:string;version:number;result_kind?:string|null;result_text?:string|null};
+type ArchiveWithTasks=Archive&{work_tasks?:ArchiveTask[]};
 type Preference={query:string;selected:string|null;scope:'all'|'mine'|'unread';status:string;member_id:string;closed:'all'|'open'|'closed';tag_ids:string[]};
 const defaults:Preference={query:'',selected:null,scope:'all',status:'',member_id:'',closed:'all',tag_ids:[]};
 type ListArchive=Archive&{unread_count?:number;search_match?:{observation_id:string;excerpt:string}|null};
@@ -92,12 +94,12 @@ export function ArchivesPage({actor,type,linked,detailOnly=false,onNextUnread,on
  </>;
 }
 function ArchiveDetail({type,actor,onChanged,id,revision,onLoaded,onBack,onEdit,onState,notice,focus,expanded,onExpand,onNextUnread,onDelete}:{onDelete:()=>void;type:Kind;focus?:ObservationFocus;actor:Member;onChanged:()=>void;id:string;revision:number;onLoaded:(a:Archive)=>void;onBack?:()=>void;onEdit:()=>void;onState:()=>void;notice:string;expanded:boolean;onExpand?:()=>void;onNextUnread?:()=>void}){
- const[archive,setArchive]=useState<Archive|null>(null),[error,setError]=useState(''),[retry,setRetry]=useState(0),[copy,setCopy]=useState(''),scroll=useRef<HTMLDivElement>(null);
+ const[archive,setArchive]=useState<ArchiveWithTasks|null>(null),[error,setError]=useState(''),[retry,setRetry]=useState(0),[copy,setCopy]=useState(''),scroll=useRef<HTMLDivElement>(null);
  const[opening,setOpening]=useState<ArchiveReadDelivery|null>();
  const positionKey=`cts:${actor.id}:${id}:reading-position`;
  // A mounted detail represents one opening. Count, editor and content refreshes may
  // fetch newer data, but must never expand the original personal read snapshot.
- useEffect(()=>{let cancelled=false;setError('');api<{archive:Archive;archive_reading?:ArchiveReadDelivery|null}>('/archives/'+id).then(r=>{if(!cancelled){setArchive(r.archive);setOpening(old=>old===undefined?r.archive_reading??null:old);onLoaded(r.archive);}}).catch(e=>{if(!cancelled){setArchive(null);setError(e.message);}});return()=>{cancelled=true;};},[id,revision,retry]);
+ useEffect(()=>{let cancelled=false;setError('');api<{archive:ArchiveWithTasks;archive_reading?:ArchiveReadDelivery|null}>('/archives/'+id).then(r=>{if(!cancelled){setArchive(r.archive);setOpening(old=>old===undefined?r.archive_reading??null:old);onLoaded(r.archive);}}).catch(e=>{if(!cancelled){setArchive(null);setError(e.message);}});return()=>{cancelled=true;};},[id,revision,retry]);
  useLayoutEffect(()=>{if(archive&&!focus&&scroll.current){try{scroll.current.scrollTop=Number(localStorage.getItem(positionKey)||0);}catch{}}},[archive?.id,positionKey]);
  async function copyContact(value:string){try{await navigator.clipboard.writeText(value);setCopy('联系方式已复制');}catch{setCopy('复制未完成，请选择联系方式文字复制');}}
  return <DetailFrame label={(archive?.type??type)==='org'?'组织档案':'人物档案'} code={id.slice(0,6).toUpperCase()} expanded={expanded} onExpand={onExpand} onClose={onBack} onNextUnread={onNextUnread} scrollRef={scroll} onScroll={e=>{try{localStorage.setItem(positionKey,String(e.currentTarget.scrollTop));}catch{}}}>
@@ -108,10 +110,19 @@ function ArchiveDetail({type,actor,onChanged,id,revision,onLoaded,onBack,onEdit,
     {copy&&<p className="form-notice" role="status">{copy}</p>}{notice&&<p className="form-notice" role="status">{notice}</p>}
    </EntityHeader>
    <ArchiveLifecycleNotice deleted={archive.deleted} closed={archive.closed} onReopen={onState} onRestore={actor.role==='admin'?onDelete:undefined} onDelete={actor.role==='admin'?onDelete:undefined}/>
+   {!archive.deleted&&!archive.closed&&<ArchiveWorkflow archive={archive} onChanged={onChanged}/>}
    <TagsSection archive={archive} onChanged={onChanged}/><ObservationSection focus={focus} actor={actor} archive={archive} onChanged={onChanged}/>
 
   </ArchiveReadingScope.Provider>}
  </DetailFrame>;
+}
+
+function ArchiveWorkflow({archive,onChanged}:{archive:ArchiveWithTasks;onChanged:()=>void}){
+ const[busy,setBusy]=useState(false),[error,setError]=useState('');const tasks=archive.work_tasks??[],open=tasks.filter(t=>t.status==='open');
+ const deadline=()=>new Date(Date.now()+7*86400000).toISOString();
+ async function action(path:string,confirm:string){if(confirm&&!window.confirm(confirm))return;setBusy(true);setError('');try{await api(path,{archive_id:archive.id,expected_version:archive.version,deadline_at:deadline(),request_id:crypto.randomUUID()});onChanged();}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
+ const canRefer=archive.type==='person'&&['视奸观察','个人接触','外部社友'].includes(archive.status),canJoin=archive.type==='person'&&archive.status==='人事审核';
+ return <section className="archive-workflow"><header><div><p className="eyebrow">下一步工作</p><h2>{canRefer?'确认对方愿意继续后，提交人事审核':canJoin?'审核结果已确认后，明确是否正式入社':'关联任务'}</h2></div>{canRefer&&<button className="button primary" disabled={busy} onClick={()=>void action('/archives/refer','提交后会创建待领取的人事审核任务，确认继续？')}>提交人事审核</button>}{canJoin&&<button className="button primary" disabled={busy} onClick={()=>void action('/archives/confirm-membership','确认后会保留同一档案并创建待领取的入社对接任务，继续？')}>确认正式入社</button>}</header><p className="secondary-copy">任务负责人与档案关联人分开；待领取时由符合倾向的成员收到推荐，也可以从全组任务看板主动领取。</p>{error&&<p className="form-error" role="alert">{error}</p>}{open.length>0&&<div className="archive-task-list">{open.map(task=><article key={task.id}><strong>{task.title}</strong><span>{task.owner_name??'待接手'} · 截止 {new Date(task.deadline_at).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai',hour12:false,month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})}</span><p>{task.purpose}</p></article>)}</div>}{!open.length&&tasks.length>0&&<p className="secondary-copy">当前关联任务已结束，历史仍保留在任务页。</p>}</section>;
 }
 
 function ArchiveDeletionDialog({archive,busy,setBusy,onCancel,onSaved,onReload}:{archive:Archive;busy:boolean;setBusy:(v:boolean)=>void;onCancel:()=>void;onSaved:()=>void;onReload:()=>Promise<void>}){

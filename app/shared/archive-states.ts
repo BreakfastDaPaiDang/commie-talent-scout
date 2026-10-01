@@ -5,7 +5,8 @@ export const archiveStatePolicy=[
  {status:'引荐中（待人事组接触）',types:['person'],closed:false,requiresMembers:true},
  {status:'人事审核',types:['person'],closed:false,requiresMembers:true},
  {status:'已加入待对接',types:['person'],closed:false,requiresMembers:true},
- {status:'已入伙',types:['person'],closed:true,requiresMembers:false},
+ {status:'已入伙',types:['person'],closed:false,requiresMembers:false},
+ {status:'外部社友',types:['person'],closed:false,requiresMembers:false},
  {status:'组织交流',types:['org'],closed:false,requiresMembers:true},
  {status:'已弃用',types:['person','org'],closed:true,requiresMembers:false},
 ] as const;
