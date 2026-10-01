@@ -32,3 +32,14 @@ test('administrator assignment records a reason and stops the unowned state',asy
  const assigned=await service.assign({id:task.id,member_id:target,expected_version:task.version,reason:'本周负责入社对接',request_id:uuid()});assert.equal(assigned.owner_id,target);
  const event=f.sqlite.prepare("SELECT kind,reason FROM work_task_events WHERE task_id=? ORDER BY created_at DESC LIMIT 1").get(task.id);assert.equal(event.kind,'task.assigned');assert.equal(event.reason,'本周负责入社对接');
 });
+
+test('only the current owner can complete or release a task, and both actions keep history',async t=>{
+ const f=fixture();t.after(f.close);const service=new WorkTasks(f.env,f.actor,'mcp');
+ const task=await service.create({kind:'audit',title:'审核',purpose:'了解情况',delivery:'交代结论',deadline_at:'2099-01-01T00:00:00.000Z',request_id:uuid()});
+ await assert.rejects(service.complete({id:task.id,expected_version:task.version,result_kind:'completed',result_text:'尚未接取',request_id:uuid()}),{code:'TASK_OWNER_REQUIRED'});
+ const claimed=await service.claim({id:task.id,expected_version:task.version,request_id:uuid()});
+ const released=await service.release({id:task.id,expected_version:claimed.version,deadline_at:'2099-02-01T00:00:00.000Z',request_id:uuid()});assert.equal(released.owner_id,null);
+ const reclaimed=await service.claim({id:task.id,expected_version:released.version,request_id:uuid()});
+ const completed=await service.complete({id:task.id,expected_version:reclaimed.version,result_kind:'unable_to_contact',result_text:'本次未取得联系，保留后续跟进事项。',request_id:uuid()});assert.equal(completed.status,'completed');
+ const detail=await service.detail(task.id);assert.deepEqual(detail.events.map(e=>e.kind),['task.completed','task.claimed','task.released','task.claimed','task.created']);
+});

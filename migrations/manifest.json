@@ -1,6 +1,6 @@
 {
   "format": 1,
-  "count": 19,
+  "count": 20,
   "migrations": {
     "0001_identity.sql": {
       "sha256": "ceb732997de6972d3f88ae3a15b52b4df0def3418cc4b0834cd289ce55daff6a",
@@ -96,6 +96,11 @@
       "sha256": "5d44496dfef275517265fad3494e62037312528cafa5e781a1b48f56fe46231c",
       "backwards_compatible": true,
       "reason": "Adds independent work tasks, history and preference push records."
+    },
+    "0020_work_task_results.sql": {
+      "sha256": "e5ab21ad920587468f1c8f90d02e28751644997c8452644fafb0dad118b891e5",
+      "backwards_compatible": true,
+      "reason": "Adds optional result and close metadata to work tasks."
     }
   }
 }

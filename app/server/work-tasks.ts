@@ -8,7 +8,9 @@ const taskKinds=['audit','onboarding','monthly','cooperation','custom'] as const
 export const workTaskCreateInput=z.object({archive_id:z.uuid().nullable().default(null),kind:z.enum(taskKinds),title:z.string().trim().min(1).max(160),purpose:z.string().trim().min(1).max(4000),delivery:z.string().trim().min(1).max(4000),deadline_at:z.string().datetime(),source:z.enum(['manual','rule']).default('manual'),request_id:requestId}).strict();
 export const workTaskClaimInput=z.object({id:z.uuid(),expected_version:expectedVersion,request_id:requestId}).strict();
 export const workTaskAssignInput=z.object({id:z.uuid(),member_id:z.uuid(),expected_version:expectedVersion,reason:z.string().trim().min(1).max(500),request_id:requestId}).strict();
-type Row={id:string;archive_id:string|null;kind:typeof taskKinds[number];title:string;purpose:string;delivery:string;source:'manual'|'rule';status:'open'|'completed'|'expired'|'cancelled';owner_id:string|null;deadline_at:string;created_by:string;created_at:string;updated_at:string;version:number};
+export const workTaskCompleteInput=z.object({id:z.uuid(),expected_version:expectedVersion,result_kind:z.enum(['completed','continue','not_suitable','unable_to_contact','joined','discarded']),result_text:z.string().trim().min(1).max(5000),request_id:requestId}).strict();
+export const workTaskReleaseInput=z.object({id:z.uuid(),expected_version:expectedVersion,deadline_at:z.string().datetime(),reason:z.string().trim().max(500).default('主动交还，重新等待接取'),request_id:requestId}).strict();
+type Row={id:string;archive_id:string|null;kind:typeof taskKinds[number];title:string;purpose:string;delivery:string;source:'manual'|'rule';status:'open'|'completed'|'expired'|'cancelled';owner_id:string|null;deadline_at:string;created_by:string;created_at:string;updated_at:string;version:number;result_kind:string|null;result_text:string|null;completed_at:string|null;closed_reason:string|null};
 
 export class WorkTasks {
   constructor(private env:Env,private actor:Actor,private source:Source){ }
@@ -48,6 +50,25 @@ export class WorkTasks {
       const key=uid(),at=now(),result={id:a.id,owner_id:this.actor.id,status:'open',version:task.version+1,changed:true};
       return {result,statements:[this.stmt('INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(SELECT 1 FROM work_tasks WHERE id=? AND version=? AND status=\'open\' AND owner_id IS NULL) THEN 1 ELSE 0 END)',key,a.id,a.expected_version),this.stmt('UPDATE work_tasks SET owner_id=?,version=version+1,updated_at=? WHERE id=? AND version=? AND status=\'open\' AND owner_id IS NULL',this.actor.id,at,a.id,a.expected_version),this.event(a.id,'task.claimed',{owner_id:null,version:task.version},{owner_id:this.actor.id,version:task.version+1}),this.stmt('DELETE FROM mutation_guards WHERE id=?',key)]};
     });
+  }
+  async complete(input:unknown){
+    const a=workTaskCompleteInput.parse(input);
+    return command(this.env,this.actor,{requestId:a.request_id,operation:'work_task.complete',parameters:{id:a.id,expected_version:a.expected_version,result_kind:a.result_kind,result_text:a.result_text},},async()=>{
+      const task=await this.get(a.id,a.expected_version);if(task.status!=='open')throw new Failure(409,'TASK_NOT_OPEN','只有开启中的任务可以完成');if(task.owner_id!==this.actor.id)throw new Failure(403,'TASK_OWNER_REQUIRED','只有当前负责人可以提交完成结果');
+      const key=uid(),at=now(),result={id:a.id,status:'completed',result_kind:a.result_kind,result_text:a.result_text,version:task.version+1,changed:true};
+      return {result,statements:[this.stmt('INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(SELECT 1 FROM work_tasks WHERE id=? AND version=? AND status=\'open\' AND owner_id=?) THEN 1 ELSE 0 END)',key,a.id,a.expected_version,this.actor.id),this.stmt('UPDATE work_tasks SET status=\'completed\',result_kind=?,result_text=?,completed_at=?,updated_at=?,version=version+1 WHERE id=? AND version=? AND status=\'open\' AND owner_id=?',a.result_kind,a.result_text,at,at,a.id,a.expected_version,this.actor.id),this.event(a.id,'task.completed',{status:task.status,owner_id:task.owner_id,version:task.version},{status:'completed',owner_id:task.owner_id,result_kind:a.result_kind,result_text:a.result_text,version:task.version+1}),this.stmt('DELETE FROM mutation_guards WHERE id=?',key)]};
+    });
+  }
+  async release(input:unknown){
+    const a=workTaskReleaseInput.parse(input);
+    return command(this.env,this.actor,{requestId:a.request_id,operation:'work_task.release',parameters:{id:a.id,expected_version:a.expected_version,deadline_at:a.deadline_at,reason:a.reason}},async()=>{
+      const task=await this.get(a.id,a.expected_version);if(task.status!=='open'||task.owner_id!==this.actor.id)throw new Failure(403,'TASK_OWNER_REQUIRED','只有当前负责人可以主动交还任务');if(a.deadline_at<=now())throw new Failure(400,'DEADLINE_REQUIRED','重新等待接取必须有未来期限');
+      const key=uid(),at=now(),result={id:a.id,status:'open',owner_id:null,deadline_at:a.deadline_at,version:task.version+1,changed:true};
+      return {result,statements:[this.stmt('INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(SELECT 1 FROM work_tasks WHERE id=? AND version=? AND status=\'open\' AND owner_id=?) THEN 1 ELSE 0 END)',key,a.id,a.expected_version,this.actor.id),this.stmt('UPDATE work_tasks SET owner_id=NULL,deadline_at=?,updated_at=?,version=version+1 WHERE id=? AND version=? AND status=\'open\' AND owner_id=?',a.deadline_at,at,a.id,a.expected_version,this.actor.id),this.event(a.id,'task.released',{owner_id:task.owner_id,deadline_at:task.deadline_at,version:task.version},{owner_id:null,deadline_at:a.deadline_at,version:task.version+1},a.reason),this.stmt('DELETE FROM mutation_guards WHERE id=?',key)]};
+    });
+  }
+  async detail(id:string){
+    const task=await this.get(id);const events=await this.stmt('SELECT e.id,e.actor_id,(SELECT name FROM members WHERE id=e.actor_id) actor_name,e.source,e.kind,e.before_json,e.after_json,e.reason,e.created_at FROM work_task_events e WHERE e.task_id=? ORDER BY e.created_at DESC,e.id DESC LIMIT 100',id).all<Record<string,unknown>>();return {task,events:events.results};
   }
   async assign(input:unknown){
     assertAdmin(this.actor);const a=workTaskAssignInput.parse(input);
