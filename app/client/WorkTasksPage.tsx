@@ -7,7 +7,7 @@ import {avatarUrl} from './AvatarEditor';
 import './work-tasks.css';
 
 type Scope='all'|'recommended'|'mine'|'admin';
-type ArchivePreview={id:string;type:'person'|'org';name:string;status:string;version:number;updated_at:string;observation_count:number;latest_observation:string|null;members:{id:string;name:string;frozen:boolean}[];tag_summary:{tags:{tag_id:string;category_name:string;name:string;color:string;focus:number}[];total:number}};
+export type ArchivePreview={id:string;type:'person'|'org';name:string;status:string;version:number;updated_at:string;observation_count:number;latest_observation:string|null;members:{id:string;name:string;frozen:boolean}[];tag_summary:{tags:{tag_id:string;category_name:string;name:string;color:string;focus:number}[];total:number}};
 type Task={id:string;archive_id:string|null;archive_preview?:ArchivePreview;kind:'audit'|'onboarding'|'monthly'|'cooperation'|'custom';title:string;purpose:string;delivery:string;status:string;owner_id:string|null;owner_name?:string|null;created_by:string;deadline_at:string;created_at:string;version:number;candidate_count?:number;push_stage?:string};
 const labels:Record<Task['kind'],string>={audit:'人事审核',onboarding:'入社对接',monthly:'月度沟通',cooperation:'组织合作',custom:'临时工作'};
 const stageLabels:Record<string,string>={initial:'首次推送',reminder:'三日提醒',admin:'管理员队列'};
@@ -55,20 +55,49 @@ function TaskHistory({task}:{task:Task}){
  return <section className="work-task-history"><button className="text-button" onClick={()=>void toggle()}>{open?'收起历史':'查看操作历史'}</button>{open&&(loading?<p className="history-loading">正在读取…</p>:error?<p className="form-error">{error}</p>:<ol>{events.map((event,index)=><li key={`${event.created_at}-${index}`}><strong>{event.kind.replace('task.','')}</strong><span>{event.actor_name??'系统'} · {displayDate(event.created_at)}</span>{event.reason&&<small>{event.reason}</small>}</li>)}</ol>)}</section>;
 }
 
-function TaskCard({task,actor,onChanged,onOpenArchive}:{task:Task;actor:Member;onChanged:()=>void;onOpenArchive:(archive:ArchivePreview)=>void}){
+function taskActionTitle(task:Task){
+ const name=task.archive_preview?.name;
+ return name&&task.title.startsWith(`${name} · `)?task.title.slice(name.length+3):task.title;
+}
+
+function TaskIndexItem({task,actor,selected,onSelect}:{task:Task;actor:Member;selected:boolean;onSelect:()=>void}){
+ const mine=task.owner_id===actor.id,soon=Date.parse(task.deadline_at)-Date.now()<=3*86400000;
+ return <button type="button" className={'task-index-item '+(selected?'selected':'')} onClick={onSelect} aria-pressed={selected}>
+  <span className="task-index-kicker">{labels[task.kind]}</span>
+  <strong>{taskActionTitle(task)}</strong>
+  {task.archive_preview?<span className="task-index-subject"><Avatar name={task.archive_preview.name} type={task.archive_preview.type} size="micro"/><b>{task.archive_preview.name}</b></span>:<span className="task-index-subject task-index-unlinked">未关联档案</span>}
+  <footer><span className={mine?'task-index-owner mine':!task.owner_id?'task-index-owner waiting':'task-index-owner'}>{mine?'我负责':task.owner_name??'待接取'}</span><time className={soon?'soon':''}>{soon?'即将到期 · ':''}{displayDate(task.deadline_at)}</time></footer>
+ </button>;
+}
+
+function TaskScene({task,actor,onChanged,onOpenArchive}:{task:Task;actor:Member;onChanged:()=>void;onOpenArchive:(archive:ArchivePreview,taskId:string)=>void}){
  const[open,setOpen]=useState(false),[error,setError]=useState(''),[busy,setBusy]=useState(false),[flash,setFlash]=useState(''),mine=task.owner_id===actor.id;
  function changed(kind:string){setFlash(kind);onChanged();window.setTimeout(()=>setFlash(''),500);}
  async function claim(){setBusy(true);setError('');try{await api('/work-tasks/claim',{id:task.id,expected_version:task.version,request_id:crypto.randomUUID()});changed('claimed');}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
  async function release(){setBusy(true);setError('');try{await api('/work-tasks/release',{id:task.id,expected_version:task.version,deadline_at:iso(deadlineDefault()),request_id:crypto.randomUUID()});changed('released');}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
  async function cancel(){const reason=window.prompt('取消原因','这项工作不再适用');if(!reason?.trim())return;setBusy(true);setError('');try{await api('/work-tasks/cancel',{id:task.id,expected_version:task.version,reason:reason.trim(),request_id:crypto.randomUUID()});changed('cancelled');}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
  const canCancel=task.status==='open'&&(actor.role==='admin'||(task.created_by===actor.id&&!task.owner_id));
- return <article className={`work-task-card ${flash?'flash-'+flash:''}`}><div className="work-task-card-head"><div><span className="work-task-kind">{labels[task.kind]}</span><h2>{task.title}</h2></div><span className={'work-task-state '+(task.owner_id?'claimed':'waiting')}>{task.owner_name??(task.owner_id?'已接取':'待接取')}</span></div>{task.archive_preview&&<ArchivePeek archive={task.archive_preview} onOpen={onOpenArchive}/>}<p className="work-task-purpose">{task.purpose}</p><dl><div><dt>交付</dt><dd>{task.delivery}</dd></div><div><dt>期限</dt><dd>{displayDate(task.deadline_at)}</dd></div>{task.push_stage&&<div><dt>推送</dt><dd>{stageLabels[task.push_stage]??task.push_stage}{task.candidate_count!==undefined&&` · ${task.candidate_count} 个匹配`}</dd></div>}</dl><TaskHistory task={task}/><div className="work-task-actions"><PageError error={error}/>{task.status==='open'&&!task.owner_id&&<button className="button primary" disabled={busy} onClick={()=>void claim()}>{busy?'正在领取…':'领取任务'}</button>}{mine&&task.status==='open'&&<><button className="button" disabled={busy} onClick={()=>setOpen(v=>!v)}>{open?'收起完成':'提交完成'}</button><button className="button quiet" disabled={busy} onClick={()=>void release()}>主动交还</button></>}{canCancel&&<button className="button quiet" disabled={busy} onClick={()=>void cancel()}>取消任务</button>}{open&&mine&&<CompleteForm task={task} onSaved={()=>changed('completed')}/>}</div></article>;
+ return <article className={`task-scene ${flash?'flash-'+flash:''}`}>
+  <header className="task-scene-head"><div><span className="task-scene-kicker">{labels[task.kind]} · 当前工作</span><h2>{taskActionTitle(task)}</h2></div></header>
+  <div className="task-scene-subject">{task.archive_preview?<ArchivePeek archive={task.archive_preview} onOpen={archive=>onOpenArchive(archive,task.id)}/>:<span className="task-scene-unlinked">未关联档案</span>}</div>
+  <div className="task-scene-signal"><span className={'work-task-state '+(task.owner_id?'claimed':'waiting')}>{task.owner_name??(task.owner_id?'已接取':'待接取')}</span><span className="task-scene-meta">截止 {displayDate(task.deadline_at)}</span>{task.push_stage&&<span className="task-scene-meta">{stageLabels[task.push_stage]??task.push_stage}{task.candidate_count!==undefined&&` · ${task.candidate_count} 个匹配`}</span>}</div>
+  <section className="task-scene-purpose"><span className="task-scene-label">要做什么</span><p>{task.purpose}</p></section>
+  <details className="task-scene-delivery"><summary>交付要求</summary><p>{task.delivery}</p></details>
+  <TaskHistory task={task}/>
+  <div className="task-scene-actions"><PageError error={error}/>{task.status==='open'&&!task.owner_id&&<button className="button primary" disabled={busy} onClick={()=>void claim()}>{busy?'正在领取…':'领取任务'}</button>}{mine&&task.status==='open'&&<><button className="button primary" disabled={busy} onClick={()=>setOpen(v=>!v)}>{open?'收起完成':'提交完成'}</button><button className="button quiet" disabled={busy} onClick={()=>void release()}>主动交还</button></>}{!mine&&task.owner_id&&<p className="task-scene-owner">由 {task.owner_name??'其他成员'} 负责</p>}{canCancel&&<button className="button quiet" disabled={busy} onClick={()=>void cancel()}>取消任务</button>}{open&&mine&&<CompleteForm task={task} onSaved={()=>changed('completed')}/>}</div>
+ </article>;
 }
 
-export function WorkTasksPage({actor,onOpenArchive}:{actor:Member;onOpenArchive:(archive:ArchivePreview)=>void}){
+export function WorkTasksPage({actor,onOpenArchive}:{actor:Member;onOpenArchive:(archive:ArchivePreview,taskId?:string)=>void}){
  const[scope,setScope]=useState<Scope>('all'),[tasks,setTasks]=useState<Task[]>([]),[loading,setLoading]=useState(true),[error,setError]=useState(''),[revision,setRevision]=useState(0);
+ const[selectedId,setSelectedId]=useState<string|null>(()=>new URLSearchParams(location.search).get('task'));
  async function load(){setLoading(true);setError('');try{const r=await api<{tasks:Task[]}>('/work-tasks?'+new URLSearchParams({scope}));setTasks(r.tasks);}catch(e){setError((e as Error).message);}finally{setLoading(false);}}
  useEffect(()=>{void load();},[scope,revision]);
+ const selectedTask=tasks.find(task=>task.id===selectedId)??null;
+ const updateSelection=(id:string|null)=>{setSelectedId(id);const params=new URLSearchParams(location.search);if(id)params.set('task',id);else params.delete('task');history.replaceState(null,'',location.pathname+(params.size?'?'+params.toString():''));};
+ useEffect(()=>{if(loading)return;if(selectedId&&tasks.some(task=>task.id===selectedId))return;const first=tasks.find(task=>task.owner_id===actor.id)||tasks.find(task=>!task.owner_id)||tasks[0]||null;if(first)updateSelection(first.id);},[loading,selectedId,tasks,actor.id]);
  const scopes: [Scope,string][]=[['all','全部任务'],['recommended','推荐给我'],['mine','我的任务'],...(actor.role==='admin'?[['admin','管理员队列'] as [Scope,string]]:[])];
- return <main className="account-content work-tasks-page"><div className="section-title section-title-actions"><h1>任务</h1><CreateTask onSaved={()=>setRevision(n=>n+1)}/></div><nav className="work-task-scopes" aria-label="任务范围">{scopes.map(([value,label])=><button key={value} className={scope===value?'active':''} aria-pressed={scope===value} onClick={()=>setScope(value)}>{label}</button>)}</nav><PageError error={error} retry={()=>void load()}/>{loading?<p role="status">正在读取任务…</p>:tasks.length?<div className="work-task-list">{tasks.map(task=><TaskCard key={task.id} task={task} actor={actor} onOpenArchive={onOpenArchive} onChanged={()=>setRevision(n=>n+1)}/>)}</div>:<p className="empty-state">这个范围里暂时没有任务。</p>}</main>;
+ const soon=(task:Task)=>task.status==='open'&&task.owner_id===null&&Date.parse(task.deadline_at)-Date.now()<=3*86400000;
+ const groups=[{key:'attention',title:'现在需要处理',subtitle:'我负责，或即将失去接取窗口',items:tasks.filter(task=>task.owner_id===actor.id||soon(task))},{key:'waiting',title:'等待接手',subtitle:'全组可以主动领取',items:tasks.filter(task=>!task.owner_id&&!soon(task))},{key:'active',title:'其他进行中',subtitle:'由其他成员负责',items:tasks.filter(task=>!!task.owner_id&&task.owner_id!==actor.id)}];
+ return <main className="account-content work-tasks-page task-workspace"><header className="task-workspace-head"><div><span className="task-workspace-kicker">工作台</span><h1>任务</h1><p>先处理当前工作，再回到人物档案沉淀结果。</p></div><CreateTask onSaved={()=>setRevision(n=>n+1)}/></header><nav className="work-task-scopes" aria-label="任务范围">{scopes.map(([value,label])=><button key={value} className={scope===value?'active':''} aria-pressed={scope===value} onClick={()=>{setScope(value);updateSelection(null);}}>{label}<small>{value==='all'?tasks.length:value==='mine'?tasks.filter(task=>task.owner_id===actor.id).length:value==='recommended'?tasks.filter(task=>!task.owner_id).length:tasks.length}</small></button>)}</nav><PageError error={error} retry={()=>void load()}/>{loading?<p role="status">正在读取任务…</p>:<div className={'task-workspace-grid '+(selectedTask?'has-selection':'')}><section className="task-index" aria-label="任务索引">{groups.map(group=><section className={'task-index-group '+(group.items.length?'':'empty')} key={group.key}><header><div><h2>{group.title}<span>{group.items.length}</span></h2><p>{group.subtitle}</p></div></header><div className="task-index-list">{group.items.map(task=><TaskIndexItem key={task.id} task={task} actor={actor} selected={selectedId===task.id} onSelect={()=>updateSelection(task.id)}/>)}</div>{!group.items.length&&<p className="task-index-empty">暂时没有</p>}</section>)}</section>{selectedTask?<TaskScene key={selectedTask.id} task={selectedTask} actor={actor} onChanged={()=>setRevision(n=>n+1)} onOpenArchive={onOpenArchive}/>:<aside className="task-scene-empty"><span className="task-scene-empty-mark">+</span><h2>选择一项工作</h2><p>从左侧任务索引开始。</p></aside>}</div>}</main>;
 }
