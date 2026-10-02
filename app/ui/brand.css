@@ -10,7 +10,8 @@ body {
   font-size: var(--ui-size);
   font-weight: 420;
 }
-.brand > svg {
+.brand > svg,
+.brand > img {
   width: 43px;
   height: 43px;
 }
@@ -444,7 +445,8 @@ body {
     --ui-size: 18px;
     --reading-size: 19px;
   }
-  .brand > svg {
+  .brand > svg,
+  .brand > img {
     width: 36px;
     height: 36px;
   }

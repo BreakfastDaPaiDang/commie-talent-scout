@@ -130,15 +130,5 @@ export function Icon({ name, size = 18, ...props }: React.SVGProps<SVGSVGElement
   );
 }
 export function Mark({ className = "" }: {className?:string}) {
-  return (
-    <svg
-      className={className}
-      width="40"
-      height="40"
-      viewBox="0 0 100 100"
-      aria-hidden="true"
-    >
-      <image href="/art/brand-star-v4.svg" width="100" height="100" />
-    </svg>
-  );
+  return <img className={className} width="40" height="40" src="/art/brand-star-v4.svg" alt="" aria-hidden="true" />;
 }
