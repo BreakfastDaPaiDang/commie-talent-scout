@@ -6,7 +6,7 @@ import {ArchiveHead,ArchiveRow,DetailFrame,EntityHeader,IconButton,ScopeToolbar,
 import {Icon} from '../ui/icons';
 import {ArchiveRead,ArchiveReadingScope,Highlight} from './Reading';
 import type {ArchiveReadDelivery} from '../server/archive-reading';
-import {statesFor} from '../shared/archive-states';
+import {statesFor,type PersonScope} from '../shared/archive-states';
 import type {ObservationFocus} from './ObservationSection';
 import {AvatarEditor,avatarUrl} from './AvatarEditor';
 import React,{useEffect,useLayoutEffect,useRef,useState,type FormEvent} from 'react';
@@ -30,7 +30,7 @@ type ListArchive=Archive&{unread_count?:number;search_match?:{observation_id:str
 function preferences(key:string):Preference{try{return {...defaults,...JSON.parse(localStorage.getItem(key)??'{}')};}catch{return {...defaults};}}
 const date=(value:string)=>new Date(value).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
 export function ArchiveTrashPage({actor}:{actor:Member}){const [type,setType]=useState<Kind>('person');return <ArchivesPage key={type} actor={actor} type={type} trash onTypeChange={next=>{history.replaceState(null,'',location.pathname);setType(next);}}/>;}
-export function ArchivesPage({actor,type,linked,detailOnly=false,onNextUnread,onClose,trash=false,onTypeChange,pageLabel,initialStatus='',createStatus}:{trash?:boolean;onTypeChange?:(type:Kind)=>void;actor:Member;type:Kind;linked?:{archiveId:string;focus:ObservationFocus};detailOnly?:boolean;onNextUnread?:()=>void;onClose?:()=>void;pageLabel?:string;initialStatus?:string;createStatus?:string}){
+export function ArchivesPage({actor,type,personScope='all',linked,detailOnly=false,onNextUnread,onClose,trash=false,onTypeChange,pageLabel,initialStatus='',createStatus}:{personScope?:PersonScope;trash?:boolean;onTypeChange?:(type:Kind)=>void;actor:Member;type:Kind;linked?:{archiveId:string;focus:ObservationFocus};detailOnly?:boolean;onNextUnread?:()=>void;onClose?:()=>void;pageLabel?:string;initialStatus?:string;createStatus?:string}){
  const prefKey=`cts:${actor.id}:${type}:${trash?'trash':pageLabel??'archives'}`,[pref,setPref]=useState(()=>{const saved=preferences(prefKey),linked=new URLSearchParams(location.search).get('archive'),next={...saved,status:initialStatus||saved.status};return linked&&/^[0-9a-f-]{36}$/i.test(linked)?{...next,selected:linked}:next;});
  const[query,setQuery]=useState(pref.query),[items,setItems]=useState<ListArchive[]>([]),[cursor,setCursor]=useState<string|null>(null),[loading,setLoading]=useState(true),[error,setError]=useState(''),[notice,setNotice]=useState(''),[revision,setRevision]=useState(0);
  const[dialog,setDialog]=useState<'create'|Archive|null>(null),[stateDialog,setStateDialog]=useState<Archive|null>(null),[busy,setBusy]=useState(false),[selected,setSelected]=useState<Archive|null>(null),[draftIds,setDraftIds]=useState<string[]>([]);
@@ -49,7 +49,7 @@ export function ArchivesPage({actor,type,linked,detailOnly=false,onNextUnread,on
   try{
    const collected:ListArchive[]=[];let next=before??null,totals:Record<string,number>|undefined;
    do{
-    const r=await api<{archives:ListArchive[];next_cursor:string|null;counts?:Record<string,number>}>('/archives?'+new URLSearchParams({type,deleted:String(trash),query:pref.query,scope:trash?'all':pref.scope,status:pref.status,member_id:pref.member_id,closed:pref.closed,tag_ids:pref.tag_ids.join(','),limit:String(Math.min(100,target-collected.length)),...(next?{before:next}:{})}));
+    const r=await api<{archives:ListArchive[];next_cursor:string|null;counts?:Record<string,number>}>('/archives?'+new URLSearchParams({type,person_scope:personScope,deleted:String(trash),query:pref.query,scope:trash?'all':pref.scope,status:pref.status,member_id:pref.member_id,closed:pref.closed,tag_ids:pref.tag_ids.join(','),limit:String(Math.min(100,target-collected.length)),...(next?{before:next}:{})}));
     if(sequence!==request.current)return;collected.push(...r.archives);next=r.next_cursor;if(r.counts)totals=r.counts;
    }while(refreshLoaded&&next&&collected.length<target);
    setItems(old=>before?[...new Map([...old,...collected].map(a=>[a.id,a])).values()]:collected);setCursor(next);if(totals)setCounts(totals);
@@ -57,7 +57,7 @@ export function ArchivesPage({actor,type,linked,detailOnly=false,onNextUnread,on
  }
  const periodicReload=useRef(()=>{});periodicReload.current=()=>{if(!detailOnly&&!loading&&document.visibilityState==='visible'&&!document.querySelector('dialog[open]'))void load(undefined,true);};
  useEffect(()=>{const refresh=()=>periodicReload.current(),timer=setInterval(refresh,60_000);window.addEventListener('focus',refresh);document.addEventListener('visibilitychange',refresh);return()=>{clearInterval(timer);window.removeEventListener('focus',refresh);document.removeEventListener('visibilitychange',refresh);};},[]);
- useEffect(()=>{if(!detailOnly)void load();return()=>{request.current++;};},[type,pref.query,pref.scope,pref.status,pref.member_id,pref.closed,pref.tag_ids.join(','),revision,detailOnly]);
+ useEffect(()=>{if(!detailOnly)void load();return()=>{request.current++;};},[type,personScope,pref.query,pref.scope,pref.status,pref.member_id,pref.closed,pref.tag_ids.join(','),revision,detailOnly]);
  function choose(id:string|null,match?:ListArchive['search_match']){setNotice('');setExpanded(false);if(pref.selected!==id)setSelected(null);setPref(p=>({...p,selected:id}));const next=match?{observation_id:match.observation_id,query:pref.query,key:crypto.randomUUID()}:undefined;setFocus(next);if(!detailOnly){const params=new URLSearchParams();if(id)params.set('archive',id);if(next){params.set('observation',next.observation_id);params.set('highlight',next.query);}history.replaceState(null,'',location.pathname+(params.size?'?'+params:''));}}
  useEffect(()=>{let timer:ReturnType<typeof setTimeout>|undefined;const refresh=()=>{clearTimeout(timer);timer=setTimeout(()=>{api<{drafts:{archive_id:string}[]}>('/drafts').then(r=>setDraftIds(r.drafts.map(d=>d.archive_id))).catch(()=>{});},500);};refresh();window.addEventListener('cts-drafts-changed',refresh);return()=>{clearTimeout(timer);window.removeEventListener('cts-drafts-changed',refresh);};},[]);
  async function saved(id:string,changed:boolean,message?:string){setDialog(null);setStateDialog(null);choose(id);setRevision(v=>v+1);setNotice(message??(changed?'档案已保存':'资料没有变化'));}

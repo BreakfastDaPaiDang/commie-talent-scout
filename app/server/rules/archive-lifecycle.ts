@@ -2,10 +2,11 @@ import {isClosedState,isWorkState,statesFor} from '../../shared/archive-states.t
 import {Failure} from '../types.ts';
 import type {Archive,BoundMember} from '../archives.ts';
 import type {TagState} from '../tag-state.ts';
+import type {Source} from '../commands.ts';
 
 export type Transition={old:Archive;status:string;memberIds:string[];reopen:boolean};
 type Effects=Transition&{
- at:string;members:BoundMember[];bindings:D1PreparedStatement[];tags:TagState;
+ at:string;actorId:string;source:Source;members:BoundMember[];bindings:D1PreparedStatement[];tags:TagState;
  stmt:(sql:string,...args:unknown[])=>D1PreparedStatement;
  event:(id:string,kind:string,before:unknown,after:unknown,at:string)=>D1PreparedStatement;
 };
@@ -24,6 +25,26 @@ export function stateChanged(c:Transition){return c.status!==c.old.status;}
 export function onlyMembersChanged(c:Transition){return transitionChanged(c)&&!stateChanged(c);}
 export function closesArchive(c:Transition){return transitionChanged(c)&&isClosedState(c.status);}
 export function reopensArchive(c:Transition){return c.reopen;}
+export function withdrawsAudit(c:Transition){
+ return c.old.type==='person'&&stateChanged(c)&&['引荐中（待人事组接触）','人事审核'].includes(c.old.status)&&['视奸观察','个人接触','外部社友','已弃用'].includes(c.status);
+}
+export function auditCancellationTarget(task:{id:string;kind:string;source:string},old:Pick<Archive,'type'|'status'|'closed'|'deleted'>,change:{before:{status?:unknown}|null;after:{task_id?:unknown}|null}|null){
+ if(task.kind!=='audit'||task.source!=='rule'||old.type!=='person'||old.closed||old.deleted||old.status!=='人事审核'||change?.after?.task_id!==task.id)return null;
+ const previous=change.before?.status;
+ return typeof previous==='string'&&['视奸观察','个人接触','外部社友'].includes(previous)?previous:null;
+}
+
+function cancelWithdrawnAudit(c:Effects){
+ const reason=`档案从${c.old.status}转为${c.status}，撤回人事审核`;
+ return [
+  c.stmt(`INSERT INTO work_task_events(id,task_id,actor_id,source,kind,before_json,after_json,reason,created_at)
+   SELECT lower(hex(randomblob(16))),id,?,?,'task.cancelled',
+    json_object('status',status,'owner_id',owner_id,'version',version),
+    json_object('status','cancelled','owner_id',owner_id,'version',version+1),?,?
+   FROM work_tasks WHERE archive_id=? AND kind='audit' AND source='rule' AND status='open'`,c.actorId,c.source,reason,c.at,c.old.id),
+  c.stmt("UPDATE work_tasks SET status='cancelled',closed_reason=?,updated_at=?,version=version+1 WHERE archive_id=? AND kind='audit' AND source='rule' AND status='open'",reason,c.at,c.old.id),
+ ];
+}
 
 function saveStateAndBindings(c:Effects){
  const closed=isClosedState(c.status);
@@ -50,6 +71,7 @@ export const archiveTransitionRules=[
  {id:'save-state',when:transitionChanged,apply:saveStateAndBindings},
  {id:'state-history',when:stateChanged,apply:recordStateChange},
  {id:'members-history',when:onlyMembersChanged,apply:recordMembersChange},
+ {id:'withdraw-audit',when:withdrawsAudit,apply:cancelWithdrawnAudit},
  {id:'close',when:closesArchive,apply:freezeTagsAndRecordClosure},
  {id:'reopen',when:reopensArchive,apply:recordReopening},
 ] as const;

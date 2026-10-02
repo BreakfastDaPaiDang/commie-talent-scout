@@ -17,3 +17,6 @@ export const statesFor=(type:'person'|'org')=>type==='person'?personStates:orgSt
 export const isClosedState=(status:string)=>archiveStatePolicy.some(p=>p.status===status&&p.closed);
 export const isWorkState=(type:'person'|'org',status:string)=>policyFor(type).some(p=>p.status===status&&p.requiresMembers);
 export const memberLabel=(type:'person'|'org',status:string)=>isWorkState(type,status)?type==='person'?'人事负责':'工作负责':'关联成员';
+export const memberStatuses=['已加入待对接','已入伙'] as const;
+export type PersonScope='all'|'external'|'members';
+export const isMemberStatus=(status:string)=>(memberStatuses as readonly string[]).includes(status);

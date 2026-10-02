@@ -22,13 +22,14 @@
 
 ## 触发与事务边界
 
-网页 HTTP 与 MCP 的状态修改、显式重开都进入 [transition](../../app/server/archives.ts#L103)。该入口调用下表定义产生 SQL，最后一起提交；规则不单独写库。
+网页 HTTP 与 MCP 的状态修改、显式重开都进入 [transition](../../app/server/archives.ts#L107)。该入口调用下表定义产生 SQL，最后一起提交；规则不单独写库。
 
 - 读取与预校验：[get](../../app/server/archives.ts#L35)（存在性、删除权限、关闭锁定、版本）。
-- 关联成员：[planBindings](../../app/server/archives.ts#L87)（存在、冻结及原归属保留；事务内再次校验）。
+- 关联成员：[planBindings](../../app/server/archives.ts#L91)（存在、冻结及原归属保留；事务内再次校验）。
 - 档案事务条件：[guard](../../app/server/archives.ts#L45)。
 - 授权、原子提交与重试收据：[command](../../app/server/commands.ts#L21)。
 - 重开时词义差异、历史与权限：由上述 transition 调用 [TagState](../../app/server/tag-state.ts) 读取；不在生成器中解释 SQL 或任意函数。
+- 取消自动审核任务：[cancel](../../app/server/work-tasks.ts#L115) 通过 [restoreCancelledAudit](../../app/server/work-tasks.ts#L124) 调用 [auditCancellationTarget](../../app/server/rules/archive-lifecycle.ts#L31) 取得本次引荐前的外部关系，复用同一 planArchiveEffects 并在任务事务中提交。历史无法确认或档案已变更身份时不猜测退回状态。
 
 以下条件和结果来自实际参与执行的函数引用及函数体。源码链接供追溯，不把人工说明作为规则来源。
 
@@ -36,11 +37,12 @@
 
 | 标识 | 条件函数 | 结果函数 |
 | --- | --- | --- |
-| save-state | [transitionChanged](../../app/server/rules/archive-lifecycle.ts#L20) | [saveStateAndBindings](../../app/server/rules/archive-lifecycle.ts#L28) |
-| state-history | [stateChanged](../../app/server/rules/archive-lifecycle.ts#L23) | [recordStateChange](../../app/server/rules/archive-lifecycle.ts#L33) |
-| members-history | [onlyMembersChanged](../../app/server/rules/archive-lifecycle.ts#L24) | [recordMembersChange](../../app/server/rules/archive-lifecycle.ts#L36) |
-| close | [closesArchive](../../app/server/rules/archive-lifecycle.ts#L25) | [freezeTagsAndRecordClosure](../../app/server/rules/archive-lifecycle.ts#L39) |
-| reopen | [reopensArchive](../../app/server/rules/archive-lifecycle.ts#L26) | [recordReopening](../../app/server/rules/archive-lifecycle.ts#L43) |
+| save-state | [transitionChanged](../../app/server/rules/archive-lifecycle.ts#L21) | [saveStateAndBindings](../../app/server/rules/archive-lifecycle.ts#L49) |
+| state-history | [stateChanged](../../app/server/rules/archive-lifecycle.ts#L24) | [recordStateChange](../../app/server/rules/archive-lifecycle.ts#L54) |
+| members-history | [onlyMembersChanged](../../app/server/rules/archive-lifecycle.ts#L25) | [recordMembersChange](../../app/server/rules/archive-lifecycle.ts#L57) |
+| withdraw-audit | [withdrawsAudit](../../app/server/rules/archive-lifecycle.ts#L28) | [cancelWithdrawnAudit](../../app/server/rules/archive-lifecycle.ts#L37) |
+| close | [closesArchive](../../app/server/rules/archive-lifecycle.ts#L26) | [freezeTagsAndRecordClosure](../../app/server/rules/archive-lifecycle.ts#L60) |
+| reopen | [reopensArchive](../../app/server/rules/archive-lifecycle.ts#L27) | [recordReopening](../../app/server/rules/archive-lifecycle.ts#L64) |
 
 ```mermaid
 flowchart TD
@@ -57,22 +59,26 @@ flowchart TD
   cond2 -->|成立| effect2["recordMembersChange"]
   cond2 -->|不成立| next2["继续"]
   effect2 --> next2
-  next2 --> cond3{"closesArchive"}
-  cond3 -->|成立| effect3["freezeTagsAndRecordClosure"]
+  next2 --> cond3{"withdrawsAudit"}
+  cond3 -->|成立| effect3["cancelWithdrawnAudit"]
   cond3 -->|不成立| next3["继续"]
   effect3 --> next3
-  next3 --> cond4{"reopensArchive"}
-  cond4 -->|成立| effect4["recordReopening"]
+  next3 --> cond4{"closesArchive"}
+  cond4 -->|成立| effect4["freezeTagsAndRecordClosure"]
   cond4 -->|不成立| next4["继续"]
   effect4 --> next4
-  next4 --> batch["command: 权限与版本复核 / 原子写入 / 收据"]
+  next4 --> cond5{"reopensArchive"}
+  cond5 -->|成立| effect5["recordReopening"]
+  cond5 -->|不成立| next5["继续"]
+  effect5 --> next5
+  next5 --> batch["command: 权限与版本复核 / 原子写入 / 收据"]
 ```
 
 ## 执行条件与结果的源码
 
 ### assertReopenAllowed
 
-[assertReopenAllowed](../../app/server/rules/archive-lifecycle.ts#L13)
+[assertReopenAllowed](../../app/server/rules/archive-lifecycle.ts#L14)
 
 ```javascript
 function assertReopenAllowed(c) {
@@ -82,7 +88,7 @@ function assertReopenAllowed(c) {
 
 ### assertStateAndResponsibility
 
-[assertStateAndResponsibility](../../app/server/rules/archive-lifecycle.ts#L16)
+[assertStateAndResponsibility](../../app/server/rules/archive-lifecycle.ts#L17)
 
 ```javascript
 function assertStateAndResponsibility(type, status, ids) {
@@ -93,7 +99,7 @@ function assertStateAndResponsibility(type, status, ids) {
 
 ### transitionChanged
 
-[transitionChanged](../../app/server/rules/archive-lifecycle.ts#L20)
+[transitionChanged](../../app/server/rules/archive-lifecycle.ts#L21)
 
 ```javascript
 function transitionChanged(c) {
@@ -103,7 +109,7 @@ function transitionChanged(c) {
 
 ### planArchiveEffects
 
-[planArchiveEffects](../../app/server/rules/archive-lifecycle.ts#L57)
+[planArchiveEffects](../../app/server/rules/archive-lifecycle.ts#L79)
 
 ```javascript
 function planArchiveEffects(context) {
@@ -111,9 +117,25 @@ function planArchiveEffects(context) {
 }
 ```
 
+### auditCancellationTarget
+
+[auditCancellationTarget](../../app/server/rules/archive-lifecycle.ts#L31)
+
+```javascript
+function auditCancellationTarget(task, old, change) {
+    if (task.kind !== 'audit' || task.source !== 'rule' || old.type !== 'person' || old.closed || old.deleted || old.status !== '人事审核' || change?.after?.task_id !== task.id) return null;
+    const previous = change.before?.status;
+    return typeof previous === 'string' && [
+        '视奸观察',
+        '个人接触',
+        '外部社友'
+    ].includes(previous) ? previous : null;
+}
+```
+
 ### saveStateAndBindings
 
-[saveStateAndBindings](../../app/server/rules/archive-lifecycle.ts#L28)
+[saveStateAndBindings](../../app/server/rules/archive-lifecycle.ts#L49)
 
 ```javascript
 function saveStateAndBindings(c) {
@@ -128,7 +150,7 @@ function saveStateAndBindings(c) {
 
 ### stateChanged
 
-[stateChanged](../../app/server/rules/archive-lifecycle.ts#L23)
+[stateChanged](../../app/server/rules/archive-lifecycle.ts#L24)
 
 ```javascript
 function stateChanged(c) {
@@ -138,7 +160,7 @@ function stateChanged(c) {
 
 ### recordStateChange
 
-[recordStateChange](../../app/server/rules/archive-lifecycle.ts#L33)
+[recordStateChange](../../app/server/rules/archive-lifecycle.ts#L54)
 
 ```javascript
 function recordStateChange(c) {
@@ -156,7 +178,7 @@ function recordStateChange(c) {
 
 ### onlyMembersChanged
 
-[onlyMembersChanged](../../app/server/rules/archive-lifecycle.ts#L24)
+[onlyMembersChanged](../../app/server/rules/archive-lifecycle.ts#L25)
 
 ```javascript
 function onlyMembersChanged(c) {
@@ -166,7 +188,7 @@ function onlyMembersChanged(c) {
 
 ### recordMembersChange
 
-[recordMembersChange](../../app/server/rules/archive-lifecycle.ts#L36)
+[recordMembersChange](../../app/server/rules/archive-lifecycle.ts#L57)
 
 ```javascript
 function recordMembersChange(c) {
@@ -182,9 +204,45 @@ function recordMembersChange(c) {
 }
 ```
 
+### withdrawsAudit
+
+[withdrawsAudit](../../app/server/rules/archive-lifecycle.ts#L28)
+
+```javascript
+function withdrawsAudit(c) {
+    return c.old.type === 'person' && stateChanged(c) && [
+        '引荐中（待人事组接触）',
+        '人事审核'
+    ].includes(c.old.status) && [
+        '视奸观察',
+        '个人接触',
+        '外部社友',
+        '已弃用'
+    ].includes(c.status);
+}
+```
+
+### cancelWithdrawnAudit
+
+[cancelWithdrawnAudit](../../app/server/rules/archive-lifecycle.ts#L37)
+
+```javascript
+function cancelWithdrawnAudit(c) {
+    const reason = `档案从${c.old.status}转为${c.status}，撤回人事审核`;
+    return [
+        c.stmt(`INSERT INTO work_task_events(id,task_id,actor_id,source,kind,before_json,after_json,reason,created_at)
+   SELECT lower(hex(randomblob(16))),id,?,?,'task.cancelled',
+    json_object('status',status,'owner_id',owner_id,'version',version),
+    json_object('status','cancelled','owner_id',owner_id,'version',version+1),?,?
+   FROM work_tasks WHERE archive_id=? AND kind='audit' AND source='rule' AND status='open'`, c.actorId, c.source, reason, c.at, c.old.id),
+        c.stmt("UPDATE work_tasks SET status='cancelled',closed_reason=?,updated_at=?,version=version+1 WHERE archive_id=? AND kind='audit' AND source='rule' AND status='open'", reason, c.at, c.old.id)
+    ];
+}
+```
+
 ### closesArchive
 
-[closesArchive](../../app/server/rules/archive-lifecycle.ts#L25)
+[closesArchive](../../app/server/rules/archive-lifecycle.ts#L26)
 
 ```javascript
 function closesArchive(c) {
@@ -194,7 +252,7 @@ function closesArchive(c) {
 
 ### freezeTagsAndRecordClosure
 
-[freezeTagsAndRecordClosure](../../app/server/rules/archive-lifecycle.ts#L39)
+[freezeTagsAndRecordClosure](../../app/server/rules/archive-lifecycle.ts#L60)
 
 ```javascript
 function freezeTagsAndRecordClosure(c) {
@@ -213,7 +271,7 @@ function freezeTagsAndRecordClosure(c) {
 
 ### reopensArchive
 
-[reopensArchive](../../app/server/rules/archive-lifecycle.ts#L26)
+[reopensArchive](../../app/server/rules/archive-lifecycle.ts#L27)
 
 ```javascript
 function reopensArchive(c) {
@@ -223,7 +281,7 @@ function reopensArchive(c) {
 
 ### recordReopening
 
-[recordReopening](../../app/server/rules/archive-lifecycle.ts#L43)
+[recordReopening](../../app/server/rules/archive-lifecycle.ts#L64)
 
 ```javascript
 function recordReopening(c) {

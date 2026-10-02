@@ -4,7 +4,7 @@ import {z} from 'zod';
 import {assertAdmin} from './credentials.ts';
 import {command,requestId,expectedVersion,type Source} from './commands.ts';
 import {Failure,now,uid,type Actor,type Env} from './types.ts';
-import {isClosedState,personStates,orgStates} from '../shared/archive-states.ts';
+import {isClosedState,personStates,orgStates,memberStatuses} from '../shared/archive-states.ts';
 import {assertReopenAllowed,assertStateAndResponsibility,planArchiveEffects,transitionChanged} from './rules/archive-lifecycle.ts';
 import {TagState,evidenceVisibilitySql,type TagBinding,type TagLabel} from './tag-state.ts';
 import {Reading,eventVisibility,unreadPredicate} from './reading.ts';
@@ -19,7 +19,7 @@ export const archiveCreateInput=z.object({type:archiveType,...profile,status:sta
 export const archiveUpdateInput=z.object({id:z.uuid(),expected_version:expectedVersion,...profile,contacts:z.array(contact).max(20),links:z.array(link).max(20),request_id:requestId}).strict();
 export const archiveStateInput=z.object({id:z.uuid(),expected_version:expectedVersion,status:statusInput,member_ids:memberIds,request_id:requestId}).strict();
 export const archiveDeletionInput=z.object({id:z.uuid(),expected_version:expectedVersion,request_id:requestId}).strict();
-export const archiveListInput=z.object({type:archiveType,deleted:z.union([z.boolean(),z.enum(['true','false']).transform(v=>v==='true')]).default(false),query:z.string().trim().max(200).default(''),scope:z.enum(['all','mine','unread']).default('all').describe('mine 为关联我：当前状态关联成员包含调用者，不限工作或开启状态，仍遵循其他筛选和删除权限。'),status:z.string().max(80).default(''),member_id:z.union([z.uuid(),z.literal('')]).default(''),closed:z.enum(['all','open','closed']).default('all'),tag_ids:z.array(z.uuid()).max(30).default([]).describe('按当前词库类别分组：同类别任一标签匹配、不同类别同时匹配。关闭档案按冻结绑定匹配稳定标签 ID；仅计入当前成员可见的来源。'),limit:z.coerce.number().int().min(1).max(100).default(30),before:z.string().max(150).optional()});
+export const archiveListInput=z.object({type:archiveType,person_scope:z.enum(['all','external','members']).default('all').describe('Person range: external excludes members; members includes joined people; all preserves existing queries.'),deleted:z.union([z.boolean(),z.enum(['true','false']).transform(v=>v==='true')]).default(false),query:z.string().trim().max(200).default(''),scope:z.enum(['all','mine','unread']).default('all').describe('mine 为关联我：当前状态关联成员包含调用者，不限工作或开启状态，仍遵循其他筛选和删除权限。'),status:z.string().max(80).default(''),member_id:z.union([z.uuid(),z.literal('')]).default(''),closed:z.enum(['all','open','closed']).default('all'),tag_ids:z.array(z.uuid()).max(30).default([]).describe('按当前词库类别分组：同类别任一标签匹配、不同类别同时匹配。关闭档案按冻结绑定匹配稳定标签 ID；仅计入当前成员可见的来源。'),limit:z.coerce.number().int().min(1).max(100).default(30),before:z.string().max(150).optional()});
 type Row={id:string;type:'person'|'org';name:string;contacts_json:string;links_json:string;status:string;closed:number;deleted:number;deleted_at:string|null;deleted_by:string|null;deleted_snapshot_version:number|null;last_open_status:string|null;avatar_id:string|null;created_by:string;created_at:string;updated_at:string;version:number;tag_snapshot_version:number|null};
 export type BoundMember={id:string;name:string;frozen:boolean};
 export type Archive=Omit<Row,'contacts_json'|'links_json'|'closed'|'deleted'>&{contacts:z.infer<typeof contact>[];links:z.infer<typeof link>[];closed:boolean;deleted:boolean;update_reminder:ArchiveReminder;observation_count:number;latest_observation:string|null;members:BoundMember[];bindings:Record<string,BoundMember[]>;tags:TagBinding[];tag_summary?:{tags:TagLabel[];total:number}};
@@ -47,6 +47,10 @@ export class Archives{
  async detail(id:string){const archive=await this.get(id);const tasks=await this.stmt(`SELECT t.id,t.kind,t.title,t.purpose,t.delivery,t.status,t.owner_id,(SELECT name FROM members WHERE id=t.owner_id) owner_name,t.deadline_at,t.created_at,t.updated_at,t.version,t.result_kind,t.result_text FROM work_tasks t WHERE t.archive_id=? ORDER BY CASE WHEN t.status='open' THEN 0 ELSE 1 END,t.deadline_at DESC,t.created_at DESC,t.id DESC LIMIT 30`,id).all();return {archive:{...archive,url:this.url(archive),tags:await new TagState(this.env,this.actor).list(id,archive.closed||archive.deleted,archive.deleted?archive.deleted_snapshot_version:archive.tag_snapshot_version),work_tasks:tasks.results}};}
  async list(input:unknown){
   const a=archiveListInput.parse(input),position=archiveCursor(a.before);if(a.deleted)assertAdmin(this.actor);const where=['a.type=?','a.deleted=?'],args:unknown[]=[a.type,a.deleted?1:0],unread=unreadPredicate(this.actor);
+  if(a.person_scope!=='all'){
+   if(a.type!=='person')throw new Failure(400,'PERSON_SCOPE_REQUIRED','人物范围只适用于人物档案');
+   where.push(`a.status ${a.person_scope==='members'?'IN':'NOT IN'} (${memberStatuses.map(()=>'?').join(',')})`);args.push(...memberStatuses);
+  }
   const value='%'+a.query.replace(/[\\%_]/g,'\\$&')+'%',match=`SELECT json_object('observation_id',o.id,'excerpt',substr(v.body,max(1,instr(lower(v.body),lower(?))-60),240)) FROM observations o JOIN observation_versions v ON v.observation_id=o.id AND v.version=o.content_version WHERE o.archive_id=a.id AND o.deleted=0 AND v.body LIKE ? ESCAPE '\\' ORDER BY o.updated_at DESC,o.id DESC LIMIT 1`;
   if(a.query){where.push(`(a.name LIKE ? ESCAPE '\\' OR a.contacts_json LIKE ? ESCAPE '\\' OR EXISTS(SELECT 1 FROM observations o JOIN observation_versions v ON v.observation_id=o.id AND v.version=o.content_version WHERE o.archive_id=a.id AND o.deleted=0 AND v.body LIKE ? ESCAPE '\\'))`);args.push(value,value,value);}
   if(a.status){const statuses=[...new Set(a.status.split(',').map(status=>status.trim()).filter(Boolean))];if(statuses.length===1){where.push('a.status=?');args.push(statuses[0]);}else if(statuses.length>1){where.push(`a.status IN (${statuses.map(()=>'?').join(',')})`);args.push(...statuses);}}
@@ -108,7 +112,7 @@ export class Archives{
    const tagState=new TagState(this.env,this.actor),definitionChanges:{tag_id:string;before:TagBinding;after:TagBinding}[]=[];
    if(reopen){const frozen=await tagState.list(a.id,true,old.tag_snapshot_version),current=await tagState.list(a.id);for(const b of frozen){const live=current.find(t=>t.tag_id===b.tag_id);if(live&&(live.definition_version!==b.definition_version||live.category_version!==b.category_version||!live.enabled||!live.category_enabled||live.merged_into))definitionChanges.push({tag_id:b.tag_id,before:b,after:live});}}
    const statements=[this.guard(a.id,a.expected_version,key,!reopen),...plan.guards];
-   statements.push(...planArchiveEffects({...transition,at,members:plan.members,bindings:plan.bindings,tags:tagState,stmt:this.stmt.bind(this),event:this.event.bind(this)}));
+   statements.push(...planArchiveEffects({...transition,at,actorId:this.actor.id,source:this.source,members:plan.members,bindings:plan.bindings,tags:tagState,stmt:this.stmt.bind(this),event:this.event.bind(this)}));
    statements.push(...plan.cleanup,this.stmt('DELETE FROM mutation_guards WHERE id=?',key));return {result:{id:a.id,version:old.version+(changed?1:0),status:a.status,closed,changed,archive_url:this.url(old),definition_changes:definitionChanges},statements};
   });
  }
