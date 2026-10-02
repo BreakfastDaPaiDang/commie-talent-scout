@@ -2,7 +2,7 @@ import {readFileSync,writeFileSync,mkdirSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {resolve} from 'node:path';
 import {archiveStatePolicy} from '../app/shared/archive-states.ts';
-import {archiveTransitionRules,assertReopenAllowed,assertStateAndResponsibility,transitionChanged,planArchiveEffects} from '../app/server/rules/archive-lifecycle.ts';
+import {archiveTransitionRules,assertReopenAllowed,assertStateAndResponsibility,transitionChanged,planArchiveEffects,auditCancellationTarget} from '../app/server/rules/archive-lifecycle.ts';
 
 const root=new URL('../',import.meta.url),output=new URL('docs/generated/archive-rules.md',root);
 const lifecycle='app/server/rules/archive-lifecycle.ts';
@@ -27,6 +27,7 @@ export function renderBusinessRules(){
   `- 档案事务条件：${link('app/server/archives.ts','guard')}。`,
   `- 授权、原子提交与重试收据：${link('app/server/commands.ts','command')}。`,
   '- 重开时词义差异、历史与权限：由上述 transition 调用 [TagState](../../app/server/tag-state.ts) 读取；不在生成器中解释 SQL 或任意函数。',
+  `- 取消自动审核任务：${link('app/server/work-tasks.ts','cancel')} 通过 ${link('app/server/work-tasks.ts','restoreCancelledAudit')} 调用 ${link(lifecycle,'auditCancellationTarget')} 取得本次引荐前的外部关系，复用同一 planArchiveEffects 并在任务事务中提交。历史无法确认或档案已变更身份时不猜测退回状态。`,
   '','以下条件和结果来自实际参与执行的函数引用及函数体。源码链接供追溯，不把人工说明作为规则来源。',
   '','## 按顺序执行的联动','','| 标识 | 条件函数 | 结果函数 |','| --- | --- | --- |');
  for(const rule of archiveTransitionRules)lines.push(`| ${rule.id} | ${link(lifecycle,rule.when.name)} | ${link(lifecycle,rule.apply.name)} |`);
@@ -36,7 +37,7 @@ export function renderBusinessRules(){
  });
  lines.push(`  next${archiveTransitionRules.length-1} --> batch["command: 权限与版本复核 / 原子写入 / 收据"]`,'```',
   '','## 执行条件与结果的源码','');
- const funcs=new Set([assertReopenAllowed,assertStateAndResponsibility,transitionChanged,planArchiveEffects,...archiveTransitionRules.flatMap(r=>[r.when,r.apply])]);
+ const funcs=new Set([assertReopenAllowed,assertStateAndResponsibility,transitionChanged,planArchiveEffects,auditCancellationTarget,...archiveTransitionRules.flatMap(r=>[r.when,r.apply])]);
  for(const fn of funcs)lines.push(`### ${fn.name}`,'',link(lifecycle,fn.name),'','```javascript',source(fn),'```','');
  return lines.join('\n');
 }

@@ -4,6 +4,9 @@ import {command,expectedVersion,requestId,type Source} from './commands.ts';
 import {Failure,now,uid,type Actor,type Env} from './types.ts';
 import {matchesPreference,pushCandidates,pushStage,type PushableTaskKind} from '../shared/task-preferences.ts';
 import {TagState,type TagLabel} from './tag-state.ts';
+import {isMemberStatus} from '../shared/archive-states.ts';
+import {Archives} from './archives.ts';
+import {auditCancellationTarget,planArchiveEffects} from './rules/archive-lifecycle.ts';
 
 const taskKinds=['audit','onboarding','monthly','cooperation','custom'] as const;
 export const workTaskCreateInput=z.object({archive_id:z.uuid().nullable().default(null),kind:z.enum(taskKinds),title:z.string().trim().min(1).max(160),purpose:z.string().trim().min(1).max(4000),delivery:z.string().trim().min(1).max(4000),deadline_at:z.string().datetime(),source:z.enum(['manual','rule']).default('manual'),request_id:requestId}).strict();
@@ -114,9 +117,18 @@ export class WorkTasks {
     return command(this.env,this.actor,{requestId:a.request_id,operation:'work_task.cancel',parameters:{id:a.id,expected_version:a.expected_version,reason:a.reason}},async()=>{
       const task=await this.get(a.id,a.expected_version);if(task.status!=='open')throw new Failure(409,'TASK_NOT_OPEN','只有开启中的任务可以取消');
       const creatorMayCancel=task.created_by===this.actor.id&&!task.owner_id;if(this.actor.role!=='admin'&&!creatorMayCancel)throw new Failure(403,'TASK_CANCEL_FORBIDDEN','只有创建者取消未接取任务，或管理员取消已接取任务');
-      const key=uid(),at=now(),result={id:a.id,status:'cancelled',owner_id:task.owner_id,version:task.version+1,changed:true};
-      return {result,statements:[this.stmt("INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(SELECT 1 FROM work_tasks WHERE id=? AND version=? AND status='open') THEN 1 ELSE 0 END)",key,a.id,a.expected_version),this.stmt("UPDATE work_tasks SET status='cancelled',closed_reason=?,updated_at=?,version=version+1 WHERE id=? AND version=? AND status='open'",a.reason,at,a.id,a.expected_version),this.event(a.id,'task.cancelled',{status:task.status,owner_id:task.owner_id,version:task.version},{status:'cancelled',owner_id:task.owner_id,version:task.version+1},a.reason),this.stmt('DELETE FROM mutation_guards WHERE id=?',key)]};
+      const key=uid(),at=now(),restoration=await this.restoreCancelledAudit(task,at),result={id:a.id,status:'cancelled',owner_id:task.owner_id,version:task.version+1,changed:true,...restoration.result};
+      return {result,statements:[this.stmt("INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(SELECT 1 FROM work_tasks WHERE id=? AND version=? AND status='open') THEN 1 ELSE 0 END)",key,a.id,a.expected_version),this.stmt("UPDATE work_tasks SET status='cancelled',closed_reason=?,updated_at=?,version=version+1 WHERE id=? AND version=? AND status='open'",a.reason,at,a.id,a.expected_version),this.event(a.id,'task.cancelled',{status:task.status,owner_id:task.owner_id,version:task.version},{status:'cancelled',owner_id:task.owner_id,version:task.version+1},a.reason),...restoration.statements,this.stmt('DELETE FROM mutation_guards WHERE id=?',key)]};
     });
+  }
+  private async restoreCancelledAudit(task:Row,at:string){
+    const unchanged={result:{},statements:[] as D1PreparedStatement[]};if(!task.archive_id||task.kind!=='audit'||task.source!=='rule')return unchanged;
+    const current=await this.stmt('SELECT status,closed,deleted FROM archives WHERE id=?',task.archive_id).first<{status:string;closed:number;deleted:number}>();if(!current||current.closed||current.deleted||current.status!=='人事审核')return unchanged;
+    const archives=new Archives(this.env,this.actor,this.source),old=await archives.get(task.archive_id);
+    const event=await this.stmt("SELECT before_json,after_json FROM archive_events WHERE archive_id=? AND kind='archive.state_changed' ORDER BY seq DESC LIMIT 1",old.id).first<{before_json:string|null;after_json:string|null}>();
+    const status=auditCancellationTarget(task,old,event?{before:event.before_json?JSON.parse(event.before_json):null,after:event.after_json?JSON.parse(event.after_json):null}:null);if(!status)return unchanged;
+    const members=old.bindings[status]??[],key=uid(),bindings=members.map(member=>this.stmt('INSERT INTO archive_bindings(archive_id,status,member_id) VALUES(?,?,?)',old.id,status,member.id));
+    return {result:{archive_id:old.id,archive_status:status,archive_version:old.version+1},statements:[archives.guard(old.id,old.version,key),...planArchiveEffects({old,status,memberIds:members.map(member=>member.id).sort(),reopen:false,at,actorId:this.actor.id,source:this.source,members,bindings,tags:new TagState(this.env,this.actor),stmt:this.stmt.bind(this),event:archives.event.bind(archives)}),this.stmt('DELETE FROM mutation_guards WHERE id=?',key)]};
   }
   async detail(id:string){
     const task=await this.get(id);const events=await this.stmt('SELECT e.id,e.actor_id,(SELECT name FROM members WHERE id=e.actor_id) actor_name,e.source,e.kind,e.before_json,e.after_json,e.reason,e.created_at FROM work_task_events e WHERE e.task_id=? ORDER BY e.rowid DESC LIMIT 100',id).all<Record<string,unknown>>();return {task,events:events.results};
@@ -126,6 +138,7 @@ export class WorkTasks {
     return command(this.env,this.actor,{requestId:a.request_id,operation:'archive.refer',parameters:{archive_id:a.archive_id,expected_version:a.expected_version,deadline_at:a.deadline_at}},async()=>{
       const archive=await this.stmt('SELECT id,type,name,status,closed,deleted,version FROM archives WHERE id=?',a.archive_id).first<{id:string;type:'person'|'org';name:string;status:string;closed:number;deleted:number;version:number}>();
       if(!archive||archive.deleted)throw new Failure(404,'NOT_FOUND','档案不存在');if(archive.version!==a.expected_version)throw new Failure(409,'VERSION_CONFLICT','档案已被更新，请刷新后重试');if(archive.type!=='person')throw new Failure(400,'PERSON_ARCHIVE_REQUIRED','只有外部人物可以发起人事审核');if(archive.closed)throw new Failure(409,'ARCHIVE_CLOSED','关闭档案不能发起引荐');
+      if(isMemberStatus(archive.status))throw new Failure(409,'INVALID_REFERRAL_STAGE','社员不能作为外部人物提交审核');
       const existing=await this.stmt("SELECT id,version FROM work_tasks WHERE archive_id=? AND kind='audit' AND status='open'",a.archive_id).first<{id:string;version:number}>();if(existing)return {result:{id:existing.id,task_id:existing.id,archive_id:a.archive_id,status:'open',archive_status:'人事审核',archive_version:archive.version,reused:true,changed:false},statements:[]};
       if(a.deadline_at<=now())throw new Failure(400,'DEADLINE_REQUIRED','审核任务必须有未来期限');
       const taskId=uid(),key=uid(),at=now(),nextVersion=archive.version+1,task={id:taskId,archive_id:a.archive_id,kind:'audit',title:`${archive.name} · 人事审核`,purpose:'了解对方情况、意愿以及可能参与的方向，形成有依据的审核结论。',delivery:'提交审核期间的观察与结论，结果留在关联人物档案。',source:'rule',status:'open',owner_id:null,deadline_at:a.deadline_at,created_at:at,updated_at:at,version:1};
