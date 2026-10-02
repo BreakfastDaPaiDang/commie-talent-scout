@@ -3,6 +3,7 @@ import {assertAdmin} from './credentials.ts';
 import {command,expectedVersion,requestId,type Source} from './commands.ts';
 import {Failure,now,uid,type Actor,type Env} from './types.ts';
 import {matchesPreference,pushCandidates,pushStage,type PushableTaskKind} from '../shared/task-preferences.ts';
+import {TagState,type TagLabel} from './tag-state.ts';
 
 const taskKinds=['audit','onboarding','monthly','cooperation','custom'] as const;
 export const workTaskCreateInput=z.object({archive_id:z.uuid().nullable().default(null),kind:z.enum(taskKinds),title:z.string().trim().min(1).max(160),purpose:z.string().trim().min(1).max(4000),delivery:z.string().trim().min(1).max(4000),deadline_at:z.string().datetime(),source:z.enum(['manual','rule']).default('manual'),request_id:requestId}).strict();
@@ -36,8 +37,46 @@ export class WorkTasks {
     if(a.archive_id){where.push('t.archive_id=?');args.push(a.archive_id);}
     if(a.scope==='mine') {where.push('t.owner_id=?');args.push(this.actor.id);}
     if(a.scope==='recommended') {where.push('(t.kind IN (\'audit\',\'onboarding\',\'monthly\',\'cooperation\') AND EXISTS (SELECT 1 FROM member_work_preferences p WHERE p.member_id=? AND (p.all_work=1 OR instr(p.kinds_json,\'"\'||t.kind||\'"\')>0)) AND t.owner_id IS NULL)');args.push(this.actor.id);}
-    const rows=await this.stmt(`SELECT t.*,(SELECT name FROM members WHERE id=t.owner_id) owner_name FROM work_tasks t WHERE ${where.join(' AND ')} ORDER BY t.deadline_at,t.created_at,t.id LIMIT ?`,...args,a.limit).all();
-    const tasks=rows.results as Record<string,unknown>[];
+    const rows=await this.stmt(`SELECT t.*,
+      (SELECT name FROM members WHERE id=t.owner_id) owner_name,
+      ar.type archive_type,
+      ar.name archive_name,
+      ar.status archive_status,
+      ar.version archive_version,
+      ar.updated_at archive_updated_at,
+      (SELECT count(*) FROM observations o WHERE o.archive_id=ar.id AND o.deleted=0) archive_observation_count,
+      (SELECT substr(v.body,1,240) FROM observations o JOIN observation_versions v ON v.observation_id=o.id AND v.version=o.content_version WHERE o.archive_id=ar.id AND o.deleted=0 ORDER BY o.updated_at DESC,o.id DESC LIMIT 1) archive_latest_observation,
+      (SELECT json_group_array(json_object('id',m.id,'name',m.name,'frozen',m.frozen)) FROM archive_bindings b JOIN members m ON m.id=b.member_id WHERE b.archive_id=ar.id AND b.status=ar.status) archive_members_json
+      FROM work_tasks t
+      LEFT JOIN archives ar ON ar.id=t.archive_id AND (ar.deleted=0 OR ?='admin')
+      WHERE ${where.join(' AND ')} ORDER BY t.deadline_at,t.created_at,t.id LIMIT ?`,this.actor.role,...args,a.limit).all();
+    const tasks=rows.results as (Record<string,unknown>&{archive_id:string|null;archive_members_json?:string|null})[];
+    const archiveIds=[...new Set(tasks.map(task=>task.archive_id).filter((id):id is string=>!!id))];
+    const tagSummaries=archiveIds.length?await new TagState(this.env,this.actor).summaries(archiveIds):new Map<string,{tags:TagLabel[];total:number}>();
+    for(const task of tasks){
+      if(task.archive_id&&task.archive_name){
+        task.archive_preview={
+          id:task.archive_id,
+          type:task.archive_type,
+          name:task.archive_name,
+          status:task.archive_status,
+          version:task.archive_version,
+          updated_at:task.archive_updated_at,
+          observation_count:task.archive_observation_count??0,
+          latest_observation:task.archive_latest_observation??null,
+          members:JSON.parse(task.archive_members_json??'[]'),
+          tag_summary:tagSummaries.get(task.archive_id)??{tags:[],total:0},
+        };
+      }
+      delete task.archive_members_json;
+      delete task.archive_type;
+      delete task.archive_name;
+      delete task.archive_status;
+      delete task.archive_version;
+      delete task.archive_updated_at;
+      delete task.archive_observation_count;
+      delete task.archive_latest_observation;
+    }
     if(a.scope==='admin') for(const task of tasks){const candidates=await this.candidates(task as unknown as Row);task.candidate_count=candidates.length;task.push_stage=pushStage(this.pushable(task as unknown as Row),now());}
     return {tasks};
   }

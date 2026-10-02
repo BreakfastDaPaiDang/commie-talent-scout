@@ -27,3 +27,36 @@
 @keyframes task-card-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 @media(prefers-reduced-motion:reduce){.work-task-card{animation:none}.work-task-scopes button{transition:none}}
 @media(max-width:600px){.work-tasks-page .section-title-actions{display:flex}.work-task-list{grid-template-columns:1fr}.work-task-card{padding:17px}}
+
+/* Focus moves through a task like a small storyboard: the person enters first,
+   then the task actions stay quiet until the user asks for them. */
+.work-task-card{position:relative;transition:border-color .2s ease,box-shadow .2s ease}
+.work-task-card:before{content:"";position:absolute;right:-1px;top:-1px;width:16px;height:16px;background:var(--ink);clip-path:polygon(100% 0,100% 100%,0 0);pointer-events:none;transition:background .18s ease}
+.work-task-card:hover:before,.work-task-card:focus-within:before{background:var(--red)}
+.work-task-card:focus-within{border-color:#c96c64;box-shadow:4px 4px 0 #ed33271c}
+.task-archive-anchor{position:relative;display:inline-flex;max-width:100%;margin:15px 0 2px;z-index:2}
+.task-archive-link{display:inline-flex;align-items:center;gap:9px;max-width:100%;padding:4px 8px 4px 4px;border:1px solid transparent;text-align:left;transition:background .16s ease,border-color .16s ease,transform .2s cubic-bezier(.22,1,.36,1)}
+.task-archive-link:hover,.task-archive-link:focus-visible{background:#fff7f6;border-color:#d98a82;transform:translateY(-2px)}
+.task-archive-copy{display:grid;min-width:0;line-height:1.35}
+.task-archive-copy strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px;font-weight:700}
+.task-archive-copy small{color:#8b625f;font-size:11px;white-space:nowrap}
+.archive-peek{position:absolute;left:0;top:calc(100% + 9px);width:min(350px,calc(100vw - 48px));padding:15px;background:#fff;border:1px solid var(--ink);box-shadow:7px 7px 0 #2020201c;animation:archive-peek-in .22s cubic-bezier(.22,1,.36,1) both}
+.archive-peek:before{content:"";position:absolute;left:14px;top:-7px;width:12px;height:12px;background:#fff;border-left:1px solid var(--ink);border-top:1px solid var(--ink);transform:rotate(45deg)}
+.archive-peek header{position:relative;display:flex;align-items:center;gap:9px;padding-bottom:10px;border-bottom:1px solid var(--line)}
+.archive-peek header>div{display:grid;min-width:0;line-height:1.35}.archive-peek header strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.archive-peek header span{color:var(--muted);font-size:12px}
+.archive-peek-close{margin-left:auto;width:24px;height:24px;font-size:20px;line-height:1;color:var(--muted)}
+.archive-peek-close:hover,.archive-peek-close:focus-visible{color:var(--ink)}
+.archive-peek-tags{display:flex;flex-wrap:wrap;gap:5px;margin-top:10px}
+.archive-peek-tags span{padding:2px 6px;border-left:3px solid var(--tag-color,#bbb);background:#f5f5f5;font-size:11px;line-height:1.45}
+.archive-peek p{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden;margin:11px 0 14px;color:#555;font-size:13px;line-height:1.7}
+.archive-peek footer{display:flex;align-items:center;justify-content:space-between;gap:10px;border-top:1px solid var(--line);padding-top:10px;color:var(--muted);font-size:12px}
+.archive-peek footer .text-button{font-size:13px;color:var(--ink)}
+.work-task-card.flash-claimed{animation:task-state-claimed .48s ease both}
+.work-task-card.flash-released{animation:task-state-released .48s ease both}
+.work-task-card.flash-cancelled,.work-task-card.flash-completed{animation:task-state-cancelled .48s ease both}
+@keyframes archive-peek-in{from{opacity:0;transform:translateY(5px) scale(.98)}to{opacity:1;transform:none}}
+@keyframes task-state-claimed{0%{box-shadow:0 0 0 0 #ed332700}35%{box-shadow:0 0 0 4px #ed332733;border-color:#d96f66}100%{box-shadow:0 0 0 0 #ed332700}}
+@keyframes task-state-released{0%{box-shadow:0 0 0 0 #8b625f00}35%{box-shadow:0 0 0 4px #8b625f2b;border-color:#b99a96}100%{box-shadow:0 0 0 0 #8b625f00}}
+@keyframes task-state-cancelled{0%{opacity:1;transform:none}55%{opacity:.55;transform:translateY(2px)}100%{opacity:1;transform:none}}
+@media(prefers-reduced-motion:reduce){.task-archive-link,.work-task-card{transition:none}.archive-peek,.work-task-card.flash-claimed,.work-task-card.flash-released,.work-task-card.flash-cancelled,.work-task-card.flash-completed{animation:none}}
+@media(max-width:600px){.archive-peek{position:fixed;left:16px;right:16px;bottom:16px;top:auto;width:auto;z-index:30;box-shadow:6px 6px 0 #20202026}.archive-peek:before{display:none}.task-archive-anchor{margin-top:13px}}
