@@ -157,6 +157,7 @@ app.post('/api/work-tasks/assign',async c=>c.json(await new WorkTasks(c.env,awai
 app.get('/api/work-tasks/:id',async c=>c.json(await new WorkTasks(c.env,await authenticate(c.req.raw,c.env),'web').detail(c.req.param('id'))));
 app.post('/api/work-tasks/complete',async c=>c.json(await new WorkTasks(c.env,await authenticate(c.req.raw,c.env),'web').complete(await c.req.json())));
 app.post('/api/work-tasks/release',async c=>c.json(await new WorkTasks(c.env,await authenticate(c.req.raw,c.env),'web').release(await c.req.json())));
+app.post('/api/work-tasks/cancel',async c=>c.json(await new WorkTasks(c.env,await authenticate(c.req.raw,c.env),'web').cancel(await c.req.json())));
 app.post('/api/archives/refer',async c=>c.json(await new WorkTasks(c.env,await authenticate(c.req.raw,c.env),'web').refer(await c.req.json())));
 app.post('/api/archives/confirm-membership',async c=>c.json(await new WorkTasks(c.env,await authenticate(c.req.raw,c.env),'web').confirmMembership(await c.req.json())));
 app.all('/api/*',c=>c.json({error:{code:'NOT_FOUND',message:'接口不存在'}},404));

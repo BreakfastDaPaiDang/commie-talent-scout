@@ -45,6 +45,13 @@ test('only the current owner can complete or release a task, and both actions ke
  const detail=await service.detail(task.id);assert.deepEqual(detail.events.map(e=>e.kind),['task.completed','task.claimed','task.released','task.claimed','task.created']);
 });
 
+test('task creators can cancel an unclaimed task and the reason remains in history',async t=>{
+ const f=fixture();t.after(f.close);const service=new WorkTasks(f.env,f.actor,'mcp');
+ const task=await service.create({kind:'custom',title:'取消测试',purpose:'不再需要',delivery:'无需交付',deadline_at:'2099-01-01T00:00:00.000Z',request_id:uuid()});
+ const cancelled=await service.cancel({id:task.id,expected_version:task.version,reason:'需求已经合并到其他工作',request_id:uuid()});assert.equal(cancelled.status,'cancelled');
+ const detail=await service.detail(task.id);assert.equal(detail.events[0].kind,'task.cancelled');assert.equal(detail.events[0].reason,'需求已经合并到其他工作');
+});
+
 test('referral creates an unowned audit task and explicit membership creates onboarding on the same archive',async t=>{
  const f=fixture();t.after(f.close);const archives=new Archives(f.env,f.actor,'web'),archive=await archives.create({type:'person',name:'虚构流程对象',status:'个人接触',request_id:uuid()});const service=new WorkTasks(f.env,f.actor,'mcp');
  const referral=await service.refer({archive_id:archive.id,expected_version:archive.version,deadline_at:'2099-01-01T00:00:00.000Z',request_id:uuid()});assert.equal(referral.archive_status,'人事审核');assert.equal(f.sqlite.prepare("SELECT owner_id FROM work_tasks WHERE id=?").get(referral.task_id).owner_id,null);
