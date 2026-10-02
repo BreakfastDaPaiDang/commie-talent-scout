@@ -1,6 +1,12 @@
 /* Live-only features. The approved layout and breakpoints live solely in app/ui. */
 .workspace-layout{min-width:0;min-height:0}.detail-only{height:100%}.detail-only .workspace{display:block;height:100%}.detail-only .main-panel{display:none}.detail-only .detail-panel{display:flex;height:100%}
 .account-content,.support-content,.tag-library{height:calc(100dvh - var(--nav-height));overflow-y:auto}.account-menu{position:relative}.account-menu summary.current-member{display:flex;list-style:none;cursor:pointer}.account-menu summary::-webkit-details-marker{display:none}.account-menu .current-member>span{max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.mobile-menu>button{min-height:44px;padding:8px 16px;text-align:left}
+
+/* Wide desktop shells keep the working canvas from collapsing into a narrow island. */
+@media(min-width:961px){
+ .account-content,.support-content,.tag-library,.statistics-page,.auxiliary-tools{width:100%;max-width:none;margin-left:0;margin-right:0}
+ .detail-panel .detail-inner,.expanded-detail .detail-inner{max-width:none;width:min(100%,1600px);padding-left:clamp(48px,4vw,96px);padding-right:clamp(48px,4vw,96px)}
+}
 .nav-unread{font:12px var(--mono);color:white;background:var(--red);padding:4px 5px;line-height:1}.live-modal-body{--form-pad:28px;padding:28px}.live-modal-body .form-error{margin:12px 0}.modal-chrome .form-error{margin:0;border-left:0;border-bottom:1px solid var(--line)}.entity-action-list{display:grid;gap:16px}.entity-action-list .avatar-edit-button{justify-self:start}
 .live-composer-form{margin:0}.occurred-control{font-size:14px;margin-right:auto;position:relative}.occurred-control summary{cursor:pointer}.occurred-control label{display:grid;gap:8px}.occurred-control input{font-size:15px;max-width:100%}.record-body .reading-boundary{left:0}.focused-content{padding:0 0 24px;margin:0 0 24px;border-bottom:1px solid var(--line);scroll-margin-top:20px}.focused-content>.eyebrow{margin-bottom:20px}.focused-content .observation{margin-left:48px}.focused-content mark{background:#ffe0d6}
 .system-event.compact-event{position:relative}.compact-event p{margin:0}.event-overview{display:flex;gap:8px 16px;align-items:baseline;flex-wrap:wrap}.event-overview>small{margin-left:auto}.compact-event strong{font-weight:500}.compact-event small{display:block;font-size:13px;color:var(--muted)}.compact-event details{font-size:14px;margin-top:6px}.compact-event summary{cursor:pointer}.compact-event ul{padding-left:18px;overflow-wrap:anywhere}.compact-event .reading-content{font-size:14px}
