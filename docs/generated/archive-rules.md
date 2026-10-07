@@ -29,7 +29,7 @@
 - 档案事务条件：[guard](../../app/server/archives.ts#L45)。
 - 授权、原子提交与重试收据：[command](../../app/server/commands.ts#L21)。
 - 重开时词义差异、历史与权限：由上述 transition 调用 [TagState](../../app/server/tag-state.ts) 读取；不在生成器中解释 SQL 或任意函数。
-- 取消自动审核任务：[cancel](../../app/server/work-tasks.ts#L115) 通过 [restoreCancelledAudit](../../app/server/work-tasks.ts#L124) 调用 [auditCancellationTarget](../../app/server/rules/archive-lifecycle.ts#L31) 取得本次引荐前的外部关系，复用同一 planArchiveEffects 并在任务事务中提交。历史无法确认或档案已变更身份时不猜测退回状态。
+- 取消自动审核任务：[cancel](../../app/server/work-tasks.ts#L130) 通过 [restoreCancelledAudit](../../app/server/work-tasks.ts#L139) 调用 [auditCancellationTarget](../../app/server/rules/archive-lifecycle.ts#L31) 取得本次引荐前的外部关系，复用同一 planArchiveEffects 并在任务事务中提交。历史无法确认或档案已变更身份时不猜测退回状态。
 
 以下条件和结果来自实际参与执行的函数引用及函数体。源码链接供追溯，不把人工说明作为规则来源。
 

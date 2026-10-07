@@ -5,13 +5,26 @@ import {fixture} from './d1-fixture.mjs';
 import {WorkTasks} from '../app/server/work-tasks.ts';
 import {Archives} from '../app/server/archives.ts';
 
+function addMember(f,name){
+ const id=uuid(),credential=uuid(),at=new Date().toISOString();
+ f.sqlite.prepare("INSERT INTO members(id,username,name,role,password_hash,must_change_password,qq,created_at) VALUES(?,?,?,'member','fixture',0,'00000',?)")
+   .run(id,`fixture-${name}-${id}`,name,at);
+ f.sqlite.prepare("INSERT INTO credentials(id,member_id,hash,kind,name,auth_epoch,created_at,expires_at) VALUES(?,?,?,'mcp','fixture',1,?,'2099-01-01T00:00:00.000Z')")
+   .run(credential,id,uuid(),at);
+ return {...f.sqlite.prepare('SELECT * FROM members WHERE id=?').get(id),credential_id:credential,credential_kind:'mcp'};
+}
+
+function taskInput(request_id=uuid()){
+ return {kind:'custom',title:'跨入口任务',purpose:'验证网页与 MCP 共享任务数据',delivery:'留下可回查的工作结果',deadline_at:'2099-01-01T00:00:00.000Z',request_id};
+}
+
 test('work task creation is separate from MCP review tasks and can be claimed once',async t=>{
  const f=fixture();t.after(f.close);const service=new WorkTasks(f.env,f.actor,'mcp');
  const created=await service.create({kind:'audit',title:'人事审核',purpose:'了解是否适合继续接触',delivery:'提交观察与结论',deadline_at:'2099-01-01T00:00:00.000Z',request_id:uuid()});
  assert.equal(created.status,'open');assert.equal(created.owner_id,null);
  const listed=await service.list({scope:'all'});assert.equal(listed.tasks.length,1);
  const claimed=await service.claim({id:created.id,expected_version:created.version,request_id:uuid()});assert.equal(claimed.owner_id,f.actor.id);
- await assert.rejects(service.claim({id:created.id,expected_version:created.version,request_id:uuid()}),{code:'VERSION_CONFLICT'});
+ await assert.rejects(service.claim({id:created.id,expected_version:created.version,request_id:uuid()}),error=>error.code==='TASK_ALREADY_CLAIMED'&&/已被其他成员领取/.test(error.message));
  assert.equal(f.sqlite.prepare('SELECT count(*) n FROM mcp_tasks').get().n,0);
 });
 
@@ -43,6 +56,84 @@ test('only the current owner can complete or release a task, and both actions ke
  const reclaimed=await service.claim({id:task.id,expected_version:released.version,request_id:uuid()});
  const completed=await service.complete({id:task.id,expected_version:reclaimed.version,result_kind:'unable_to_contact',result_text:'本次未取得联系，保留后续跟进事项。',request_id:uuid()});assert.equal(completed.status,'completed');
  const detail=await service.detail(task.id);assert.deepEqual(detail.events.map(e=>e.kind),['task.completed','task.claimed','task.released','task.claimed','task.created']);
+});
+
+test('two members racing the same claim leave one owner, an explicit transaction rejection, and no duplicate retry event',async t=>{
+ const f=fixture();t.after(f.close);
+ const other=addMember(f,'并发领取成员'),creator=new WorkTasks(f.env,f.actor,'web'),first=new WorkTasks(f.env,f.actor,'mcp'),second=new WorkTasks(f.env,other,'mcp');
+ const task=await creator.create(taskInput());
+ const realBatch=f.env.DB.batch;let waiting;
+ // Let both callers finish their version-1 reads, then commit the two prepared
+ // batches serially. The second batch must fail its transaction guard.
+ f.env.DB.batch=async statements=>{
+  if(!waiting)return new Promise((resolve,reject)=>{waiting={statements,resolve,reject};});
+  const first=waiting;waiting=undefined;
+  try{
+   const firstResult=await realBatch(first.statements);first.resolve(firstResult);
+   return await realBatch(statements);
+  }catch(error){first.reject(error);throw error;}
+ };
+ const requestIds=[uuid(),uuid()];let results;
+ try{
+  results=await Promise.allSettled([
+   first.claim({id:task.id,expected_version:1,request_id:requestIds[0]}),
+   second.claim({id:task.id,expected_version:1,request_id:requestIds[1]}),
+  ]);
+ }finally{f.env.DB.batch=realBatch;}
+ assert.equal(results.filter(r=>r.status==='fulfilled').length,1);
+ assert.equal(results.filter(r=>r.status==='rejected').length,1);
+ const rejected=results.find(r=>r.status==='rejected');
+ assert.equal(rejected?.reason.code,'TASK_ALREADY_CLAIMED');
+ assert.match(rejected?.reason.message??'',/已被其他成员领取/);
+ const current=f.sqlite.prepare('SELECT owner_id,version FROM work_tasks WHERE id=?').get(task.id);
+ assert.equal(current.version,2);assert.ok([f.actor.id,other.id].includes(current.owner_id));
+ const winnerIndex= current.owner_id===f.actor.id?0:1;
+ const winningActor=current.owner_id===f.actor.id?f.actor:other;
+ const retry=await new WorkTasks(f.env,winningActor,'mcp').claim({id:task.id,expected_version:1,request_id:requestIds[winnerIndex]});
+ assert.equal(retry.replayed,true);
+ assert.equal(f.sqlite.prepare("SELECT count(*) n FROM work_task_events WHERE task_id=? AND kind='task.claimed'").get(task.id).n,1);
+ assert.equal(f.sqlite.prepare('SELECT count(*) n FROM mutation_guards').get().n,0);
+});
+
+test('web and MCP share task state and enforce owner permissions across the full operation path',async t=>{
+ const f=fixture();t.after(f.close);
+ const other=addMember(f,'跨入口成员'),web=new WorkTasks(f.env,f.actor,'web'),mcp=new WorkTasks(f.env,other,'mcp');
+ const webCreated=await web.create(taskInput());
+ const fromMcp=await mcp.list({scope:'all'});
+ assert.equal(fromMcp.tasks.find(task=>task.id===webCreated.id)?.owner_id,null);
+ const claimed=await mcp.claim({id:webCreated.id,expected_version:webCreated.version,request_id:uuid()});
+ const fromWeb=await web.detail(webCreated.id);
+ assert.equal(fromWeb.task.owner_id,other.id);
+ await assert.rejects(web.complete({id:webCreated.id,expected_version:claimed.version,result_kind:'completed',result_text:'越权完成不应成功',request_id:uuid()}),{code:'TASK_OWNER_REQUIRED'});
+ await assert.rejects(web.cancel({id:webCreated.id,expected_version:claimed.version,reason:'越权取消不应成功',request_id:uuid()}),{code:'TASK_CANCEL_FORBIDDEN'});
+ const completed=await mcp.complete({id:webCreated.id,expected_version:claimed.version,result_kind:'unable_to_contact',result_text:'跨入口完成：本次未联系到对象。',request_id:uuid()});
+ assert.equal((await web.detail(webCreated.id)).task.status,'completed');
+ assert.equal(completed.version,3);
+
+ const mcpCreated=await mcp.create(taskInput());
+ assert.ok((await web.list({scope:'all'})).tasks.some(task=>task.id===mcpCreated.id));
+ const webClaim=await web.claim({id:mcpCreated.id,expected_version:mcpCreated.version,request_id:uuid()});
+ assert.equal((await mcp.detail(mcpCreated.id)).task.owner_id,f.actor.id);
+ const released=await web.release({id:mcpCreated.id,expected_version:webClaim.version,deadline_at:'2099-02-01T00:00:00.000Z',request_id:uuid()});
+ assert.equal((await mcp.detail(mcpCreated.id)).task.owner_id,null);
+ const cancelled=await mcp.cancel({id:mcpCreated.id,expected_version:released.version,reason:'跨入口取消：已合并到其他工作',request_id:uuid()});
+ assert.equal(cancelled.status,'cancelled');
+ const events=(await web.detail(mcpCreated.id)).events;
+ assert.deepEqual(events.map(event=>event.kind),['task.cancelled','task.released','task.claimed','task.created']);
+ assert.deepEqual(events.map(event=>event.source),['mcp','web','web','mcp']);
+});
+
+test('stale versions and frozen accounts cannot mutate an owned task',async t=>{
+ const f=fixture();t.after(f.close);
+ const other=addMember(f,'边界成员'),web=new WorkTasks(f.env,f.actor,'web'),mcp=new WorkTasks(f.env,other,'mcp');
+ const task=await web.create(taskInput());
+ const claimed=await mcp.claim({id:task.id,expected_version:task.version,request_id:uuid()});
+ await assert.rejects(web.claim({id:task.id,expected_version:task.version,request_id:uuid()}),error=>error.code==='TASK_ALREADY_CLAIMED'&&/已被其他成员领取/.test(error.message));
+ await assert.rejects(web.complete({id:task.id,expected_version:claimed.version,result_kind:'completed',result_text:'非负责人不能完成',request_id:uuid()}),{code:'TASK_OWNER_REQUIRED'});
+ f.sqlite.prepare('UPDATE members SET frozen=1 WHERE id=?').run(other.id);
+ await assert.rejects(mcp.complete({id:task.id,expected_version:claimed.version,result_kind:'completed',result_text:'冻结账号不能完成',request_id:uuid()}),{code:'PRECONDITION_CHANGED'});
+ const current=await web.detail(task.id);
+ assert.equal(current.task.status,'open');assert.equal(current.task.owner_id,other.id);assert.equal(current.events.length,2);
 });
 
 test('task creators can cancel an unclaimed task and the reason remains in history',async t=>{

@@ -90,11 +90,26 @@ export class WorkTasks {
   private pushable(task:Row){return {id:task.id,kind:task.kind,open:task.status==='open',ownerId:task.owner_id,createdAt:task.created_at};}
   async claim(input:unknown){
     const a=workTaskClaimInput.parse(input);
-    return command(this.env,this.actor,{requestId:a.request_id,operation:'work_task.claim',parameters:{id:a.id,expected_version:a.expected_version}},async()=>{
-      const task=await this.get(a.id,a.expected_version);if(task.status!=='open')throw new Failure(409,'TASK_NOT_OPEN','只有开启中的任务可以领取');if(task.owner_id)throw new Failure(409,'TASK_ALREADY_CLAIMED','任务已经有人领取');
-      const key=uid(),at=now(),result={id:a.id,owner_id:this.actor.id,status:'open',version:task.version+1,changed:true};
-      return {result,statements:[this.stmt('INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(SELECT 1 FROM work_tasks WHERE id=? AND version=? AND status=\'open\' AND owner_id IS NULL) THEN 1 ELSE 0 END)',key,a.id,a.expected_version),this.stmt('UPDATE work_tasks SET owner_id=?,version=version+1,updated_at=? WHERE id=? AND version=? AND status=\'open\' AND owner_id IS NULL',this.actor.id,at,a.id,a.expected_version),this.event(a.id,'task.claimed',{owner_id:null,version:task.version},{owner_id:this.actor.id,version:task.version+1}),this.stmt('DELETE FROM mutation_guards WHERE id=?',key)]};
-    });
+    try{
+      return await command(this.env,this.actor,{requestId:a.request_id,operation:'work_task.claim',parameters:{id:a.id,expected_version:a.expected_version}},async()=>{
+        const task=await this.get(a.id,a.expected_version);if(task.status!=='open')throw new Failure(409,'TASK_NOT_OPEN','只有开启中的任务可以领取');if(task.owner_id)throw new Failure(409,'TASK_ALREADY_CLAIMED','任务已经有人领取');
+        const key=uid(),at=now(),result={id:a.id,owner_id:this.actor.id,status:'open',version:task.version+1,changed:true};
+        return {result,statements:[this.stmt('INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(SELECT 1 FROM work_tasks WHERE id=? AND version=? AND status=\'open\' AND owner_id IS NULL) THEN 1 ELSE 0 END)',key,a.id,a.expected_version),this.stmt('UPDATE work_tasks SET owner_id=?,version=version+1,updated_at=? WHERE id=? AND version=? AND status=\'open\' AND owner_id IS NULL',this.actor.id,at,a.id,a.expected_version),this.event(a.id,'task.claimed',{owner_id:null,version:task.version},{owner_id:this.actor.id,version:task.version+1}),this.stmt('DELETE FROM mutation_guards WHERE id=?',key)]};
+      });
+    }catch(error){
+      // A stale read and a transaction guard failure are both normal outcomes when
+      // two members press Claim together. Re-read only to turn that race into a
+      // direct explanation; frozen or expired credentials keep the original auth error.
+      if(error instanceof Failure&&(error.code==='VERSION_CONFLICT'||error.code==='PRECONDITION_CHANGED')){
+        const current=await this.stmt('SELECT status,owner_id FROM work_tasks WHERE id=?',a.id).first<{status:string;owner_id:string|null}>();
+        const auth=await this.stmt(`SELECT m.frozen,m.auth_epoch,c.auth_epoch credential_epoch,c.revoked_at,c.expires_at
+          FROM members m JOIN credentials c ON c.member_id=m.id AND c.id=? WHERE m.id=?`,this.actor.credential_id,this.actor.id).first<{frozen:number;auth_epoch:number;credential_epoch:number;revoked_at:string|null;expires_at:string}>();
+        if(current?.status==='open'&&current.owner_id&&auth&&auth.frozen===0&&auth.auth_epoch===this.actor.auth_epoch&&auth.credential_epoch===this.actor.auth_epoch&&!auth.revoked_at&&auth.expires_at>now()){
+          throw new Failure(409,'TASK_ALREADY_CLAIMED','任务已被其他成员领取，请刷新任务列表');
+        }
+      }
+      throw error;
+    }
   }
   async complete(input:unknown){
     const a=workTaskCompleteInput.parse(input);
