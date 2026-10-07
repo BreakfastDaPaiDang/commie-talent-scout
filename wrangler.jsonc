@@ -12,7 +12,7 @@
   "env": {
     "production": {
       "name": "cts-web",
-      "vars": { "ENVIRONMENT": "production", "APP_ORIGIN": "https://scout.dapaidang.org" },
+      "vars": { "ENVIRONMENT": "production", "APP_ORIGIN": "https://scout.dapaidang.org", "MONTHLY_TASKS_ENABLED": "false" },
       "d1_databases": [{ "binding": "DB", "database_name": "cts-production", "database_id": "0fa0b451-4d79-468b-8313-c626913057b3", "migrations_dir": "migrations" }],
       "r2_buckets": [{ "binding": "IMAGES", "bucket_name": "cts-production-images" }],
       "routes": [{ "pattern": "scout.dapaidang.org", "custom_domain": true }],
@@ -20,7 +20,7 @@
     },
     "staging": {
       "name": "cts-web-staging",
-      "vars": { "ENVIRONMENT": "staging", "APP_ORIGIN": "https://scout-staging.dapaidang.org" },
+      "vars": { "ENVIRONMENT": "staging", "APP_ORIGIN": "https://scout-staging.dapaidang.org", "MONTHLY_TASKS_ENABLED": "true" },
       "d1_databases": [{ "binding": "DB", "database_name": "cts-staging", "database_id": "b43ac6eb-d724-416a-b62e-3433fe072560", "migrations_dir": "migrations" }],
       "r2_buckets": [{ "binding": "IMAGES", "bucket_name": "cts-staging-images" }],
       "routes": [{ "pattern": "scout-staging.dapaidang.org", "custom_domain": true }],

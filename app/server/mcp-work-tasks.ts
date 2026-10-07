@@ -1,13 +1,13 @@
 import {z} from 'zod';
-import {WorkTasks,workTaskCreateInput,workTaskClaimInput,workTaskAssignInput,workTaskCompleteInput,workTaskReleaseInput,workTaskCancelInput,workTaskReferInput,workTaskMembershipInput,workTaskEditInput,workTaskExtendInput,workTaskReopenInput,workTaskCommentCreateInput,workTaskCommentEditInput,workTaskCommentDeleteInput,workTaskCommentRestoreInput} from './work-tasks.ts';
+import {WorkTasks,workTaskCreateInput,workTaskClaimInput,workTaskAssignInput,workTaskCompleteInput,workTaskReleaseInput,workTaskCancelInput,workTaskReferInput,workTaskMembershipInput,workTaskEditInput,workTaskExtendInput,workTaskReopenInput,workTaskCommentCreateInput,workTaskCommentEditInput,workTaskCommentDeleteInput,workTaskCommentRestoreInput,monthlyPreviewInput,monthlyGenerateInput} from './work-tasks.ts';
 import {registerJournalFields} from './mcp-journal.ts';
 import type {McpReply} from './mcp-members.ts';
 import type {Actor,Env} from './types.ts';
 
-export const workTaskToolNames=['list_work_tasks','get_work_task','create_work_task','claim_work_task','complete_work_task','release_work_task','cancel_work_task','edit_work_task','extend_work_task','reopen_work_task','add_work_task_comment','edit_work_task_comment','delete_work_task_comment','restore_work_task_comment','refer_archive','confirm_membership','assign_work_task'];
+export const workTaskToolNames=['list_work_tasks','get_work_task','create_work_task','claim_work_task','complete_work_task','release_work_task','cancel_work_task','edit_work_task','extend_work_task','reopen_work_task','add_work_task_comment','edit_work_task_comment','delete_work_task_comment','restore_work_task_comment','refer_archive','confirm_membership','assign_work_task','preview_monthly_work_tasks','generate_monthly_work_tasks'];
 registerJournalFields('list_work_tasks',['scope','state','archive_id','limit']);
 registerJournalFields('get_work_task',['id']);
-registerJournalFields('create_work_task',['archive_id','kind','title','purpose','delivery','deadline_at','source','request_id']);
+registerJournalFields('create_work_task',['archive_id','kind','title','purpose','delivery','deadline_at','source','period_key','request_id']);
 registerJournalFields('claim_work_task',['id','expected_version','request_id']);
 registerJournalFields('complete_work_task',['id','expected_version','result_kind','result_text','references','request_id']);
 registerJournalFields('release_work_task',['id','expected_version','deadline_at','reason','request_id']);
@@ -22,6 +22,8 @@ registerJournalFields('restore_work_task_comment',['id','expected_version','requ
 registerJournalFields('refer_archive',['archive_id','expected_version','deadline_at','request_id']);
 registerJournalFields('confirm_membership',['archive_id','expected_version','deadline_at','request_id']);
 registerJournalFields('assign_work_task',['id','member_id','expected_version','reason','request_id']);
+registerJournalFields('preview_monthly_work_tasks',['month']);
+registerJournalFields('generate_monthly_work_tasks',['month','request_id']);
 export const workTaskGuides=['工作任务与 Agent 的任务审查记录分开；创建明确类型的工作任务后，系统只向符合本人倾向的活跃成员推送，不直接分配责任。','成员仍可从全组看板主动领取；管理员队列用于查看无人匹配或推送后未领取的开启任务。'];
 export function registerWorkTaskTools(server:any,env:Env,actor:Actor,reply:McpReply){
   const service=new WorkTasks(env,actor,'mcp');
@@ -42,4 +44,6 @@ export function registerWorkTaskTools(server:any,env:Env,actor:Actor,reply:McpRe
   server.registerTool('refer_archive',{description:'将开启中的外部人物提交进入人事审核。系统创建待领取的人事审核任务并显示人事审核阶段，不创建负责人、不保留“引荐中”作为新的手动状态。',annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:true,openWorldHint:false},inputSchema:workTaskReferInput,outputSchema:z.object({task_id:z.string(),archive_id:z.string(),archive_status:z.string(),changed:z.boolean()}).passthrough()},(input:any)=>reply(()=>service.refer(input),r=>({id:r.task_id,changed:r.changed})));
   server.registerTool('confirm_membership',{description:'在审核结果已经完成后明确确认人物取得社员身份。系统保留同一档案、转入社员身份范围并创建待领取入社对接任务；不会把审核负责人自动设为对接负责人。',annotations:{readOnlyHint:false,destructiveHint:true,idempotentHint:true,openWorldHint:false},inputSchema:workTaskMembershipInput,outputSchema:z.object({task_id:z.string(),archive_id:z.string(),archive_status:z.string(),changed:z.boolean()}).passthrough()},(input:any)=>reply(()=>service.confirmMembership(input),r=>({id:r.task_id,changed:r.changed})));
   server.registerTool('assign_work_task',{description:'仅管理员明确指派开启中的工作任务。需要指定活跃成员和简短理由；这会停止普通倾向推送，但记录为管理员指派，不伪装成主动领取。',annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:true,openWorldHint:false},inputSchema:workTaskAssignInput,outputSchema:z.object({id:z.string(),owner_id:z.string(),version:z.number(),changed:z.boolean(),assigned:z.boolean()}).passthrough()},(input:any)=>reply(()=>service.assign(input),r=>({id:r.id,version:r.version,changed:r.changed,assigned:r.assigned})));
+  server.registerTool('preview_monthly_work_tasks',{description:'仅管理员预览指定东八区自然月将生成的社员沟通与外部对象观察任务，不创建数据。',annotations:{readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:false},inputSchema:monthlyPreviewInput,outputSchema:z.object({month:z.string(),deadline_at:z.string(),archives:z.array(z.record(z.string(),z.unknown()))})},(input:any)=>reply(()=>service.previewMonthly(input),r=>({count:(r.archives as unknown[]).length})));
+  server.registerTool('generate_monthly_work_tasks',{description:'仅管理员按指定东八区自然月生成月度任务；同一对象、类型和月份幂等去重，月份由调用者明确指定。',annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:true,openWorldHint:false},inputSchema:monthlyGenerateInput,outputSchema:z.object({month:z.string(),deadline_at:z.string(),eligible_count:z.number(),created_count:z.number(),changed:z.boolean(),tasks:z.array(z.record(z.string(),z.unknown()))}).passthrough()},(input:any)=>reply(()=>service.generateMonthly(input),r=>({count:(r.tasks as unknown[]).length,created_count:r.created_count,changed:r.changed})));
 }

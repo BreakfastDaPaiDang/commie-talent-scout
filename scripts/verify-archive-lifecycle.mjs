@@ -31,16 +31,16 @@ try{
  await page.getByRole('button',{name:'编辑档案',exact:true}).click();
  let dialog=page.getByRole('dialog',{name:'编辑档案',exact:true});
  await dialog.getByRole('tab',{name:'状态与成员',exact:true}).click();
- await dialog.getByRole('radio',{name:'已入伙',exact:true}).check();await capture('desktop-close');
+ await dialog.getByRole('radio',{name:'已弃用',exact:true}).check();await capture('desktop-close');
  const sent=page.waitForRequest(r=>r.url().endsWith('/api/archives/state')&&r.method()==='POST');
  await dialog.getByRole('button',{name:'保存并关闭档案',exact:true}).click();
  const closeRequest=(await sent).postDataJSON();await dialog.waitFor({state:'detached'});
  await page.getByRole('button',{name:'重新开启',exact:true}).waitFor();
- let a=await get();assert.equal(a.closed,true);assert.equal(a.status,'已入伙');
+ let a=await get();assert.equal(a.closed,true);assert.equal(a.status,'已弃用');
  assert.equal(a.tags[0].description,'关闭前的含义');const afterClose=(await events()).length;
  assert.equal((await v.call('set_archive_state',closeRequest)).replayed,true);assert.equal((await events()).length,afterClose);
  const locked=await v.http('/archives/state',input(a,'个人接触'));assert.equal(locked.status,409);assert.equal(locked.body.error.code,'ARCHIVE_CLOSED');
- checks.push('desktop web closes the same archive with old 已入伙 semantics; MCP replay adds no history; ordinary write cannot reopen it');
+ checks.push('desktop web closes the same archive as 已弃用; MCP replay adds no history; ordinary write cannot reopen it');
 
  const preview=await v.call('preview_tag_definition',{change:{entity_type:'tag',id:tag.id,category_id:category.id,name:'虚构原词义',description:'重开后读取的新含义',reason:'虚构规则验收'}});
  await v.call('apply_tag_definition',{preview_id:preview.preview_id,request_id:uuid()});

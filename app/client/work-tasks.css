@@ -64,6 +64,14 @@
 /* Desktop task workspace: action first, object second, context on demand. */
 .task-workspace.account-content{width:100%;max-width:none;margin:0;padding:34px clamp(28px,4vw,76px) 54px;min-height:calc(100dvh - var(--nav-height));background:#fafafa}
 .task-workspace-head{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;max-width:none;margin:0 auto 22px}
+.task-workspace-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end}
+.monthly-task-tools{position:relative;align-self:center;border:1px solid #c7cbcc;background:#fff;color:#555d60}
+.monthly-task-tools summary{cursor:pointer;padding:9px 12px;list-style:none}
+.monthly-task-tools summary::-webkit-details-marker{display:none}
+.monthly-task-tools-body{display:grid;gap:9px;min-width:250px;padding:12px;border-top:1px solid #e0e2e3}
+.monthly-task-tools-body label{display:grid;gap:5px;font-size:13px}
+.monthly-task-tools-body input{font:inherit;border:1px solid #bbb;padding:7px}
+.monthly-task-tools-actions{display:flex;gap:7px;justify-content:flex-end}
 .task-workspace-kicker,.task-scene-kicker{display:block;color:#8a8f92;font-size:12px;letter-spacing:.12em;text-transform:uppercase;line-height:1.4}
 .task-workspace-head h1{font-size:42px;line-height:1.15;letter-spacing:-.055em;margin:5px 0 8px;font-weight:720}
 .task-workspace-head .work-task-create-button{align-self:center}
@@ -117,4 +125,4 @@
 @keyframes task-scene-signal{0%{box-shadow:7px 7px 0 #2020200d}35%{box-shadow:0 0 0 4px #ed332733,7px 7px 0 #2020200d;border-color:#d96f66}100%{box-shadow:7px 7px 0 #2020200d}}
 @keyframes task-scene-settle{0%{opacity:1;transform:none}55%{opacity:.62;transform:translateY(2px)}100%{opacity:1;transform:none}}
 @media(prefers-reduced-motion:reduce){.task-index-item,.task-scene{transition:none;animation:none}}
-@media(max-width:900px){.task-workspace-grid.has-selection{grid-template-columns:minmax(0,1fr)}.task-scene{position:static}.task-workspace.account-content{padding-left:18px;padding-right:18px}.task-scene{padding:20px 18px}}
+@media(max-width:900px){.task-workspace-grid.has-selection{grid-template-columns:minmax(0,1fr)}.task-scene{position:static}.task-workspace.account-content{padding-left:18px;padding-right:18px}.task-scene{padding:20px 18px}.task-workspace-head{align-items:flex-start;flex-direction:column}.task-workspace-actions{justify-content:flex-start}.monthly-task-tools{align-self:auto}}

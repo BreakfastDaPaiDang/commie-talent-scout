@@ -1,4 +1,4 @@
-import {isClosedState,isWorkState,statesFor} from '../../shared/archive-states.ts';
+import {isClosedState,isWorkState,statesFor,memberStatuses} from '../../shared/archive-states.ts';
 import {Failure} from '../types.ts';
 import type {Archive,BoundMember} from '../archives.ts';
 import type {TagState} from '../tag-state.ts';
@@ -46,6 +46,44 @@ function cancelWithdrawnAudit(c:Effects){
  ];
 }
 
+function cancelsInapplicableTasks(c:Effects){
+ const leavesMembership=c.old.type==='person'&&memberStatuses.includes(c.old.status as typeof memberStatuses[number])&&!memberStatuses.includes(c.status as typeof memberStatuses[number]);
+ const kinds=isClosedState(c.status)?"'audit','monthly','onboarding'":leavesMembership?"'monthly','onboarding'":null;
+ if(!kinds)return [];
+ const reason=`档案从${c.old.status}变为${c.status}，关联工作不再适用`;
+ return [
+  c.stmt(`INSERT INTO work_task_events(id,task_id,actor_id,source,kind,before_json,after_json,reason,created_at)
+   SELECT lower(hex(randomblob(16))),id,?,?,'task.cancelled',
+    json_object('status',status,'owner_id',owner_id,'version',version),
+    json_object('status','cancelled','owner_id',owner_id,'version',version+1),?,?
+   FROM work_tasks WHERE archive_id=? AND source='rule' AND kind IN (${kinds}) AND status='open'`,c.actorId,c.source,reason,c.at,c.old.id),
+  c.stmt(`UPDATE work_tasks SET status='cancelled',closed_reason=?,updated_at=?,version=version+1 WHERE archive_id=? AND source='rule' AND kind IN (${kinds}) AND status='open'`,reason,c.at,c.old.id),
+ ];
+}
+
+function notifyManualTasks(c:Effects){
+ if(!stateChanged(c)||c.old.type!=='person')return [];
+ const reason=`档案状态已从${c.old.status}变为${c.status}，请负责人核对合作任务是否继续`;
+ return [
+  c.stmt(`INSERT INTO work_task_events(id,task_id,actor_id,source,kind,before_json,after_json,reason,created_at)
+   SELECT lower(hex(randomblob(16))),id,?,?,'task.archive_status_changed',
+    json_object('archive_status',?),json_object('archive_status',?,'owner_id',owner_id),?,?
+   FROM work_tasks WHERE archive_id=? AND status='open' AND kind='cooperation'`,c.actorId,c.source,c.old.status,c.status,reason,c.at,c.old.id),
+  c.stmt(`INSERT INTO messages(id,recipient_id,kind,task_id,object_type,object_id,title,body,task_version,deadline_at,created_at)
+   SELECT lower(hex(randomblob(16))),owner_id,'archive_status_changed',id,'work_task',id,'关联档案状态已变化',?,version,deadline_at,?
+   FROM work_tasks t WHERE archive_id=? AND status='open' AND kind='cooperation' AND owner_id IS NOT NULL
+   ON CONFLICT(recipient_id,kind,object_type,object_id,deadline_at) DO UPDATE SET body=excluded.body,task_version=excluded.task_version,created_at=excluded.created_at,read_at=NULL`,reason,c.at,c.old.id),
+ ];
+}
+
+function cancelInapplicableTasksWhen(c:Transition){
+ return stateChanged(c)&&((c.old.type==='person'&&memberStatuses.includes(c.old.status as typeof memberStatuses[number])&&!memberStatuses.includes(c.status as typeof memberStatuses[number]))||isClosedState(c.status));
+}
+
+function notifyManualTasksWhen(c:Transition){
+ return stateChanged(c)&&c.old.type==='person';
+}
+
 function saveStateAndBindings(c:Effects){
  const closed=isClosedState(c.status);
  return [c.stmt('UPDATE archives SET status=?,closed=?,last_open_status=?,version=version+1,updated_at=? WHERE id=?',c.status,closed?1:0,closed?c.old.status:c.old.last_open_status,c.at,c.old.id),
@@ -72,6 +110,8 @@ export const archiveTransitionRules=[
  {id:'state-history',when:stateChanged,apply:recordStateChange},
  {id:'members-history',when:onlyMembersChanged,apply:recordMembersChange},
  {id:'withdraw-audit',when:withdrawsAudit,apply:cancelWithdrawnAudit},
+ {id:'cancel-inapplicable-tasks',when:cancelInapplicableTasksWhen,apply:cancelsInapplicableTasks},
+ {id:'notify-manual-tasks',when:notifyManualTasksWhen,apply:notifyManualTasks},
  {id:'close',when:closesArchive,apply:freezeTagsAndRecordClosure},
  {id:'reopen',when:reopensArchive,apply:recordReopening},
 ] as const;

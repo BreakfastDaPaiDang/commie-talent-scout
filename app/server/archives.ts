@@ -8,6 +8,7 @@ import {isClosedState,personStates,orgStates,memberStatuses} from '../shared/arc
 import {assertReopenAllowed,assertStateAndResponsibility,planArchiveEffects,transitionChanged} from './rules/archive-lifecycle.ts';
 import {TagState,evidenceVisibilitySql,type TagBinding,type TagLabel} from './tag-state.ts';
 import {Reading,eventVisibility,unreadPredicate} from './reading.ts';
+import {contactReminder,type ContactReminder} from '../shared/contact-reminders.ts';
 
 export const archiveType=z.enum(['person','org']);
 const contact=z.object({type:z.string().trim().min(1).max(40),value:z.string().trim().min(1).max(500),note:z.string().trim().max(500).default('')}).strict().refine(c=>c.type.toUpperCase()!=='QQ'||/^\d{5,20}$/.test(c.value),{message:'QQ 使用 5–20 位数字字符串',path:['value']});
@@ -15,15 +16,16 @@ const link=z.object({label:z.string().trim().max(100).default(''),url:z.url().ma
 const profile={name:z.string().trim().min(1,'名称不能为空').max(120),contacts:z.array(contact).max(20).default([]),links:z.array(link).max(20).default([])};
 const statusInput=z.enum([...personStates,...orgStates]);
 const memberIds=z.array(z.uuid()).max(50).transform(ids=>[...new Set(ids)].sort());
-export const archiveCreateInput=z.object({type:archiveType,...profile,status:statusInput.default('视奸观察'),member_ids:memberIds.default([]),request_id:requestId}).strict();
-export const archiveUpdateInput=z.object({id:z.uuid(),expected_version:expectedVersion,...profile,contacts:z.array(contact).max(20),links:z.array(link).max(20),request_id:requestId}).strict();
+const currentNeed=z.string().trim().max(5000);
+export const archiveCreateInput=z.object({type:archiveType,...profile,current_need:currentNeed.default(''),status:statusInput.default('\u89c6\u5978\u89c2\u5bdf'),member_ids:memberIds.default([]),request_id:requestId}).strict();
+export const archiveUpdateInput=z.object({id:z.uuid(),expected_version:expectedVersion,...profile,current_need:currentNeed.optional(),contacts:z.array(contact).max(20),links:z.array(link).max(20),request_id:requestId}).strict();
 export const archiveStateInput=z.object({id:z.uuid(),expected_version:expectedVersion,status:statusInput,member_ids:memberIds,request_id:requestId}).strict();
 export const archiveDeletionInput=z.object({id:z.uuid(),expected_version:expectedVersion,request_id:requestId}).strict();
 export const archiveListInput=z.object({type:archiveType,person_scope:z.enum(['all','external','members']).default('all').describe('Person range: external excludes members; members includes joined people; all preserves existing queries.'),deleted:z.union([z.boolean(),z.enum(['true','false']).transform(v=>v==='true')]).default(false),query:z.string().trim().max(200).default(''),scope:z.enum(['all','mine','unread']).default('all').describe('mine 为关联我：当前状态关联成员包含调用者，不限工作或开启状态，仍遵循其他筛选和删除权限。'),status:z.string().max(80).default(''),member_id:z.union([z.uuid(),z.literal('')]).default(''),closed:z.enum(['all','open','closed']).default('all'),tag_ids:z.array(z.uuid()).max(30).default([]).describe('按当前词库类别分组：同类别任一标签匹配、不同类别同时匹配。关闭档案按冻结绑定匹配稳定标签 ID；仅计入当前成员可见的来源。'),limit:z.coerce.number().int().min(1).max(100).default(30),before:z.string().max(150).optional()});
-type Row={id:string;type:'person'|'org';name:string;contacts_json:string;links_json:string;status:string;closed:number;deleted:number;deleted_at:string|null;deleted_by:string|null;deleted_snapshot_version:number|null;last_open_status:string|null;avatar_id:string|null;created_by:string;created_at:string;updated_at:string;version:number;tag_snapshot_version:number|null};
+type Row={id:string;type:'person'|'org';name:string;contacts_json:string;links_json:string;current_need:string;status:string;closed:number;deleted:number;deleted_at:string|null;deleted_by:string|null;deleted_snapshot_version:number|null;last_open_status:string|null;avatar_id:string|null;created_by:string;created_at:string;updated_at:string;version:number;tag_snapshot_version:number|null};
 export type BoundMember={id:string;name:string;frozen:boolean};
-export type Archive=Omit<Row,'contacts_json'|'links_json'|'closed'|'deleted'>&{contacts:z.infer<typeof contact>[];links:z.infer<typeof link>[];closed:boolean;deleted:boolean;update_reminder:ArchiveReminder;observation_count:number;latest_observation:string|null;members:BoundMember[];bindings:Record<string,BoundMember[]>;tags:TagBinding[];tag_summary?:{tags:TagLabel[];total:number}};
-function present(row:Row&{members_json?:string;observation_count?:number;latest_observation?:string|null},at=Date.now()):Archive{const {contacts_json,links_json,members_json,...rest}=row;return {...rest,closed:!!row.closed,deleted:!!row.deleted,update_reminder:archiveReminder({...row,closed:!!row.closed,deleted:!!row.deleted},at),contacts:JSON.parse(contacts_json),links:JSON.parse(links_json),observation_count:row.observation_count??0,latest_observation:row.latest_observation??null,members:JSON.parse(members_json??'[]').map((m:BoundMember)=>({...m,frozen:!!m.frozen})),bindings:{},tags:[]};}
+export type Archive=Omit<Row,'contacts_json'|'links_json'|'closed'|'deleted'>&{contacts:z.infer<typeof contact>[];links:z.infer<typeof link>[];closed:boolean;deleted:boolean;update_reminder:ArchiveReminder;contact_reminder:ContactReminder;observation_count:number;latest_observation:string|null;members:BoundMember[];bindings:Record<string,BoundMember[]>;tags:TagBinding[];tag_summary?:{tags:TagLabel[];total:number}};
+function present(row:Row&{members_json?:string;observation_count?:number;latest_observation?:string|null},at=Date.now()):Archive{const {contacts_json,links_json,members_json,...rest}=row;const contacts=JSON.parse(contacts_json) as z.infer<typeof contact>[];return {...rest,closed:!!row.closed,deleted:!!row.deleted,update_reminder:archiveReminder({...row,closed:!!row.closed,deleted:!!row.deleted},at),contact_reminder:contactReminder(row.type,row.status,contacts),contacts,links:JSON.parse(links_json),observation_count:row.observation_count??0,latest_observation:row.latest_observation??null,members:JSON.parse(members_json??'[]').map((m:BoundMember)=>({...m,frozen:!!m.frozen})),bindings:{},tags:[]};}
 const observationSummary="(SELECT count(*) FROM observations o WHERE o.archive_id=a.id AND o.deleted=0) observation_count,(SELECT substr(v.body,1,240) FROM observations o JOIN observation_versions v ON v.observation_id=o.id AND v.version=o.content_version WHERE o.archive_id=a.id AND o.deleted=0 ORDER BY o.updated_at DESC,o.id DESC LIMIT 1) latest_observation";
 const currentMembers="(SELECT json_group_array(json_object('id',m.id,'name',m.name,'frozen',m.frozen)) FROM archive_bindings b JOIN members m ON m.id=b.member_id WHERE b.archive_id=a.id AND b.status=a.status) members_json";
 
@@ -77,16 +79,23 @@ export class Archives{
   const a=archiveDeletionInput.parse(input);return command(this.env,this.actor,{requestId:a.request_id,operation:deleted?'archive.delete':'archive.restore',parameters:a,requireAdmin:true},async()=>{
    const old=await this.get(a.id);if(old.version!==a.expected_version)throw new Failure(409,'VERSION_CONFLICT','档案已被更新，请重新读取后核对');
    const changed=old.deleted!==deleted,key=uid(),at=now(),statements=[this.stmt('INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(SELECT 1 FROM archives WHERE id=? AND version=? AND deleted=?) THEN 1 ELSE 0 END)',key,a.id,a.expected_version,old.deleted?1:0)];
-   if(changed){
-    if(deleted&&!old.closed)statements.push(new TagState(this.env,this.actor).snapshot(a.id,old.version+1));
-    statements.push(this.stmt('UPDATE archives SET deleted=?,deleted_at=?,deleted_by=?,deleted_snapshot_version=?,version=version+1,updated_at=? WHERE id=?',deleted?1:0,deleted?at:null,deleted?this.actor.id:null,deleted?(old.closed?old.tag_snapshot_version:old.version+1):null,at,a.id),this.event(a.id,deleted?'archive.deleted':'archive.restored',{deleted:old.deleted},{deleted},at));
+    if(changed){
+     if(deleted&&!old.closed)statements.push(new TagState(this.env,this.actor).snapshot(a.id,old.version+1));
+     if(deleted){
+      const reason='档案已删除，关联自动任务不再适用';
+      statements.push(this.stmt(`INSERT INTO work_task_events(id,task_id,actor_id,source,kind,before_json,after_json,reason,created_at)
+       SELECT lower(hex(randomblob(16))),id,?,?,'task.cancelled',json_object('status',status,'owner_id',owner_id,'version',version),json_object('status','cancelled','owner_id',owner_id,'version',version+1),?,?
+       FROM work_tasks WHERE archive_id=? AND source='rule' AND status='open'`,this.actor.id,this.source,reason,at,a.id),
+       this.stmt("UPDATE work_tasks SET status='cancelled',closed_reason=?,updated_at=?,version=version+1 WHERE archive_id=? AND source='rule' AND status='open'",reason,at,a.id));
+     }
+     statements.push(this.stmt('UPDATE archives SET deleted=?,deleted_at=?,deleted_by=?,deleted_snapshot_version=?,version=version+1,updated_at=? WHERE id=?',deleted?1:0,deleted?at:null,deleted?this.actor.id:null,deleted?(old.closed?old.tag_snapshot_version:old.version+1):null,at,a.id),this.event(a.id,deleted?'archive.deleted':'archive.restored',{deleted:old.deleted},{deleted},at));
    }
    statements.push(this.stmt('DELETE FROM mutation_guards WHERE id=?',key));return {result:{id:a.id,version:old.version+(changed?1:0),deleted,changed,archive_url:this.url(old)},statements};
   });
  }
  async create(input:unknown){const a=archiveCreateInput.parse(input);return command(this.env,this.actor,{requestId:a.request_id,operation:'archive.create',parameters:{...a,request_id:undefined}},async()=>{
-  const id=uid(),at=now(),plan=await this.planBindings(id,a.type,a.status,a.member_ids),closed=isClosedState(a.status);
-  return {result:{id,version:1,changed:true,archive_url:this.url({id,type:a.type})},statements:[...plan.guards,this.stmt('INSERT INTO archives(id,type,name,contacts_json,links_json,status,closed,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)',id,a.type,a.name,JSON.stringify(a.contacts),JSON.stringify(a.links),a.status,closed?1:0,this.actor.id,at,at),...plan.bindings,this.event(id,'archive.created',null,{type:a.type,name:a.name,contacts:a.contacts,links:a.links,status:a.status,members:plan.members},at),...(closed?[this.event(id,'archive.closed',null,{status:a.status},at)]:[]),...plan.cleanup]};
+  const id=uid(),at=now(),plan=await this.planBindings(id,a.type,a.status,a.member_ids),closed=isClosedState(a.status),reminder=contactReminder(a.type,a.status,a.contacts);
+  return {result:{id,version:1,changed:true,archive_url:this.url({id,type:a.type}),contact_reminder:reminder},statements:[...plan.guards,this.stmt('INSERT INTO archives(id,type,name,contacts_json,links_json,current_need,status,closed,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)',id,a.type,a.name,JSON.stringify(a.contacts),JSON.stringify(a.links),a.current_need,a.status,closed?1:0,this.actor.id,at,at),...plan.bindings,this.event(id,'archive.created',null,{type:a.type,name:a.name,contacts:a.contacts,links:a.links,current_need:a.current_need,status:a.status,members:plan.members},at),...(closed?[this.event(id,'archive.closed',null,{status:a.status},at)]:[]),...plan.cleanup]};
  });}
  private async planBindings(id:string,type:'person'|'org',status:string,ids:string[]){
   assertStateAndResponsibility(type,status,ids);
@@ -117,10 +126,10 @@ export class Archives{
   });
  }
  async update(input:unknown){const a=archiveUpdateInput.parse(input);return command(this.env,this.actor,{requestId:a.request_id,operation:'archive.update',parameters:{...a,request_id:undefined}},async()=>{
-  const old=await this.get(a.id,a.expected_version,true),key=uid(),before={name:old.name,contacts:old.contacts,links:old.links},after={name:a.name,contacts:a.contacts,links:a.links},changed=JSON.stringify(before)!==JSON.stringify(after),at=now();
+  const old=await this.get(a.id,a.expected_version,true),key=uid(),current_need=a.current_need===undefined?old.current_need:a.current_need,before={name:old.name,contacts:old.contacts,links:old.links,current_need:old.current_need},after={name:a.name,contacts:a.contacts,links:a.links,current_need},changed=JSON.stringify(before)!==JSON.stringify(after),at=now(),reminder=contactReminder(old.type,old.status,a.contacts);
   const statements=[this.guard(a.id,a.expected_version,key)];
-  if(changed)statements.push(this.stmt('UPDATE archives SET name=?,contacts_json=?,links_json=?,version=version+1,updated_at=? WHERE id=?',a.name,JSON.stringify(a.contacts),JSON.stringify(a.links),at,a.id),this.event(a.id,'archive.profile_changed',before,after,at));
-  statements.push(this.stmt('DELETE FROM mutation_guards WHERE id=?',key));return {result:{id:a.id,version:old.version+(changed?1:0),changed,archive_url:this.url(old)},statements};
+  if(changed)statements.push(this.stmt('UPDATE archives SET name=?,contacts_json=?,links_json=?,current_need=?,version=version+1,updated_at=? WHERE id=?',a.name,JSON.stringify(a.contacts),JSON.stringify(a.links),current_need,at,a.id),this.event(a.id,'archive.profile_changed',before,after,at));
+  statements.push(this.stmt('DELETE FROM mutation_guards WHERE id=?',key));return {result:{id:a.id,version:old.version+(changed?1:0),changed,archive_url:this.url(old),contact_reminder:reminder},statements};
  });}
  async events(input:unknown){
   const a=z.object({id:z.uuid(),before:z.coerce.number().int().positive().optional(),limit:z.coerce.number().int().min(1).max(100).default(30)}).parse(input);await this.get(a.id);

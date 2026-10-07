@@ -4,6 +4,7 @@ export type Env = {
   ASSETS: Fetcher;
   ENVIRONMENT: 'staging' | 'production';
   APP_ORIGIN: string;
+  MONTHLY_TASKS_ENABLED?: string;
 };
 export type Actor = {
   id: string; username: string; name: string; role: 'admin' | 'member'; frozen: number;

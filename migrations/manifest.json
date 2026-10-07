@@ -1,6 +1,6 @@
 {
   "format": 1,
-  "count": 24,
+  "count": 26,
   "migrations": {
     "0001_identity.sql": {
       "sha256": "ceb732997de6972d3f88ae3a15b52b4df0def3418cc4b0834cd289ce55daff6a",
@@ -121,6 +121,16 @@
       "sha256": "10d163cdd28981cbf6d77a0fd7921bcfed7269ff6a6aa16f49a2d26b18fba644",
       "backwards_compatible": true,
       "reason": "Adds recipient-scoped task messages with idempotent reads; existing archive reading and task rows remain unchanged."
+    },
+    "0025_work_task_periods.sql": {
+      "sha256": "307000214c2521f8b6c0731e5ac1fa648fb024469ae88cc09d53c2bbef250c36",
+      "backwards_compatible": true,
+      "reason": "Adds a nullable monthly period key and a deduplication index without changing existing task rows."
+    },
+    "0026_archive_current_need.sql": {
+      "sha256": "d14f80fcadef9f7a7e6d85a867064a0ef60ca17fe4ea43fb8882b480d0ffb610",
+      "backwards_compatible": true,
+      "reason": "Adds a nullable-in-practice defaulted current-need field without changing existing archive rows or lifecycle semantics."
     }
   }
 }

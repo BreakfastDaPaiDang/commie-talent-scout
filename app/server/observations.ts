@@ -6,11 +6,12 @@ import {command,requestId,expectedVersion,type Source} from './commands.ts';
 import {Failure,now,uid,type Actor,type Env} from './types.ts';
 import {TagState} from './tag-state.ts';
 import {Images,imageIds,attachmentProjection,type AttachmentInfo} from './images.ts';
+import {monthKeyAt} from '../shared/monthly-tasks.ts';
 
 export const observationBody=z.string().max(100000,'正文最多 100,000 个字符');
 export const occurredAt=z.iso.datetime({offset:true}).nullable();
-export const observationCreateInput=z.object({archive_id:z.uuid(),body:observationBody.default(''),attachment_ids:imageIds.default([]),occurred_at:occurredAt.default(null),request_id:requestId}).strict().refine(a=>!!a.body.trim()||a.attachment_ids.length>0,'正文与图片至少有一项');
-export const observationUpdateInput=z.object({id:z.uuid(),expected_version:expectedVersion,body:observationBody,attachment_ids:imageIds.optional().describe('完整图片列表；省略保留当前图片，空数组明确移除当前图片，旧版本仍保留。'),occurred_at:occurredAt,request_id:requestId}).strict();
+export const observationCreateInput=z.object({archive_id:z.uuid(),body:observationBody.default(''),attachment_ids:imageIds.default([]),occurred_at:occurredAt.default(null),work_task_id:z.uuid().optional().describe('Explicit monthly task link for automatic completion'),request_id:requestId}).strict().refine(a=>!!a.body.trim()||a.attachment_ids.length>0,'正文与图片至少有一项');
+export const observationUpdateInput=z.object({id:z.uuid(),expected_version:expectedVersion,body:observationBody,attachment_ids:imageIds.optional().describe('完整图片列表；省略保留当前图片，空数组明确移除当前图片，旧版本仍保留。'),occurred_at:occurredAt,work_task_id:z.uuid().optional(),request_id:requestId}).strict();
 export const observationStateInput=z.object({id:z.uuid(),expected_version:expectedVersion,request_id:requestId}).strict();
 export type Observation={reading?:ReadDelivery|null;id:string;archive_id:string;author_id:string;author_name:string;created_at:string;updated_at:string;version:number;content_version:number;body:string;occurred_at:string|null;deleted:boolean;deleted_at:string|null;deleted_by:string|null;deleted_by_name:string|null;editable:boolean;deletable:boolean;restorable:boolean;attachments:AttachmentInfo[];author_avatar_url:string};
 type Row=Omit<Observation,'deleted'|'editable'|'deletable'|'restorable'|'attachments'|'author_avatar_url'>&{deleted:number;archive_closed:number;archive_deleted:number;attachments_json:string;author_version:number};
@@ -36,15 +37,33 @@ export class Observations{
   await this.rememberReads([{id,content_version:historical.version}]);return {observation:result};
  }
  private authorizeEdit(o:Observation){if(o.author_id!==this.actor.id&&this.actor.role!=='admin')throw new Failure(403,'AUTHOR_REQUIRED','仅原作者或管理员可以修改这条观察');if(o.deleted)throw new Failure(409,'OBSERVATION_DELETED','记录已删除，请先核对');}
- private openGuard(id:string,key:string){return this.stmt('INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(SELECT 1 FROM archives WHERE id=? AND closed=0 AND deleted=0) THEN 1 ELSE 0 END)',key,id);}
- private recordGuard(id:string,version:number,key:string){return this.stmt('INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(SELECT 1 FROM observations WHERE id=? AND version=? AND deleted=0) THEN 1 ELSE 0 END)',key,id,version);}
- private touch(id:string,at:string){return this.stmt('UPDATE archives SET version=version+1,updated_at=? WHERE id=?',at,id);}
- async create(input:unknown){const a=observationCreateInput.parse(input);return command(this.env,this.actor,{requestId:a.request_id,operation:'observation.create',parameters:{...a,attachment_ids:a.attachment_ids.length?a.attachment_ids:undefined,request_id:undefined}},async()=>{
-  const archive=await this.archives.get(a.archive_id,undefined,true);const id=uid(),at=now(),key=uid(),images=await this.images.planVersion(a.attachment_ids,a.archive_id,id,1);
+  private openGuard(id:string,key:string){return this.stmt('INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(SELECT 1 FROM archives WHERE id=? AND closed=0 AND deleted=0) THEN 1 ELSE 0 END)',key,id);}
+  private recordGuard(id:string,version:number,key:string){return this.stmt('INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(SELECT 1 FROM observations WHERE id=? AND version=? AND deleted=0) THEN 1 ELSE 0 END)',key,id,version);}
+  private touch(id:string,at:string){return this.stmt('UPDATE archives SET version=version+1,updated_at=? WHERE id=?',at,id);}
+  private async monthlyTask(workTaskId:string,archiveId:string,occurredAt:string|null){
+   const task=await this.stmt("SELECT id,archive_id,kind,status,owner_id,version,period_key,deadline_at FROM work_tasks WHERE id=?",workTaskId).first<{id:string;archive_id:string;kind:string;status:string;owner_id:string|null;version:number;period_key:string|null;deadline_at:string}>();
+   if(!task||task.archive_id!==archiveId||task.kind!=='monthly')throw new Failure(409,'TASK_NOT_MONTHLY','只能关联同一档案的月度任务');
+   if(task.status!=='open')throw new Failure(409,'TASK_NOT_OPEN','关联任务已经结束');
+   if(task.owner_id!==this.actor.id)throw new Failure(403,'TASK_OWNER_REQUIRED','只有当前负责人可以自动完成任务');
+   if(Date.parse(task.deadline_at)<=Date.now())throw new Failure(409,'TASK_EXPIRED','关联任务已经到期');
+   if(!task.period_key||monthKeyAt(occurredAt?new Date(occurredAt):new Date())!==task.period_key)throw new Failure(409,'TASK_PERIOD_MISMATCH','观察发生月份与关联任务不一致');
+   return task;
+  }
+  private autoCompleteTask(task:{id:string;version:number;owner_id:string|null},observationId:string,contentVersion:number,at:string){
+   const key=uid(),resultText='通过关联档案观察自动完成；详情见档案记录。',after={status:'completed',owner_id:task.owner_id,result_kind:'completed',result_text:resultText,reference_count:1,version:task.version+1};
+   return [
+    this.stmt("INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(SELECT 1 FROM work_tasks WHERE id=? AND version=? AND status='open' AND owner_id=?) THEN 1 ELSE 0 END)",key,task.id,task.version,this.actor.id),
+    this.stmt("UPDATE work_tasks SET status='completed',result_kind='completed',result_text=?,result_references_json=?,completed_at=?,updated_at=?,version=version+1 WHERE id=? AND version=? AND status='open' AND owner_id=?",resultText,JSON.stringify([{observation_id:observationId,content_version:contentVersion}]),at,at,task.id,task.version,this.actor.id),
+    this.stmt('INSERT INTO work_task_events(id,task_id,actor_id,source,kind,before_json,after_json,reason,created_at) VALUES(?,?,?,?,?,?,?,?,?)',uid(),task.id,this.actor.id,this.source,'task.completed',JSON.stringify({status:'open',owner_id:task.owner_id,version:task.version}),JSON.stringify(after),'automatic archive observation',at),
+    this.stmt('DELETE FROM mutation_guards WHERE id=?',key),
+   ];
+  }
+  async create(input:unknown){const a=observationCreateInput.parse(input);return command(this.env,this.actor,{requestId:a.request_id,operation:'observation.create',parameters:{...a,attachment_ids:a.attachment_ids.length?a.attachment_ids:undefined,request_id:undefined}},async()=>{
+   const archive=await this.archives.get(a.archive_id,undefined,true);const id=uid(),at=now(),key=uid(),images=await this.images.planVersion(a.attachment_ids,a.archive_id,id,1),monthly=a.work_task_id?await this.monthlyTask(a.work_task_id,a.archive_id,a.occurred_at):null;
   return {result:{id,archive_id:a.archive_id,archive_url:this.archives.url(archive),version:1,content_version:1,changed:true},statements:[
    this.openGuard(a.archive_id,key),this.stmt('INSERT INTO observations(id,archive_id,author_id,created_at,updated_at) VALUES(?,?,?,?,?)',id,a.archive_id,this.actor.id,at,at),
    this.stmt('INSERT INTO observation_versions(observation_id,version,body,occurred_at,editor_id,created_at) VALUES(?,1,?,?,?,?)',id,a.body,a.occurred_at,this.actor.id,at),...images.statements,this.touch(a.archive_id,at),
-   this.archives.event(a.archive_id,'observation.created',null,{id,content_version:1},at,id),...images.cleanup,this.stmt('DELETE FROM mutation_guards WHERE id=?',key),
+    this.archives.event(a.archive_id,'observation.created',null,{id,content_version:1},at,id),...images.cleanup,...(monthly?this.autoCompleteTask(monthly,id,1,at):[]),this.stmt('DELETE FROM mutation_guards WHERE id=?',key),
   ]};
  });}
  async update(input:unknown){
@@ -53,11 +72,11 @@ export class Observations{
    const old=await this.get(a.id);this.authorizeEdit(old);const archive=await this.archives.get(old.archive_id,undefined,true);
    if(old.version!==a.expected_version)throw new Failure(409,'VERSION_CONFLICT','观察已被更新，请重新读取后核对');
    const ids=a.attachment_ids??old.attachments.map(im=>im.id);if(!a.body.trim()&&!ids.length)throw new Failure(400,'EMPTY_OBSERVATION','正文与图片至少有一项');
-   const key=uid(),recordKey=uid(),changed=a.body!==old.body||a.occurred_at!==old.occurred_at||JSON.stringify(ids)!==JSON.stringify(old.attachments.map(im=>im.id)),at=now();
+   const key=uid(),recordKey=uid(),changed=a.body!==old.body||a.occurred_at!==old.occurred_at||JSON.stringify(ids)!==JSON.stringify(old.attachments.map(im=>im.id)),at=now(),monthly=a.work_task_id?await this.monthlyTask(a.work_task_id,old.archive_id,a.occurred_at):null;
    const images=changed?await this.images.planVersion(ids,old.archive_id,a.id,old.content_version+1):{statements:[],cleanup:[]};
    const statements=[this.openGuard(old.archive_id,key),this.recordGuard(a.id,a.expected_version,recordKey)];
    if(changed)statements.push(this.stmt('INSERT INTO observation_versions(observation_id,version,body,occurred_at,editor_id,created_at) VALUES(?,?,?,?,?,?)',a.id,old.content_version+1,a.body,a.occurred_at,this.actor.id,at),...images.statements,this.stmt('UPDATE observations SET version=version+1,content_version=content_version+1,updated_at=? WHERE id=?',at,a.id),this.touch(old.archive_id,at),this.archives.event(old.archive_id,'observation.edited',{id:a.id,content_version:old.content_version},{id:a.id,content_version:old.content_version+1},at,a.id));
-   statements.push(...images.cleanup,this.stmt('DELETE FROM mutation_guards WHERE id IN (?,?)',key,recordKey));
+   statements.push(...images.cleanup,...(monthly?this.autoCompleteTask(monthly,a.id,changed?old.content_version+1:old.content_version,at):[]),this.stmt('DELETE FROM mutation_guards WHERE id IN (?,?)',key,recordKey));
    return {result:{id:a.id,archive_id:old.archive_id,archive_url:this.archives.url(archive),version:old.version+(changed?1:0),content_version:old.content_version+(changed?1:0),changed},statements};
   });
  }

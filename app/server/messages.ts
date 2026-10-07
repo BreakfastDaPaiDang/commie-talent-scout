@@ -12,7 +12,7 @@ export class Messages {
   return [`(${alias}.task_id IS NULL OR EXISTS(SELECT 1 FROM work_tasks mt LEFT JOIN archives ma ON ma.id=mt.archive_id WHERE mt.id=${alias}.task_id AND (mt.archive_id IS NULL OR ma.deleted=0 OR ?='admin')))` ,[this.actor.role]];
  }
  private active(alias='m'){
-  return `(${alias}.task_id IS NULL OR (${alias}.kind='task_deadline_reminder' AND t.status='open' AND t.owner_id=${alias}.recipient_id AND t.version=${alias}.task_version AND t.deadline_at=${alias}.deadline_at AND t.deadline_at>? OR ${alias}.kind='task_expired_uncompleted' AND t.status='expired' AND t.owner_id=${alias}.recipient_id AND t.version=${alias}.task_version))`;
+  return `(${alias}.task_id IS NULL OR (${alias}.kind='task_deadline_reminder' AND t.status='open' AND t.owner_id=${alias}.recipient_id AND t.version=${alias}.task_version AND t.deadline_at=${alias}.deadline_at AND t.deadline_at>? OR ${alias}.kind='task_expired_uncompleted' AND t.status='expired' AND t.owner_id=${alias}.recipient_id AND t.version=${alias}.task_version OR ${alias}.kind='archive_status_changed' AND t.status='open' AND t.owner_id=${alias}.recipient_id AND t.version=${alias}.task_version))`;
  }
  async list(input:unknown={}){
   const a=messageListInput.parse(input),visibility=this.visible(),where=[`m.recipient_id=?`,`EXISTS(SELECT 1 FROM members recipient WHERE recipient.id=m.recipient_id AND recipient.frozen=0)`,`(${this.active('m')})`,visibility[0]];

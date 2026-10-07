@@ -4,14 +4,18 @@ import {command,expectedVersion,requestId,type Source} from './commands.ts';
 import {Failure,now,uid,type Actor,type Env} from './types.ts';
 import {matchesPreference,pushCandidates,pushStage,type PushableTaskKind} from '../shared/task-preferences.ts';
 import {TagState,type TagLabel} from './tag-state.ts';
-import {isMemberStatus} from '../shared/archive-states.ts';
+import {isMemberStatus,memberStatuses} from '../shared/archive-states.ts';
 import {Archives} from './archives.ts';
 import {auditCancellationTarget,planArchiveEffects} from './rules/archive-lifecycle.ts';
+import {monthDeadline,monthKey,monthKeyAt} from '../shared/monthly-tasks.ts';
 
 const taskKinds=['audit','onboarding','monthly','cooperation','custom'] as const;
 export const TASK_REMINDER_WINDOW_MS=24*60*60*1000;
 export const workTaskCommentReferenceInput=z.object({observation_id:z.uuid(),content_version:z.number().int().min(1)}).strict();
-export const workTaskCreateInput=z.object({archive_id:z.uuid().nullable().default(null),kind:z.enum(taskKinds),title:z.string().trim().min(1).max(160),purpose:z.string().trim().min(1).max(4000),delivery:z.string().trim().min(1).max(4000),deadline_at:z.string().datetime(),source:z.enum(['manual','rule']).default('manual'),request_id:requestId}).strict();
+const monthlyKeyInput=z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/,'月份必须使用 YYYY-MM 格式');
+export const workTaskCreateInput=z.object({archive_id:z.uuid().nullable().default(null),kind:z.enum(taskKinds),title:z.string().trim().min(1).max(160),purpose:z.string().trim().min(1).max(4000),delivery:z.string().trim().min(1).max(4000),deadline_at:z.string().datetime(),source:z.enum(['manual','rule']).default('manual'),period_key:monthlyKeyInput.optional(),request_id:requestId}).strict();
+export const monthlyPreviewInput=z.object({month:monthlyKeyInput.optional()}).strict();
+export const monthlyGenerateInput=z.object({month:monthlyKeyInput.optional(),request_id:requestId}).strict();
 export const workTaskClaimInput=z.object({id:z.uuid(),expected_version:expectedVersion,request_id:requestId}).strict();
 export const workTaskAssignInput=z.object({id:z.uuid(),member_id:z.uuid(),expected_version:expectedVersion,reason:z.string().trim().min(1).max(500),request_id:requestId}).strict();
 export const workTaskCompleteInput=z.object({id:z.uuid(),expected_version:expectedVersion,result_kind:z.enum(['completed','continue','not_suitable','unable_to_contact','joined','discarded']),result_text:z.string().trim().min(1).max(5000),references:z.array(workTaskCommentReferenceInput).max(20).default([]),request_id:requestId}).strict();
@@ -26,7 +30,7 @@ export const workTaskCommentDeleteInput=z.object({id:z.uuid(),expected_version:e
 export const workTaskCommentRestoreInput=z.object({id:z.uuid(),expected_version:expectedVersion,request_id:requestId}).strict();
 export const workTaskReferInput=z.object({archive_id:z.uuid(),expected_version:expectedVersion,deadline_at:z.string().datetime(),request_id:requestId}).strict();
 export const workTaskMembershipInput=z.object({archive_id:z.uuid(),expected_version:expectedVersion,deadline_at:z.string().datetime(),request_id:requestId}).strict();
-type Row={id:string;archive_id:string|null;kind:typeof taskKinds[number];title:string;purpose:string;delivery:string;source:'manual'|'rule';status:'open'|'completed'|'expired'|'cancelled';owner_id:string|null;deadline_at:string;created_by:string;created_at:string;updated_at:string;version:number;result_kind:string|null;result_text:string|null;result_references_json:string;completed_at:string|null;closed_reason:string|null};
+type Row={id:string;archive_id:string|null;kind:typeof taskKinds[number];title:string;purpose:string;delivery:string;source:'manual'|'rule';status:'open'|'completed'|'expired'|'cancelled';owner_id:string|null;deadline_at:string;created_by:string;created_at:string;updated_at:string;version:number;result_kind:string|null;result_text:string|null;result_references_json:string;completed_at:string|null;closed_reason:string|null;period_key:string|null};
 type CommentRow={id:string;task_id:string;author_id:string;author_name:string|null;body:string;references_json:string;created_at:string;updated_at:string;deleted_at:string|null;version:number};
 type CommentVersionRow={comment_id:string;task_id:string;version:number;actor_id:string|null;source:'web'|'mcp'|'system';body:string;references_json:string;deleted_at:string|null;created_at:string};
 
@@ -82,11 +86,18 @@ export class WorkTasks {
   }
   async create(input:unknown){
     const a=workTaskCreateInput.parse(input);
-    return command(this.env,this.actor,{requestId:a.request_id,operation:'work_task.create',parameters:{archive_id:a.archive_id,kind:a.kind,title:a.title,purpose:a.purpose,delivery:a.delivery,deadline_at:a.deadline_at,source:a.source}},async()=>{
+    return command(this.env,this.actor,{requestId:a.request_id,operation:'work_task.create',parameters:{archive_id:a.archive_id,kind:a.kind,title:a.title,purpose:a.purpose,delivery:a.delivery,deadline_at:a.deadline_at,source:a.source,period_key:a.period_key}},async()=>{
       if(a.deadline_at<=now())throw new Failure(400,'DEADLINE_REQUIRED','开启任务必须有未来期限');
+      if(a.kind==='monthly'&&!a.period_key)throw new Failure(400,'MONTH_REQUIRED','Monthly task requires a period');
+      if(a.kind==='monthly'&&!a.archive_id)throw new Failure(400,'MONTH_ARCHIVE_REQUIRED','Monthly tasks must be linked to an archive');
+      if(a.kind==='monthly'&&Date.parse(a.deadline_at)!==Date.parse(monthDeadline(a.period_key!)))throw new Failure(400,'MONTH_DEADLINE_REQUIRED','Monthly tasks must end at the month deadline');
+      if(a.kind==='monthly'){
+        const existing=await this.stmt("SELECT * FROM work_tasks WHERE archive_id=? AND kind='monthly' AND period_key=?",a.archive_id,a.period_key).first<Row>();
+        if(existing)return {result:{...existing,changed:false,reused:true},statements:[]};
+      }
       if(a.archive_id){const archive=await this.stmt('SELECT closed,deleted,status FROM archives WHERE id=?',a.archive_id).first<{closed:number;deleted:number;status:string}>();if(!archive)throw new Failure(404,'ARCHIVE_NOT_FOUND','关联档案不存在');if(archive.deleted)throw new Failure(404,'ARCHIVE_NOT_FOUND','Linked archive is unavailable');if(archive.closed)throw new Failure(409,'ARCHIVE_CLOSED','关闭档案不能创建工作任务');}
-      const id=uid(),at=now(),result={id,archive_id:a.archive_id,kind:a.kind,title:a.title,purpose:a.purpose,delivery:a.delivery,source:a.source,status:'open',owner_id:null,deadline_at:a.deadline_at,created_at:at,updated_at:at,version:1,changed:true};
-      return {result,statements:[this.stmt('INSERT INTO work_tasks(id,archive_id,kind,title,purpose,delivery,source,status,deadline_at,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',id,a.archive_id,a.kind,a.title,a.purpose,a.delivery,a.source,'open',a.deadline_at,this.actor.id,at,at),this.event(id,'task.created',null,result)]};
+      const id=uid(),at=now(),result={id,archive_id:a.archive_id,kind:a.kind,title:a.title,purpose:a.purpose,delivery:a.delivery,source:a.source,status:'open' as const,owner_id:null,deadline_at:a.deadline_at,period_key:a.period_key??null,created_by:this.actor.id,created_at:at,updated_at:at,version:1,result_kind:null,result_text:null,result_references_json:'[]',completed_at:null,closed_reason:null,changed:true,reused:false};
+      return {result,statements:[this.stmt('INSERT INTO work_tasks(id,archive_id,kind,title,purpose,delivery,source,status,deadline_at,created_by,created_at,updated_at,period_key) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)',id,a.archive_id,a.kind,a.title,a.purpose,a.delivery,a.source,'open',a.deadline_at,this.actor.id,at,at,a.period_key??null),this.event(id,'task.created',null,result)]};
     });
   }
   async list(input:unknown={}){
@@ -218,6 +229,7 @@ export class WorkTasks {
     const a=workTaskReopenInput.parse(input),admin=this.actor.role==='admin';
     return command(this.env,this.actor,{requestId:a.request_id,operation:'work_task.reopen',parameters:{id:a.id,expected_version:a.expected_version,deadline_at:a.deadline_at,owner_mode:a.owner_mode,reason:a.reason},requireAdmin:admin&&a.owner_mode==='unassigned'},async()=>{
       const task=await this.get(a.id,a.expected_version);if(!['expired','cancelled'].includes(task.status))throw new Failure(409,'TASK_NOT_REOPENABLE','只有已过期或已取消的任务可以重新开启');
+      if(task.archive_id){const archive=await this.stmt('SELECT closed,deleted FROM archives WHERE id=?',task.archive_id).first<{closed:number;deleted:number}>();if(!archive||archive.deleted)throw new Failure(404,'ARCHIVE_NOT_FOUND','关联档案不存在');if(archive.closed)throw new Failure(409,'ARCHIVE_CLOSED','请先重新开启关联档案');}
       if(Date.parse(a.deadline_at)<=Date.now())throw new Failure(400,'DEADLINE_REQUIRED','重新开启必须给出未来截止时间');
       if(a.owner_mode==='keep'&&(this.actor.role!=='admin'&&task.owner_id!==this.actor.id))throw new Failure(403,'TASK_OWNER_REQUIRED','只有原负责人可以保留负责人身份重新开启');
       if(a.owner_mode==='keep'&&this.actor.role==='admin'&&task.owner_id!==this.actor.id)throw new Failure(403,'TASK_OWNER_REQUIRED','管理员为他人重新开启时应明确退回待领取');
@@ -309,6 +321,48 @@ export class WorkTasks {
       const taskId=uid(),key=uid(),at=now(),nextVersion=archive.version+1,task={id:taskId,archive_id:a.archive_id,kind:'onboarding',title:`${archive.name} · 入社对接`,purpose:'向新社员介绍组织与参与方式，落实后续联系和参与安排。',delivery:'提交对接期间的结果，并记录未解决事项或后续安排。',source:'rule',status:'open',owner_id:null,deadline_at:a.deadline_at,created_at:at,updated_at:at,version:1};
       return {result:{id:taskId,task_id:taskId,archive_id:a.archive_id,status:'open',archive_status:'已加入待对接',archive_version:nextVersion,reused:false,changed:true},statements:[this.stmt('INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(SELECT 1 FROM archives WHERE id=? AND version=? AND deleted=0 AND closed=0) THEN 1 ELSE 0 END)',key,a.archive_id,a.expected_version),this.stmt("UPDATE archives SET status='已加入待对接',closed=0,version=version+1,updated_at=? WHERE id=? AND version=? AND deleted=0 AND closed=0",at,a.archive_id,a.expected_version),this.stmt('INSERT INTO work_tasks(id,archive_id,kind,title,purpose,delivery,source,status,deadline_at,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',taskId,a.archive_id,task.kind,task.title,task.purpose,task.delivery,task.source,'open',task.deadline_at,this.actor.id,at,at),this.stmt('INSERT INTO archive_events(id,archive_id,actor_id,source,kind,before_json,after_json,created_at) VALUES(?,?,?,?,?,?,?,?)',uid(),a.archive_id,this.actor.id,this.source,'archive.membership_confirmed',JSON.stringify({status:archive.status,audit_task_id:audit.id}),JSON.stringify({status:'已加入待对接',task_id:taskId}),at),this.event(taskId,'task.created',null,task),this.stmt('DELETE FROM mutation_guards WHERE id=?',key)]};
     });
+  }
+  private async monthlyTargets(month:string){
+    const rows=await this.stmt(`SELECT a.id,a.type,a.name,a.status,a.version,
+      (SELECT id FROM work_tasks t WHERE t.archive_id=a.id AND t.kind='monthly' AND t.period_key=?) existing_task_id
+      FROM archives a
+      WHERE a.deleted=0 AND a.closed=0 AND ((a.type='person' AND a.status IN (?,?)) OR (a.type='person' AND a.status NOT IN (?,?)) OR a.type='org')
+      ORDER BY a.name,a.id`,month,memberStatuses[0],memberStatuses[1],memberStatuses[0],memberStatuses[1]).all<{id:string;type:'person'|'org';name:string;status:string;version:number;existing_task_id:string|null}>();
+    return rows.results;
+  }
+  private async monthlyTasks(month:string){
+    return (await this.stmt(`SELECT t.*,a.type archive_type,a.name archive_name,(SELECT name FROM members WHERE id=t.owner_id) owner_name
+      FROM work_tasks t LEFT JOIN archives a ON a.id=t.archive_id WHERE t.kind='monthly' AND t.period_key=? AND (a.deleted=0 OR ?='admin')
+      ORDER BY t.created_at,t.id`,month,this.actor.role).all()).results;
+  }
+  async previewMonthly(input:unknown={}){
+    assertAdmin(this.actor);const a=monthlyPreviewInput.parse(input),month=monthKey(a.month??monthKeyAt()),targets=await this.monthlyTargets(month);
+    return {month,deadline_at:monthDeadline(month),archives:targets.map(target=>({id:target.id,type:target.type,name:target.name,status:target.status,existing_task_id:target.existing_task_id}))};
+  }
+  async generateScheduledMonthly(){
+    if(this.env.MONTHLY_TASKS_ENABLED!=='true')return null;
+    return this.generateMonthly({request_id:uid()});
+  }
+  async generateMonthly(input:unknown){
+    assertAdmin(this.actor);const a=monthlyGenerateInput.parse(input),month=monthKey(a.month??monthKeyAt()),deadline=monthDeadline(month),targets=await this.monthlyTargets(month);
+    const newTargets=targets.filter(target=>!target.existing_task_id);
+    const generated=await command(this.env,this.actor,{requestId:a.request_id,operation:'work_task.generate_monthly',parameters:{month}},async()=>{
+      const at=now(),statements:D1PreparedStatement[]=[];
+      for(const target of targets){
+        const key=uid(),taskId=uid(),member=target.type==='person'&&isMemberStatus(target.status);
+        const title=`${target.name} · ${month} ${member?'月度沟通':'月度观察'}`;
+        const purpose=member?'了解近期生活、参与、困难、需要支持或想调整的事项，结合已有联系自然交流；联系不到也如实记录。':'了解近期变化、联系与需求，把有用结果写入关联档案；没有适用资料时如实交代。';
+        const delivery='将本次跟进结果及后续关注事项写入关联档案的观察记录；无需在任务评论重复提交。';
+        statements.push(this.stmt('INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(SELECT 1 FROM archives WHERE id=? AND version=? AND deleted=0 AND closed=0 AND status=?) THEN 1 ELSE 0 END)',key,target.id,target.version,target.status));
+        statements.push(this.stmt('INSERT OR IGNORE INTO work_tasks(id,archive_id,kind,title,purpose,delivery,source,status,deadline_at,created_by,created_at,updated_at,period_key) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)',taskId,target.id,'monthly',title,purpose,delivery,'rule','open',deadline,this.actor.id,at,at,month));
+        statements.push(this.stmt(`INSERT INTO work_task_events(id,task_id,actor_id,source,kind,before_json,after_json,reason,created_at)
+          SELECT ?,t.id,?,?,'task.created',NULL,?,NULL,? FROM work_tasks t
+          WHERE t.id=? AND NOT EXISTS(SELECT 1 FROM work_task_events e WHERE e.task_id=t.id AND e.kind='task.created')`,uid(),this.actor.id,this.source,JSON.stringify({kind:'monthly',period_key:month,deadline_at:deadline}),at,taskId));
+        statements.push(this.stmt('DELETE FROM mutation_guards WHERE id=?',key));
+      }
+      return {result:{month,deadline_at:deadline,eligible_count:targets.length,created_count:newTargets.length,changed:newTargets.length>0},statements};
+    });
+    return {...generated,tasks:await this.monthlyTasks(month)};
   }
   async assign(input:unknown){
     assertAdmin(this.actor);const a=workTaskAssignInput.parse(input);
