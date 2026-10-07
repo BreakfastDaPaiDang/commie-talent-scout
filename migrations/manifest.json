@@ -1,6 +1,6 @@
 {
   "format": 1,
-  "count": 23,
+  "count": 24,
   "migrations": {
     "0001_identity.sql": {
       "sha256": "ceb732997de6972d3f88ae3a15b52b4df0def3418cc4b0834cd289ce55daff6a",
@@ -116,6 +116,11 @@
       "sha256": "e905840dd7610c25e6f2a3321dbaaa5286c6609c8a98068dcb408516eb248d31",
       "backwards_compatible": true,
       "reason": "Adds immutable task comment versions and backfills the current comment state without changing existing comment rows."
+    },
+    "0024_messages.sql": {
+      "sha256": "10d163cdd28981cbf6d77a0fd7921bcfed7269ff6a6aa16f49a2d26b18fba644",
+      "backwards_compatible": true,
+      "reason": "Adds recipient-scoped task messages with idempotent reads; existing archive reading and task rows remain unchanged."
     }
   }
 }

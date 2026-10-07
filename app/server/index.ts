@@ -24,6 +24,7 @@ import {Images,cleanupImages} from './images.ts';
 import {Materials,cleanupMaterials} from './materials.ts';
 import {Avatars} from './avatars.ts';
 import {WorkTasks} from './work-tasks.ts';
+import {Messages} from './messages.ts';
 
 const app=new Hono<{Bindings:Env}>();
 app.use('/api/*',bodyLimit({maxSize:1024*1024,onError:c=>c.json({error:{code:'REQUEST_TOO_LARGE',message:'请求内容过大'}},413)}));
@@ -112,6 +113,9 @@ app.get('/api/reading',async c=>c.json(await new Reading(c.env,await authenticat
 app.get('/api/reading/events',async c=>c.json(await new Reading(c.env,await authenticate(c.req.raw,c.env)).list(c.req.query())));
 app.post('/api/reading/confirm',async c=>c.json(await new Reading(c.env,await authenticate(c.req.raw,c.env)).confirm(await c.req.json())));
 app.post('/api/reading/archive',async c=>c.json(await new ArchiveReading(c.env,await authenticate(c.req.raw,c.env)).confirm(await c.req.json())));
+app.get('/api/messages',async c=>c.json(await new Messages(c.env,await authenticate(c.req.raw,c.env)).list(c.req.query())));
+app.get('/api/messages/summary',async c=>c.json(await new Messages(c.env,await authenticate(c.req.raw,c.env)).summary()));
+app.post('/api/messages/read',async c=>c.json(await new Messages(c.env,await authenticate(c.req.raw,c.env)).markRead(await c.req.json())));
 app.get('/api/events/:id',async c=>c.json(await new Observations(c.env,await authenticate(c.req.raw,c.env),'web').event(c.req.param('id'))));
 app.get('/api/observations',async c=>c.json(await new Observations(c.env,await authenticate(c.req.raw,c.env),'web').list(c.req.query())));
 app.get('/api/observations/:id/versions',async c=>c.json(await new Observations(c.env,await authenticate(c.req.raw,c.env),'web').versions({...c.req.query(),id:c.req.param('id')})));

@@ -9,6 +9,7 @@ import {Archives} from './archives.ts';
 import {auditCancellationTarget,planArchiveEffects} from './rules/archive-lifecycle.ts';
 
 const taskKinds=['audit','onboarding','monthly','cooperation','custom'] as const;
+export const TASK_REMINDER_WINDOW_MS=24*60*60*1000;
 export const workTaskCommentReferenceInput=z.object({observation_id:z.uuid(),content_version:z.number().int().min(1)}).strict();
 export const workTaskCreateInput=z.object({archive_id:z.uuid().nullable().default(null),kind:z.enum(taskKinds),title:z.string().trim().min(1).max(160),purpose:z.string().trim().min(1).max(4000),delivery:z.string().trim().min(1).max(4000),deadline_at:z.string().datetime(),source:z.enum(['manual','rule']).default('manual'),request_id:requestId}).strict();
 export const workTaskClaimInput=z.object({id:z.uuid(),expected_version:expectedVersion,request_id:requestId}).strict();
@@ -276,7 +277,13 @@ export class WorkTasks {
   }
   async expire(at=now()){
     const rows=await this.stmt("SELECT * FROM work_tasks WHERE status='open' AND deadline_at<=? ORDER BY deadline_at,id",at).all<Row>();
-    const statements:D1PreparedStatement[]=[];for(const task of rows.results){const key=uid();statements.push(this.stmt("INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(SELECT 1 FROM work_tasks WHERE id=? AND version=? AND status='open' AND deadline_at<=?) THEN 1 ELSE 0 END)",key,task.id,task.version,at),this.stmt("UPDATE work_tasks SET status='expired',closed_reason='超过截止时间',updated_at=?,version=version+1 WHERE id=? AND version=? AND status='open' AND deadline_at<=?",at,task.id,task.version,at),this.stmt('INSERT INTO work_task_events(id,task_id,actor_id,source,kind,before_json,after_json,reason,created_at) VALUES(?,?,?,?,?,?,?,?,?)',uid(),task.id,this.actor.id,'system','task.expired',JSON.stringify({status:task.status,owner_id:task.owner_id,deadline_at:task.deadline_at,version:task.version}),JSON.stringify({status:'expired',owner_id:task.owner_id,version:task.version+1}),null,at),this.stmt('DELETE FROM mutation_guards WHERE id=?',key));}
+    const statements:D1PreparedStatement[]=[];
+    for(const task of rows.results){
+      const key=uid(),owned=!!task.owner_id,reason=owned?'completion_deadline_missed':'claim_deadline_missed';
+      statements.push(this.stmt("INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(SELECT 1 FROM work_tasks WHERE id=? AND version=? AND status='open' AND deadline_at<=?) THEN 1 ELSE 0 END)",key,task.id,task.version,at),this.stmt("UPDATE work_tasks SET status='expired',closed_reason=?,updated_at=?,version=version+1 WHERE id=? AND version=? AND status='open' AND deadline_at<=?",reason,at,task.id,task.version,at));
+      if(owned)statements.push(this.stmt("INSERT OR IGNORE INTO messages(id,recipient_id,kind,task_id,object_type,object_id,title,body,task_version,deadline_at,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)",uid(),task.owner_id,'task_expired_uncompleted',task.id,'work_task',task.id,'任务已逾期未完成','负责人未在完成期限前提交结果。',task.version+1,task.deadline_at,at));
+      statements.push(this.stmt('INSERT INTO work_task_events(id,task_id,actor_id,source,kind,before_json,after_json,reason,created_at) VALUES(?,?,?,?,?,?,?,?,?)',uid(),task.id,this.actor.id,'system','task.expired',JSON.stringify({status:task.status,owner_id:task.owner_id,deadline_at:task.deadline_at,version:task.version}),JSON.stringify({status:'expired',owner_id:task.owner_id,closed_reason:reason,version:task.version+1}),reason,at),this.stmt('DELETE FROM mutation_guards WHERE id=?',key));
+    }
     if(statements.length)await this.env.DB.batch(statements);return {count:rows.results.length};
   }
   async refer(input:unknown){
@@ -313,8 +320,21 @@ export class WorkTasks {
     });
   }
   async duePushes(at=now()){
-    const rows=await this.stmt("SELECT * FROM work_tasks WHERE status='open' AND owner_id IS NULL AND created_at<=?",at).all<Row>();const statements:D1PreparedStatement[]=[];let count=0;
-    for(const task of rows.results){const stage=pushStage(this.pushable(task),at);if(stage==='admin')continue;const members=await this.candidates(task);for(const member of members){const exists=await this.stmt('SELECT 1 FROM work_task_pushes WHERE task_id=? AND member_id=? AND stage=?',task.id,member.id,stage).first();if(!exists){statements.push(this.stmt('INSERT INTO work_task_pushes(id,task_id,member_id,stage,pushed_at) VALUES(?,?,?,?,?)',uid(),task.id,member.id,stage,at));count++;}}}
+    const rows=await this.stmt("SELECT * FROM work_tasks WHERE status='open' AND owner_id IS NULL AND created_at<=?",at).all<Row>();
+    const statements:D1PreparedStatement[]=[];let count=0;
+    for(const task of rows.results){
+      const stage=pushStage(this.pushable(task),at);if(stage==='admin')continue;
+      const members=await this.candidates(task);for(const member of members){
+        const exists=await this.stmt('SELECT 1 FROM work_task_pushes WHERE task_id=? AND member_id=? AND stage=?',task.id,member.id,stage).first();
+        if(!exists){statements.push(this.stmt('INSERT INTO work_task_pushes(id,task_id,member_id,stage,pushed_at) VALUES(?,?,?,?,?)',uid(),task.id,member.id,stage,at));count++;}
+      }
+    }
+    const deadline=new Date(Date.parse(at)+TASK_REMINDER_WINDOW_MS).toISOString();
+    const owned=await this.stmt("SELECT t.* FROM work_tasks t JOIN members m ON m.id=t.owner_id AND m.frozen=0 WHERE t.status='open' AND t.owner_id IS NOT NULL AND t.deadline_at>? AND t.deadline_at<=?",at,deadline).all<Row>();
+    for(const task of owned.results){
+      const exists=await this.stmt("SELECT 1 FROM messages WHERE recipient_id=? AND kind='task_deadline_reminder' AND object_type='work_task' AND object_id=? AND deadline_at=?",task.owner_id,task.id,task.deadline_at).first();
+      if(!exists){statements.push(this.stmt("INSERT OR IGNORE INTO messages(id,recipient_id,kind,task_id,object_type,object_id,title,body,task_version,deadline_at,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)",uid(),task.owner_id,'task_deadline_reminder',task.id,'work_task',task.id,'任务即将到期',`当前任务将在 ${task.deadline_at} 到期，请在期限前提交结果或主动延长期限。`,task.version,task.deadline_at,at));count++;}
+    }
     if(statements.length)await this.env.DB.batch(statements);return {count};
   }
 }
