@@ -155,6 +155,13 @@ app.post('/api/work-tasks/create',async c=>c.json(await new WorkTasks(c.env,awai
 app.post('/api/work-tasks/claim',async c=>c.json(await new WorkTasks(c.env,await authenticate(c.req.raw,c.env),'web').claim(await c.req.json())));
 app.post('/api/work-tasks/assign',async c=>c.json(await new WorkTasks(c.env,await authenticate(c.req.raw,c.env),'web').assign(await c.req.json())));
 app.get('/api/work-tasks/:id',async c=>c.json(await new WorkTasks(c.env,await authenticate(c.req.raw,c.env),'web').detail(c.req.param('id'))));
+app.post('/api/work-tasks/edit',async c=>c.json(await new WorkTasks(c.env,await authenticate(c.req.raw,c.env),'web').edit(await c.req.json())));
+app.post('/api/work-tasks/extend',async c=>c.json(await new WorkTasks(c.env,await authenticate(c.req.raw,c.env),'web').extend(await c.req.json())));
+app.post('/api/work-tasks/reopen',async c=>c.json(await new WorkTasks(c.env,await authenticate(c.req.raw,c.env),'web').reopen(await c.req.json())));
+app.post('/api/work-tasks/comments/create',async c=>c.json(await new WorkTasks(c.env,await authenticate(c.req.raw,c.env),'web').addComment(await c.req.json())));
+app.post('/api/work-tasks/comments/edit',async c=>c.json(await new WorkTasks(c.env,await authenticate(c.req.raw,c.env),'web').editComment(await c.req.json())));
+app.post('/api/work-tasks/comments/delete',async c=>c.json(await new WorkTasks(c.env,await authenticate(c.req.raw,c.env),'web').deleteComment(await c.req.json())));
+app.post('/api/work-tasks/comments/restore',async c=>c.json(await new WorkTasks(c.env,await authenticate(c.req.raw,c.env),'web').restoreComment(await c.req.json())));
 app.post('/api/work-tasks/complete',async c=>c.json(await new WorkTasks(c.env,await authenticate(c.req.raw,c.env),'web').complete(await c.req.json())));
 app.post('/api/work-tasks/release',async c=>c.json(await new WorkTasks(c.env,await authenticate(c.req.raw,c.env),'web').release(await c.req.json())));
 app.post('/api/work-tasks/cancel',async c=>c.json(await new WorkTasks(c.env,await authenticate(c.req.raw,c.env),'web').cancel(await c.req.json())));
@@ -177,7 +184,7 @@ export default {
   async scheduled(_event:ScheduledController,env:Env) {
     await cleanupJournal(env);
     const pushActor=await env.DB.prepare("SELECT id,username,name,role,frozen,auth_epoch,must_change_password,version,qq,avatar_id FROM members WHERE frozen=0 ORDER BY role='admin' DESC,id LIMIT 1").first();
-    if(pushActor) await new WorkTasks(env,pushActor as Actor,'mcp').duePushes();
+    if(pushActor) { const workTasks=new WorkTasks(env,pushActor as Actor,'mcp'); await workTasks.expire(); await workTasks.duePushes(); }
     await env.DB.batch([
       env.DB.prepare('DELETE FROM observation_drafts WHERE updated_at<?').bind(new Date(Date.now()-30*86400000).toISOString()),
       env.DB.prepare('DELETE FROM reading_deliveries WHERE expires_at<?').bind(new Date().toISOString()),

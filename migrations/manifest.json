@@ -1,6 +1,6 @@
 {
   "format": 1,
-  "count": 20,
+  "count": 22,
   "migrations": {
     "0001_identity.sql": {
       "sha256": "ceb732997de6972d3f88ae3a15b52b4df0def3418cc4b0834cd289ce55daff6a",
@@ -101,6 +101,16 @@
       "sha256": "e5ab21ad920587468f1c8f90d02e28751644997c8452644fafb0dad118b891e5",
       "backwards_compatible": true,
       "reason": "Adds optional result and close metadata to work tasks."
+    },
+    "0021_work_task_history.sql": {
+      "sha256": "55e15e8ba22c99aa750df822e5f96df4dacc1d29a86bc6343013d044a3da44fa",
+      "backwards_compatible": true,
+      "reason": "Adds recoverable task comments and historized observation references without changing existing task rows."
+    },
+    "0022_work_task_result_references.sql": {
+      "sha256": "88fd73e7ada6a63037106556e02d76b44eb249628c077f7c4faaf6177880bbb8",
+      "backwards_compatible": true,
+      "reason": "Adds optional versioned observation references to task results without changing existing result text."
     }
   }
 }

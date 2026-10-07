@@ -44,7 +44,7 @@ test('administrator assignment records a reason and stops the unowned state',asy
  const target=uuid(),at=new Date().toISOString();f.sqlite.prepare("INSERT INTO members(id,username,name,role,password_hash,must_change_password,qq,created_at) VALUES(?,?,?,'member','fixture',0,'00000',?)").run(target,'assigned','被指派人',at);
  const service=new WorkTasks(f.env,f.actor,'web'),task=await service.create({kind:'onboarding',title:'入社对接',purpose:'说明后续安排',delivery:'留下交接记录',deadline_at:'2099-01-01T00:00:00.000Z',request_id:uuid()});
  const assigned=await service.assign({id:task.id,member_id:target,expected_version:task.version,reason:'本周负责入社对接',request_id:uuid()});assert.equal(assigned.owner_id,target);
- const event=f.sqlite.prepare("SELECT kind,reason FROM work_task_events WHERE task_id=? ORDER BY created_at DESC LIMIT 1").get(task.id);assert.equal(event.kind,'task.assigned');assert.equal(event.reason,'本周负责入社对接');
+ const event=f.sqlite.prepare("SELECT kind,reason FROM work_task_events WHERE task_id=? ORDER BY rowid DESC LIMIT 1").get(task.id);assert.equal(event.kind,'task.assigned');assert.equal(event.reason,'本周负责入社对接');
 });
 
 test('only the current owner can complete or release a task, and both actions keep history',async t=>{
@@ -216,4 +216,38 @@ test('cancelling an audit and restoring the archive rolls back together on SQL f
  const realBatch=f.env.DB.batch;let interfere=true;f.env.DB.batch=async statements=>{if(interfere){interfere=false;await archives.update({id:a.id,expected_version:2,name:'虚构并发资料更新',contacts:[],links:[],request_id:uuid()});}return realBatch(statements);};
  await assert.rejects(tasks.cancel(input),{code:'PRECONDITION_CHANGED'});assert.equal((await tasks.detail(referral.task_id)).task.status,'open');assert.equal((await archives.get(a.id)).status,'人事审核');assert.equal(f.sqlite.prepare('SELECT count(*) n FROM mutation_guards').get().n,0);
  assert.equal((await tasks.cancel(input)).archive_status,'个人接触');assert.equal((await archives.get(a.id)).version,4);
+});
+
+test('task history supports content edits, deadline extension, comments with permission-filtered references, and recovery',async t=>{
+ const f=fixture();t.after(f.close);const archives=new Archives(f.env,f.actor,'web');
+ const archive=await archives.create({type:'person',name:'评论引用档案',request_id:uuid()});
+ const observation=uuid(),at=new Date().toISOString();
+ f.sqlite.prepare('INSERT INTO observations(id,archive_id,author_id,created_at,updated_at) VALUES(?,?,?,?,?)').run(observation,archive.id,f.actor.id,at,at);
+ f.sqlite.prepare('INSERT INTO observation_versions(observation_id,version,body,editor_id,created_at) VALUES(?,?,?,?,?)').run(observation,1,'正文只应在观察接口返回',f.actor.id,at);
+ const service=new WorkTasks(f.env,f.actor,'web'),task=await service.create({archive_id:archive.id,kind:'custom',title:'原始标题',purpose:'原始目的',delivery:'原始交付',deadline_at:'2099-01-01T00:00:00.000Z',request_id:uuid()});
+ const edited=await service.edit({id:task.id,expected_version:1,title:'更新标题',request_id:uuid()});assert.equal(edited.version,2);
+ const claimed=await service.claim({id:task.id,expected_version:edited.version,request_id:uuid()});
+ const extended=await service.extend({id:task.id,expected_version:claimed.version,deadline_at:'2099-02-01T00:00:00.000Z',reason:'补充核对时间',request_id:uuid()});assert.equal(extended.version,4);
+ const comment=await service.addComment({task_id:task.id,body:'已完成第一轮核对',references:[{observation_id:observation,content_version:1}],request_id:uuid()});
+ let detail=await service.detail(task.id);assert.equal(detail.comments[0].body,'已完成第一轮核对');assert.deepEqual(detail.comments[0].references,[{observation_id:observation,archive_id:archive.id,content_version:1}]);assert.equal(detail.task.deadline_at,'2099-02-01T00:00:00.000Z');
+ f.sqlite.prepare('UPDATE observations SET deleted=1,deleted_at=? WHERE id=?').run(at,observation);
+ const other=addMember(f,'评论读取成员');detail=await new WorkTasks(f.env,other,'mcp').detail(task.id);assert.deepEqual(detail.comments[0].references,[]);assert.equal(detail.comments[0].references_restricted,true);
+ const deleted=await service.deleteComment({id:comment.id,expected_version:1,request_id:uuid()});assert.equal(deleted.deleted,true);const restored=await service.restoreComment({id:comment.id,expected_version:deleted.version,request_id:uuid()});assert.equal(restored.deleted,false);
+ const resultObservation=uuid();f.sqlite.prepare('INSERT INTO observations(id,archive_id,author_id,created_at,updated_at) VALUES(?,?,?,?,?)').run(resultObservation,archive.id,f.actor.id,at,at);f.sqlite.prepare('INSERT INTO observation_versions(observation_id,version,body,editor_id,created_at) VALUES(?,?,?,?,?)').run(resultObservation,1,'result observation',f.actor.id,at);const completed=await service.complete({id:task.id,expected_version:extended.version,result_kind:'unable_to_contact',result_text:'follow up',references:[{observation_id:resultObservation,content_version:1}],request_id:uuid()});assert.equal(completed.status,'completed');const completedDetail=await service.detail(task.id);assert.deepEqual(completedDetail.task.result_references,[{observation_id:resultObservation,archive_id:archive.id,content_version:1}]);
+ await assert.rejects(service.addComment({task_id:task.id,body:'关闭后不能追加',request_id:uuid()}),{code:'TASK_NOT_OPEN'});
+ assert.equal((await service.list({state:'closed'})).tasks.some(row=>row.id===task.id),true);
+ assert.deepEqual((await service.detail(task.id)).events.map(event=>event.kind),['task.completed','task.comment_restored','task.comment_deleted','task.comment_created','task.deadline_changed','task.claimed','task.edited','task.created']);
+});
+
+test('expiry and reopen preserve the prior closure result while respecting owner and admin modes',async t=>{
+ const f=fixture();t.after(f.close);const service=new WorkTasks(f.env,f.actor,'web');
+ const task=await service.create(taskInput());const claimed=await service.claim({id:task.id,expected_version:task.version,request_id:uuid()});
+ const expired=await service.expire('2099-02-01T00:00:00.000Z');assert.equal(expired.count,1);assert.equal((await service.detail(task.id)).task.status,'expired');
+ const reopened=await service.reopen({id:task.id,expected_version:claimed.version+1,deadline_at:'2099-03-01T00:00:00.000Z',owner_mode:'keep',request_id:uuid()});assert.equal(reopened.owner_id,f.actor.id);assert.equal(reopened.status,'open');
+ const completed=await service.complete({id:task.id,expected_version:reopened.version,result_kind:'completed',result_text:'重开后完成',request_id:uuid()});assert.equal(completed.status,'completed');
+ const detail=await service.detail(task.id);assert.deepEqual(detail.events.map(event=>event.kind),['task.completed','task.reopened','task.expired','task.claimed','task.created']);
+ const second=await service.create(taskInput());const secondClaim=await service.claim({id:second.id,expected_version:1,request_id:uuid()});await service.expire('2099-02-01T00:00:00.000Z');
+ f.sqlite.prepare("UPDATE members SET role='admin' WHERE id=?").run(f.actor.id);f.actor.role='admin';
+ const unassigned=await service.reopen({id:second.id,expected_version:secondClaim.version+1,deadline_at:'2099-03-01T00:00:00.000Z',owner_mode:'unassigned',request_id:uuid()});assert.equal(unassigned.owner_id,null);
+ await assert.rejects(service.reopen({id:task.id,expected_version:completed.version,deadline_at:'2099-04-01T00:00:00.000Z',owner_mode:'unassigned',request_id:uuid()}),{code:'TASK_NOT_REOPENABLE'});
 });
