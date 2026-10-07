@@ -4,6 +4,7 @@ import {randomUUID as uuid} from 'node:crypto';
 import {fixture} from './d1-fixture.mjs';
 import {WorkTasks} from '../app/server/work-tasks.ts';
 import {Archives} from '../app/server/archives.ts';
+import {Observations} from '../app/server/observations.ts';
 
 function addMember(f,name){
  const id=uuid(),credential=uuid(),at=new Date().toISOString();
@@ -230,16 +231,25 @@ test('task history supports content edits, deadline extension, comments with per
  const extended=await service.extend({id:task.id,expected_version:claimed.version,deadline_at:'2099-02-01T00:00:00.000Z',reason:'补充核对时间',request_id:uuid()});assert.equal(extended.version,4);
  const comment=await service.addComment({task_id:task.id,body:'已完成第一轮核对',references:[{observation_id:observation,content_version:1}],request_id:uuid()});
  let detail=await service.detail(task.id);assert.equal(detail.comments[0].body,'已完成第一轮核对');assert.deepEqual(detail.comments[0].references,[{observation_id:observation,archive_id:archive.id,content_version:1}]);assert.equal(detail.task.deadline_at,'2099-02-01T00:00:00.000Z');
+ const editedComment=await service.editComment({id:comment.id,expected_version:comment.version,body:'已完成第二轮核对，等待复核',request_id:uuid()});assert.equal(editedComment.version,2);detail=await service.detail(task.id);assert.equal(detail.comments[0].body,'已完成第二轮核对，等待复核');assert.deepEqual(detail.comments[0].history.map(version=>version.body),['已完成第一轮核对','已完成第二轮核对，等待复核']);
  f.sqlite.prepare('UPDATE observations SET deleted=1,deleted_at=? WHERE id=?').run(at,observation);
  const other=addMember(f,'评论读取成员');detail=await new WorkTasks(f.env,other,'mcp').detail(task.id);assert.deepEqual(detail.comments[0].references,[]);assert.equal(detail.comments[0].references_restricted,true);
- const deleted=await service.deleteComment({id:comment.id,expected_version:1,request_id:uuid()});assert.equal(deleted.deleted,true);const restored=await service.restoreComment({id:comment.id,expected_version:deleted.version,request_id:uuid()});assert.equal(restored.deleted,false);
- const resultObservation=uuid();f.sqlite.prepare('INSERT INTO observations(id,archive_id,author_id,created_at,updated_at) VALUES(?,?,?,?,?)').run(resultObservation,archive.id,f.actor.id,at,at);f.sqlite.prepare('INSERT INTO observation_versions(observation_id,version,body,editor_id,created_at) VALUES(?,?,?,?,?)').run(resultObservation,1,'result observation',f.actor.id,at);const completed=await service.complete({id:task.id,expected_version:extended.version,result_kind:'unable_to_contact',result_text:'follow up',references:[{observation_id:resultObservation,content_version:1}],request_id:uuid()});assert.equal(completed.status,'completed');const completedDetail=await service.detail(task.id);assert.deepEqual(completedDetail.task.result_references,[{observation_id:resultObservation,archive_id:archive.id,content_version:1}]);
+ const deleted=await service.deleteComment({id:comment.id,expected_version:editedComment.version,request_id:uuid()});assert.equal(deleted.deleted,true);const restored=await service.restoreComment({id:comment.id,expected_version:deleted.version,request_id:uuid()});assert.equal(restored.deleted,false);
+  const resultObservation=uuid();f.sqlite.prepare('INSERT INTO observations(id,archive_id,author_id,created_at,updated_at) VALUES(?,?,?,?,?)').run(resultObservation,archive.id,f.actor.id,at,at);f.sqlite.prepare('INSERT INTO observation_versions(observation_id,version,body,editor_id,created_at) VALUES(?,?,?,?,?)').run(resultObservation,1,'result observation',f.actor.id,at);const completed=await service.complete({id:task.id,expected_version:extended.version,result_kind:'unable_to_contact',result_text:'follow up',references:[{observation_id:resultObservation,content_version:1}],request_id:uuid()});assert.equal(completed.status,'completed');await new Observations(f.env,f.actor,'web').update({id:resultObservation,expected_version:1,body:'result observation newer',occurred_at:null,request_id:uuid()});assert.equal((await new Observations(f.env,f.actor,'web').detail(resultObservation,1)).observation.body,'result observation');assert.equal((await new Observations(f.env,f.actor,'web').detail(resultObservation)).observation.body,'result observation newer');const completedDetail=await service.detail(task.id);assert.deepEqual(completedDetail.task.result_references,[{observation_id:resultObservation,archive_id:archive.id,content_version:1}]);
  await assert.rejects(service.addComment({task_id:task.id,body:'关闭后不能追加',request_id:uuid()}),{code:'TASK_NOT_OPEN'});
  assert.equal((await service.list({state:'closed'})).tasks.some(row=>row.id===task.id),true);
- assert.deepEqual((await service.detail(task.id)).events.map(event=>event.kind),['task.completed','task.comment_restored','task.comment_deleted','task.comment_created','task.deadline_changed','task.claimed','task.edited','task.created']);
-});
+  assert.deepEqual((await service.detail(task.id)).events.map(event=>event.kind),['task.completed','task.comment_restored','task.comment_deleted','task.comment_updated','task.comment_created','task.deadline_changed','task.claimed','task.edited','task.created']);
+ });
 
-test('expiry and reopen preserve the prior closure result while respecting owner and admin modes',async t=>{
+ test('administrators can edit another member comment while preserving the version stream',async t=>{
+  const f=fixture();t.after(f.close);const owner=new WorkTasks(f.env,f.actor,'web'),task=await owner.create(taskInput()),other=addMember(f,'他人评论作者'),writer=new WorkTasks(f.env,other,'mcp');
+  const comment=await writer.addComment({task_id:task.id,body:'成员原始评论',request_id:uuid()});
+  f.sqlite.prepare("UPDATE members SET role='admin' WHERE id=?").run(f.actor.id);f.actor.role='admin';
+  const edited=await owner.editComment({id:comment.id,expected_version:comment.version,body:'管理员修订评论',request_id:uuid()});assert.equal(edited.version,2);
+  const detail=await owner.detail(task.id);assert.equal(detail.comments[0].body,'管理员修订评论');assert.deepEqual(detail.comments[0].history.map(version=>version.body),['成员原始评论','管理员修订评论']);
+ });
+
+ test('expiry and reopen preserve the prior closure result while respecting owner and admin modes',async t=>{
  const f=fixture();t.after(f.close);const service=new WorkTasks(f.env,f.actor,'web');
  const task=await service.create(taskInput());const claimed=await service.claim({id:task.id,expected_version:task.version,request_id:uuid()});
  const expired=await service.expire('2099-02-01T00:00:00.000Z');assert.equal(expired.count,1);assert.equal((await service.detail(task.id)).task.status,'expired');

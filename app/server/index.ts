@@ -115,7 +115,7 @@ app.post('/api/reading/archive',async c=>c.json(await new ArchiveReading(c.env,a
 app.get('/api/events/:id',async c=>c.json(await new Observations(c.env,await authenticate(c.req.raw,c.env),'web').event(c.req.param('id'))));
 app.get('/api/observations',async c=>c.json(await new Observations(c.env,await authenticate(c.req.raw,c.env),'web').list(c.req.query())));
 app.get('/api/observations/:id/versions',async c=>c.json(await new Observations(c.env,await authenticate(c.req.raw,c.env),'web').versions({...c.req.query(),id:c.req.param('id')})));
-app.get('/api/observations/:id',async c=>c.json(await new Observations(c.env,await authenticate(c.req.raw,c.env),'web').detail(c.req.param('id'))));
+app.get('/api/observations/:id',async c=>c.json(await new Observations(c.env,await authenticate(c.req.raw,c.env),'web').detail(c.req.param('id'),c.req.query('version')?Number(c.req.query('version')):undefined)));
 app.get('/api/archives/:id/timeline',async c=>c.json(await new Observations(c.env,await authenticate(c.req.raw,c.env),'web').timeline({...c.req.query(),id:c.req.param('id')})));
 app.get('/api/tag-categories',async c=>c.json(await new Tags(c.env,await authenticate(c.req.raw,c.env),'web').categories({type:c.req.query('type'),include_disabled:c.req.query('include_disabled')==='true',include_deleted:c.req.query('include_deleted')==='true'})));
 app.get('/api/tag-definitions/:entity_type/:id',async c=>c.json(await new TagMaintenance(c.env,await authenticate(c.req.raw,c.env),'web').detail({...c.req.query(),entity_type:c.req.param('entity_type'),id:c.req.param('id')})));
