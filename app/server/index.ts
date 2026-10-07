@@ -24,6 +24,7 @@ import {Images,cleanupImages} from './images.ts';
 import {Materials,cleanupMaterials} from './materials.ts';
 import {Avatars} from './avatars.ts';
 import {WorkTasks} from './work-tasks.ts';
+import {Messages} from './messages.ts';
 
 const app=new Hono<{Bindings:Env}>();
 app.use('/api/*',bodyLimit({maxSize:1024*1024,onError:c=>c.json({error:{code:'REQUEST_TOO_LARGE',message:'请求内容过大'}},413)}));
@@ -112,10 +113,13 @@ app.get('/api/reading',async c=>c.json(await new Reading(c.env,await authenticat
 app.get('/api/reading/events',async c=>c.json(await new Reading(c.env,await authenticate(c.req.raw,c.env)).list(c.req.query())));
 app.post('/api/reading/confirm',async c=>c.json(await new Reading(c.env,await authenticate(c.req.raw,c.env)).confirm(await c.req.json())));
 app.post('/api/reading/archive',async c=>c.json(await new ArchiveReading(c.env,await authenticate(c.req.raw,c.env)).confirm(await c.req.json())));
+app.get('/api/messages',async c=>c.json(await new Messages(c.env,await authenticate(c.req.raw,c.env)).list(c.req.query())));
+app.get('/api/messages/summary',async c=>c.json(await new Messages(c.env,await authenticate(c.req.raw,c.env)).summary()));
+app.post('/api/messages/read',async c=>c.json(await new Messages(c.env,await authenticate(c.req.raw,c.env)).markRead(await c.req.json())));
 app.get('/api/events/:id',async c=>c.json(await new Observations(c.env,await authenticate(c.req.raw,c.env),'web').event(c.req.param('id'))));
 app.get('/api/observations',async c=>c.json(await new Observations(c.env,await authenticate(c.req.raw,c.env),'web').list(c.req.query())));
 app.get('/api/observations/:id/versions',async c=>c.json(await new Observations(c.env,await authenticate(c.req.raw,c.env),'web').versions({...c.req.query(),id:c.req.param('id')})));
-app.get('/api/observations/:id',async c=>c.json(await new Observations(c.env,await authenticate(c.req.raw,c.env),'web').detail(c.req.param('id'))));
+app.get('/api/observations/:id',async c=>c.json(await new Observations(c.env,await authenticate(c.req.raw,c.env),'web').detail(c.req.param('id'),c.req.query('version')?Number(c.req.query('version')):undefined)));
 app.get('/api/archives/:id/timeline',async c=>c.json(await new Observations(c.env,await authenticate(c.req.raw,c.env),'web').timeline({...c.req.query(),id:c.req.param('id')})));
 app.get('/api/tag-categories',async c=>c.json(await new Tags(c.env,await authenticate(c.req.raw,c.env),'web').categories({type:c.req.query('type'),include_disabled:c.req.query('include_disabled')==='true',include_deleted:c.req.query('include_deleted')==='true'})));
 app.get('/api/tag-definitions/:entity_type/:id',async c=>c.json(await new TagMaintenance(c.env,await authenticate(c.req.raw,c.env),'web').detail({...c.req.query(),entity_type:c.req.param('entity_type'),id:c.req.param('id')})));
@@ -155,9 +159,18 @@ app.post('/api/work-tasks/create',async c=>c.json(await new WorkTasks(c.env,awai
 app.post('/api/work-tasks/claim',async c=>c.json(await new WorkTasks(c.env,await authenticate(c.req.raw,c.env),'web').claim(await c.req.json())));
 app.post('/api/work-tasks/assign',async c=>c.json(await new WorkTasks(c.env,await authenticate(c.req.raw,c.env),'web').assign(await c.req.json())));
 app.get('/api/work-tasks/:id',async c=>c.json(await new WorkTasks(c.env,await authenticate(c.req.raw,c.env),'web').detail(c.req.param('id'))));
+app.post('/api/work-tasks/edit',async c=>c.json(await new WorkTasks(c.env,await authenticate(c.req.raw,c.env),'web').edit(await c.req.json())));
+app.post('/api/work-tasks/extend',async c=>c.json(await new WorkTasks(c.env,await authenticate(c.req.raw,c.env),'web').extend(await c.req.json())));
+app.post('/api/work-tasks/reopen',async c=>c.json(await new WorkTasks(c.env,await authenticate(c.req.raw,c.env),'web').reopen(await c.req.json())));
+app.post('/api/work-tasks/comments/create',async c=>c.json(await new WorkTasks(c.env,await authenticate(c.req.raw,c.env),'web').addComment(await c.req.json())));
+app.post('/api/work-tasks/comments/edit',async c=>c.json(await new WorkTasks(c.env,await authenticate(c.req.raw,c.env),'web').editComment(await c.req.json())));
+app.post('/api/work-tasks/comments/delete',async c=>c.json(await new WorkTasks(c.env,await authenticate(c.req.raw,c.env),'web').deleteComment(await c.req.json())));
+app.post('/api/work-tasks/comments/restore',async c=>c.json(await new WorkTasks(c.env,await authenticate(c.req.raw,c.env),'web').restoreComment(await c.req.json())));
 app.post('/api/work-tasks/complete',async c=>c.json(await new WorkTasks(c.env,await authenticate(c.req.raw,c.env),'web').complete(await c.req.json())));
 app.post('/api/work-tasks/release',async c=>c.json(await new WorkTasks(c.env,await authenticate(c.req.raw,c.env),'web').release(await c.req.json())));
 app.post('/api/work-tasks/cancel',async c=>c.json(await new WorkTasks(c.env,await authenticate(c.req.raw,c.env),'web').cancel(await c.req.json())));
+app.post('/api/work-tasks/monthly/preview',async c=>c.json(await new WorkTasks(c.env,await authenticate(c.req.raw,c.env),'web').previewMonthly(await c.req.json())));
+app.post('/api/work-tasks/monthly/generate',async c=>c.json(await new WorkTasks(c.env,await authenticate(c.req.raw,c.env),'web').generateMonthly(await c.req.json())));
 app.post('/api/archives/refer',async c=>c.json(await new WorkTasks(c.env,await authenticate(c.req.raw,c.env),'web').refer(await c.req.json())));
 app.post('/api/archives/confirm-membership',async c=>c.json(await new WorkTasks(c.env,await authenticate(c.req.raw,c.env),'web').confirmMembership(await c.req.json())));
 app.all('/api/*',c=>c.json({error:{code:'NOT_FOUND',message:'接口不存在'}},404));
@@ -176,8 +189,8 @@ export default {
   fetch:app.fetch,
   async scheduled(_event:ScheduledController,env:Env) {
     await cleanupJournal(env);
-    const pushActor=await env.DB.prepare("SELECT id,username,name,role,frozen,auth_epoch,must_change_password,version,qq,avatar_id FROM members WHERE frozen=0 ORDER BY role='admin' DESC,id LIMIT 1").first();
-    if(pushActor) await new WorkTasks(env,pushActor as Actor,'mcp').duePushes();
+    const pushActor=await env.DB.prepare("SELECT m.id,m.username,m.name,m.role,m.frozen,m.auth_epoch,m.must_change_password,m.version,m.qq,m.avatar_id,c.id credential_id,c.kind credential_kind FROM members m LEFT JOIN credentials c ON c.member_id=m.id AND c.kind='mcp' AND c.revoked_at IS NULL AND c.expires_at>? WHERE m.frozen=0 ORDER BY m.role='admin' DESC,c.created_at DESC,m.id LIMIT 1").bind(new Date().toISOString()).first();
+    if(pushActor) { const workTasks=new WorkTasks(env,pushActor as Actor,'mcp'); await workTasks.expire(); await workTasks.duePushes(); if((pushActor as Actor).role==='admin'&&pushActor.credential_id) await workTasks.generateScheduledMonthly(); }
     await env.DB.batch([
       env.DB.prepare('DELETE FROM observation_drafts WHERE updated_at<?').bind(new Date(Date.now()-30*86400000).toISOString()),
       env.DB.prepare('DELETE FROM reading_deliveries WHERE expires_at<?').bind(new Date().toISOString()),

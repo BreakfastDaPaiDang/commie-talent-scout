@@ -1,0 +1,1 @@
+ALTER TABLE archives ADD COLUMN current_need TEXT NOT NULL DEFAULT '';

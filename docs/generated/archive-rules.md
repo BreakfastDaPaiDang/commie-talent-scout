@@ -22,14 +22,14 @@
 
 ## 触发与事务边界
 
-网页 HTTP 与 MCP 的状态修改、显式重开都进入 [transition](../../app/server/archives.ts#L107)。该入口调用下表定义产生 SQL，最后一起提交；规则不单独写库。
+网页 HTTP 与 MCP 的状态修改、显式重开都进入 [transition](../../app/server/archives.ts#L116)。该入口调用下表定义产生 SQL，最后一起提交；规则不单独写库。
 
-- 读取与预校验：[get](../../app/server/archives.ts#L35)（存在性、删除权限、关闭锁定、版本）。
-- 关联成员：[planBindings](../../app/server/archives.ts#L91)（存在、冻结及原归属保留；事务内再次校验）。
-- 档案事务条件：[guard](../../app/server/archives.ts#L45)。
+- 读取与预校验：[get](../../app/server/archives.ts#L37)（存在性、删除权限、关闭锁定、版本）。
+- 关联成员：[planBindings](../../app/server/archives.ts#L100)（存在、冻结及原归属保留；事务内再次校验）。
+- 档案事务条件：[guard](../../app/server/archives.ts#L47)。
 - 授权、原子提交与重试收据：[command](../../app/server/commands.ts#L21)。
 - 重开时词义差异、历史与权限：由上述 transition 调用 [TagState](../../app/server/tag-state.ts) 读取；不在生成器中解释 SQL 或任意函数。
-- 取消自动审核任务：[cancel](../../app/server/work-tasks.ts#L115) 通过 [restoreCancelledAudit](../../app/server/work-tasks.ts#L124) 调用 [auditCancellationTarget](../../app/server/rules/archive-lifecycle.ts#L31) 取得本次引荐前的外部关系，复用同一 planArchiveEffects 并在任务事务中提交。历史无法确认或档案已变更身份时不猜测退回状态。
+- 取消自动审核任务：[cancel](../../app/server/work-tasks.ts#L198) 通过 [restoreCancelledAudit](../../app/server/work-tasks.ts#L278) 调用 [auditCancellationTarget](../../app/server/rules/archive-lifecycle.ts#L31) 取得本次引荐前的外部关系，复用同一 planArchiveEffects 并在任务事务中提交。历史无法确认或档案已变更身份时不猜测退回状态。
 
 以下条件和结果来自实际参与执行的函数引用及函数体。源码链接供追溯，不把人工说明作为规则来源。
 
@@ -37,12 +37,14 @@
 
 | 标识 | 条件函数 | 结果函数 |
 | --- | --- | --- |
-| save-state | [transitionChanged](../../app/server/rules/archive-lifecycle.ts#L21) | [saveStateAndBindings](../../app/server/rules/archive-lifecycle.ts#L49) |
-| state-history | [stateChanged](../../app/server/rules/archive-lifecycle.ts#L24) | [recordStateChange](../../app/server/rules/archive-lifecycle.ts#L54) |
-| members-history | [onlyMembersChanged](../../app/server/rules/archive-lifecycle.ts#L25) | [recordMembersChange](../../app/server/rules/archive-lifecycle.ts#L57) |
+| save-state | [transitionChanged](../../app/server/rules/archive-lifecycle.ts#L21) | [saveStateAndBindings](../../app/server/rules/archive-lifecycle.ts#L87) |
+| state-history | [stateChanged](../../app/server/rules/archive-lifecycle.ts#L24) | [recordStateChange](../../app/server/rules/archive-lifecycle.ts#L92) |
+| members-history | [onlyMembersChanged](../../app/server/rules/archive-lifecycle.ts#L25) | [recordMembersChange](../../app/server/rules/archive-lifecycle.ts#L95) |
 | withdraw-audit | [withdrawsAudit](../../app/server/rules/archive-lifecycle.ts#L28) | [cancelWithdrawnAudit](../../app/server/rules/archive-lifecycle.ts#L37) |
-| close | [closesArchive](../../app/server/rules/archive-lifecycle.ts#L26) | [freezeTagsAndRecordClosure](../../app/server/rules/archive-lifecycle.ts#L60) |
-| reopen | [reopensArchive](../../app/server/rules/archive-lifecycle.ts#L27) | [recordReopening](../../app/server/rules/archive-lifecycle.ts#L64) |
+| cancel-inapplicable-tasks | [cancelInapplicableTasksWhen](../../app/server/rules/archive-lifecycle.ts#L79) | [cancelsInapplicableTasks](../../app/server/rules/archive-lifecycle.ts#L49) |
+| notify-manual-tasks | [notifyManualTasksWhen](../../app/server/rules/archive-lifecycle.ts#L83) | [notifyManualTasks](../../app/server/rules/archive-lifecycle.ts#L64) |
+| close | [closesArchive](../../app/server/rules/archive-lifecycle.ts#L26) | [freezeTagsAndRecordClosure](../../app/server/rules/archive-lifecycle.ts#L98) |
+| reopen | [reopensArchive](../../app/server/rules/archive-lifecycle.ts#L27) | [recordReopening](../../app/server/rules/archive-lifecycle.ts#L102) |
 
 ```mermaid
 flowchart TD
@@ -63,15 +65,23 @@ flowchart TD
   cond3 -->|成立| effect3["cancelWithdrawnAudit"]
   cond3 -->|不成立| next3["继续"]
   effect3 --> next3
-  next3 --> cond4{"closesArchive"}
-  cond4 -->|成立| effect4["freezeTagsAndRecordClosure"]
+  next3 --> cond4{"cancelInapplicableTasksWhen"}
+  cond4 -->|成立| effect4["cancelsInapplicableTasks"]
   cond4 -->|不成立| next4["继续"]
   effect4 --> next4
-  next4 --> cond5{"reopensArchive"}
-  cond5 -->|成立| effect5["recordReopening"]
+  next4 --> cond5{"notifyManualTasksWhen"}
+  cond5 -->|成立| effect5["notifyManualTasks"]
   cond5 -->|不成立| next5["继续"]
   effect5 --> next5
-  next5 --> batch["command: 权限与版本复核 / 原子写入 / 收据"]
+  next5 --> cond6{"closesArchive"}
+  cond6 -->|成立| effect6["freezeTagsAndRecordClosure"]
+  cond6 -->|不成立| next6["继续"]
+  effect6 --> next6
+  next6 --> cond7{"reopensArchive"}
+  cond7 -->|成立| effect7["recordReopening"]
+  cond7 -->|不成立| next7["继续"]
+  effect7 --> next7
+  next7 --> batch["command: 权限与版本复核 / 原子写入 / 收据"]
 ```
 
 ## 执行条件与结果的源码
@@ -109,7 +119,7 @@ function transitionChanged(c) {
 
 ### planArchiveEffects
 
-[planArchiveEffects](../../app/server/rules/archive-lifecycle.ts#L79)
+[planArchiveEffects](../../app/server/rules/archive-lifecycle.ts#L119)
 
 ```javascript
 function planArchiveEffects(context) {
@@ -135,7 +145,7 @@ function auditCancellationTarget(task, old, change) {
 
 ### saveStateAndBindings
 
-[saveStateAndBindings](../../app/server/rules/archive-lifecycle.ts#L49)
+[saveStateAndBindings](../../app/server/rules/archive-lifecycle.ts#L87)
 
 ```javascript
 function saveStateAndBindings(c) {
@@ -160,7 +170,7 @@ function stateChanged(c) {
 
 ### recordStateChange
 
-[recordStateChange](../../app/server/rules/archive-lifecycle.ts#L54)
+[recordStateChange](../../app/server/rules/archive-lifecycle.ts#L92)
 
 ```javascript
 function recordStateChange(c) {
@@ -188,7 +198,7 @@ function onlyMembersChanged(c) {
 
 ### recordMembersChange
 
-[recordMembersChange](../../app/server/rules/archive-lifecycle.ts#L57)
+[recordMembersChange](../../app/server/rules/archive-lifecycle.ts#L95)
 
 ```javascript
 function recordMembersChange(c) {
@@ -240,6 +250,68 @@ function cancelWithdrawnAudit(c) {
 }
 ```
 
+### cancelInapplicableTasksWhen
+
+[cancelInapplicableTasksWhen](../../app/server/rules/archive-lifecycle.ts#L79)
+
+```javascript
+function cancelInapplicableTasksWhen(c) {
+    return stateChanged(c) && (c.old.type === 'person' && memberStatuses.includes(c.old.status) && !memberStatuses.includes(c.status) || isClosedState(c.status));
+}
+```
+
+### cancelsInapplicableTasks
+
+[cancelsInapplicableTasks](../../app/server/rules/archive-lifecycle.ts#L49)
+
+```javascript
+function cancelsInapplicableTasks(c) {
+    const leavesMembership = c.old.type === 'person' && memberStatuses.includes(c.old.status) && !memberStatuses.includes(c.status);
+    const kinds = isClosedState(c.status) ? "'audit','monthly','onboarding'" : leavesMembership ? "'monthly','onboarding'" : null;
+    if (!kinds) return [];
+    const reason = `档案从${c.old.status}变为${c.status}，关联工作不再适用`;
+    return [
+        c.stmt(`INSERT INTO work_task_events(id,task_id,actor_id,source,kind,before_json,after_json,reason,created_at)
+   SELECT lower(hex(randomblob(16))),id,?,?,'task.cancelled',
+    json_object('status',status,'owner_id',owner_id,'version',version),
+    json_object('status','cancelled','owner_id',owner_id,'version',version+1),?,?
+   FROM work_tasks WHERE archive_id=? AND source='rule' AND kind IN (${kinds}) AND status='open'`, c.actorId, c.source, reason, c.at, c.old.id),
+        c.stmt(`UPDATE work_tasks SET status='cancelled',closed_reason=?,updated_at=?,version=version+1 WHERE archive_id=? AND source='rule' AND kind IN (${kinds}) AND status='open'`, reason, c.at, c.old.id)
+    ];
+}
+```
+
+### notifyManualTasksWhen
+
+[notifyManualTasksWhen](../../app/server/rules/archive-lifecycle.ts#L83)
+
+```javascript
+function notifyManualTasksWhen(c) {
+    return stateChanged(c) && c.old.type === 'person';
+}
+```
+
+### notifyManualTasks
+
+[notifyManualTasks](../../app/server/rules/archive-lifecycle.ts#L64)
+
+```javascript
+function notifyManualTasks(c) {
+    if (!stateChanged(c) || c.old.type !== 'person') return [];
+    const reason = `档案状态已从${c.old.status}变为${c.status}，请负责人核对合作任务是否继续`;
+    return [
+        c.stmt(`INSERT INTO work_task_events(id,task_id,actor_id,source,kind,before_json,after_json,reason,created_at)
+   SELECT lower(hex(randomblob(16))),id,?,?,'task.archive_status_changed',
+    json_object('archive_status',?),json_object('archive_status',?,'owner_id',owner_id),?,?
+   FROM work_tasks WHERE archive_id=? AND status='open' AND kind='cooperation'`, c.actorId, c.source, c.old.status, c.status, reason, c.at, c.old.id),
+        c.stmt(`INSERT INTO messages(id,recipient_id,kind,task_id,object_type,object_id,title,body,task_version,deadline_at,created_at)
+   SELECT lower(hex(randomblob(16))),owner_id,'archive_status_changed',id,'work_task',id,'关联档案状态已变化',?,version,deadline_at,?
+   FROM work_tasks t WHERE archive_id=? AND status='open' AND kind='cooperation' AND owner_id IS NOT NULL
+   ON CONFLICT(recipient_id,kind,object_type,object_id,deadline_at) DO UPDATE SET body=excluded.body,task_version=excluded.task_version,created_at=excluded.created_at,read_at=NULL`, reason, c.at, c.old.id)
+    ];
+}
+```
+
 ### closesArchive
 
 [closesArchive](../../app/server/rules/archive-lifecycle.ts#L26)
@@ -252,7 +324,7 @@ function closesArchive(c) {
 
 ### freezeTagsAndRecordClosure
 
-[freezeTagsAndRecordClosure](../../app/server/rules/archive-lifecycle.ts#L60)
+[freezeTagsAndRecordClosure](../../app/server/rules/archive-lifecycle.ts#L98)
 
 ```javascript
 function freezeTagsAndRecordClosure(c) {
@@ -281,7 +353,7 @@ function reopensArchive(c) {
 
 ### recordReopening
 
-[recordReopening](../../app/server/rules/archive-lifecycle.ts#L64)
+[recordReopening](../../app/server/rules/archive-lifecycle.ts#L102)
 
 ```javascript
 function recordReopening(c) {
