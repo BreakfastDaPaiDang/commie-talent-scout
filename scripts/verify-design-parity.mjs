@@ -31,6 +31,8 @@ async function fixture(route){const request=route.request(),url=new URL(request.
  else if(p==='/auth/me')body={member:members[0]};
  else if(p==='/members')body={members,next_cursor:null};
  else if(p==='/reading')body={total:readingEvents.filter(e=>!confirmed.has(e.id)).length};
+ else if(p==='/notifications/summary')body={total:readingEvents.filter(e=>!confirmed.has(e.id)).length,messages:0,reading:readingEvents.filter(e=>!confirmed.has(e.id)).length};
+ else if(p==='/messages')body={messages:[]};
  else if(p==='/reading/events')body={events:readingEvents.filter(e=>!confirmed.has(e.id)&&e.archive_id!==url.searchParams.get('exclude_archive_id')).slice(0,Number(url.searchParams.get('limit')??100)),snapshot:100,next_cursor:null};
  else if(p.startsWith('/events/')){const event=readingEvents.find(e=>e.id===p.split('/')[2]),reading={event_id:event.id,ticket:event.id};body={event:{...event,reading,observation:{...observations.find(o=>o.id===event.observation_id),reading}}};}
  else if(p==='/reading/archive'){const archive=archives.find(a=>uuid('archive-open'+a.id)===request.postDataJSON().ticket);readingEvents.filter(e=>e.archive_id===archive.id).forEach(e=>confirmed.add(e.id));body={member_id:members[0].id,archive_id:archive.id,through_seq:100,confirmed:true,unread_event_ids:[]};}
@@ -63,7 +65,7 @@ try{await server.listen();await sharedServer.listen();browser=await chromium.lau
  await live.keyboard.press('/');assert.equal(await live.getByRole('textbox',{name:'搜索档案',exact:true}).evaluate(e=>e===document.activeElement),true);
  await live.getByRole('button',{name:'新建',exact:true}).click();await live.getByRole('dialog').waitFor();assert.equal(await live.getByRole('dialog').getByRole('textbox',{name:'昵称',exact:true}).evaluate(e=>e===document.activeElement),true);await live.keyboard.press('Escape');assert.equal(await live.getByRole('button',{name:'新建',exact:true}).evaluate(e=>e===document.activeElement),true);
  await shared.setViewportSize({width:1440,height:1080});await shared.getByRole('button',{name:'编辑资料',exact:true}).click();await shared.getByRole('dialog').getByRole('textbox',{name:'昵称',exact:true}).fill('共用资料字段验收');await shared.getByRole('dialog').getByRole('button',{name:'＋ 添加资料链接',exact:true}).click();await shared.getByRole('textbox',{name:'资料链接1网址',exact:true}).fill('https://example.invalid/shared');await shared.getByRole('button',{name:'保存修改',exact:true}).click();await shared.getByRole('dialog').waitFor({state:'detached'});assert.equal(await shared.locator('.entity-heading h1').textContent(),'共用资料字段验收');await shared.getByRole('button',{name:'编辑资料',exact:true}).click();assert.equal(await shared.getByRole('textbox',{name:'资料链接1网址',exact:true}).inputValue(),'https://example.invalid/shared');await shared.keyboard.press('Escape');await shared.locator('button.state-badge').click();await shared.getByRole('radio',{name:'个人接触',exact:true}).check();await shared.getByRole('button',{name:'保存状态',exact:true}).click();await shared.getByRole('dialog').waitFor({state:'detached'});assert.ok((await shared.locator('.entity-heading .state-badge').textContent()).includes('个人接触'));
- confirmed.clear();await live.getByRole('button',{name:/^未读更新/}).click();
+ confirmed.clear();await live.getByRole('button',{name:/^未读更新/}).click();await live.getByRole('button',{name:'档案更新',exact:true}).click();
  for(let step=0;step<readingEvents.length;step++){
   await live.waitForFunction(()=>document.querySelector('.update-row.selected.read')||document.body.textContent.includes('近况，都看过了。'));
   if(confirmed.size===readingEvents.length)break;
