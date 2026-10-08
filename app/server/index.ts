@@ -115,6 +115,7 @@ app.post('/api/reading/confirm',async c=>c.json(await new Reading(c.env,await au
 app.post('/api/reading/archive',async c=>c.json(await new ArchiveReading(c.env,await authenticate(c.req.raw,c.env)).confirm(await c.req.json())));
 app.get('/api/messages',async c=>c.json(await new Messages(c.env,await authenticate(c.req.raw,c.env)).list(c.req.query())));
 app.get('/api/messages/summary',async c=>c.json(await new Messages(c.env,await authenticate(c.req.raw,c.env)).summary()));
+app.get('/api/notifications/summary',async c=>{const actor=await authenticate(c.req.raw,c.env),[reading,messages]=await Promise.all([new Reading(c.env,actor).summary(),new Messages(c.env,actor).summary()]);return c.json({total:reading.total+messages.total,reading:reading.total,messages:messages.total});});
 app.post('/api/messages/read',async c=>c.json(await new Messages(c.env,await authenticate(c.req.raw,c.env)).markRead(await c.req.json())));
 app.get('/api/events/:id',async c=>c.json(await new Observations(c.env,await authenticate(c.req.raw,c.env),'web').event(c.req.param('id'))));
 app.get('/api/observations',async c=>c.json(await new Observations(c.env,await authenticate(c.req.raw,c.env),'web').list(c.req.query())));

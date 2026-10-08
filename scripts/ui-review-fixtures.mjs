@@ -13,6 +13,7 @@ export async function fixture(route){const request=route.request(),url=new URL(r
  else if(p==='/auth/me')body={member:members[0]};
  else if(p==='/members')body={members,next_cursor:null};
  else if(p==='/reading')body={total:readingEvents.filter(e=>!confirmed.has(e.id)).length};
+ else if(p==='/notifications/summary')body={total:readingEvents.filter(e=>!confirmed.has(e.id)).length,messages:0,reading:readingEvents.filter(e=>!confirmed.has(e.id)).length};
  else if(p==='/reading/events')body={events:readingEvents.filter(e=>!confirmed.has(e.id)&&e.archive_id!==url.searchParams.get('exclude_archive_id')).slice(0,Number(url.searchParams.get('limit')??100)),snapshot:100,next_cursor:null};
  else if(p.startsWith('/events/')){const event=readingEvents.find(e=>e.id===p.split('/')[2]),reading={event_id:event.id,ticket:event.id};body={event:{...event,reading,observation:{...observations.find(o=>o.id===event.observation_id),reading}}};}
  else if(p==='/reading/archive'){const archive=archives.find(a=>uuid('archive-open'+a.id)===request.postDataJSON().ticket);readingEvents.filter(e=>e.archive_id===archive.id).forEach(e=>confirmed.add(e.id));body={member_id:members[0].id,archive_id:archive.id,through_seq:100,confirmed:true,unread_event_ids:[]};}

@@ -11,10 +11,10 @@ type Entry={actor_id:string;id:string;seq:number;archive_id:string;archive_name:
 const kinds:Record<string,string>={'material.uploaded':'新增材料','material.updated':'材料更新','material.deleted':'材料已删除','material.restored':'材料已恢复','material.purged':'材料已清除','material.capacity_changed':'材料容量调整','observation.created':'新的观察','observation.edited':'观察已编辑','observation.deleted':'观察已删除','observation.restored':'观察已恢复','archive.created':'新建档案','archive.profile_changed':'资料更新','archive.tags_changed':'标签变化','archive.state_changed':'状态变化','archive.members_changed':'成员变化','archive.closed':'档案已关闭','archive.reopened':'档案已开启','archive.avatar_changed':'头像更新'};
 export function UnreadBadge({onCount}:{onCount?:(total:number)=>void}={}){
  const[total,setTotal]=useState<number|null>(null);
- useEffect(()=>{let cancelled=false,sequence=0,timer:ReturnType<typeof setTimeout>;const load=()=>{const n=++sequence;clearTimeout(timer);timer=setTimeout(()=>{if(document.visibilityState==='visible')void api<{total:number}>('/reading').then(r=>{if(!cancelled&&n===sequence){setTotal(r.total);onCount?.(r.total);}}).catch(()=>{});},500);};load();window.addEventListener('cts-reading-confirmed',load);document.addEventListener('visibilitychange',load);return()=>{cancelled=true;clearTimeout(timer);window.removeEventListener('cts-reading-confirmed',load);document.removeEventListener('visibilitychange',load);};},[onCount]);
+ useEffect(()=>{let cancelled=false,sequence=0,timer:ReturnType<typeof setTimeout>;const load=()=>{const n=++sequence;clearTimeout(timer);timer=setTimeout(()=>{if(document.visibilityState==='visible')void api<{total:number}>('/notifications/summary').then(r=>{if(!cancelled&&n===sequence){setTotal(r.total);onCount?.(r.total);}}).catch(()=>{});},250);};load();window.addEventListener('cts-reading-confirmed',load);window.addEventListener('cts-messages-read',load);document.addEventListener('visibilitychange',load);return()=>{cancelled=true;clearTimeout(timer);window.removeEventListener('cts-reading-confirmed',load);window.removeEventListener('cts-messages-read',load);document.removeEventListener('visibilitychange',load);};},[onCount]);
  return <>{total!==null&&total>0&&<span className="nav-unread">{total}</span>}</>;
 }
-export function UnreadPage({actor}:{actor:Member}){
+export function UnreadPage({actor,compact=false}:{actor:Member;compact?:boolean}){
  const[items,setItems]=useState<Entry[]>([]),[selected,setSelected]=useState<string|null>(null),[cursor,setCursor]=useState<string|null>(null),[snapshot,setSnapshot]=useState<number|undefined>(),[loading,setLoading]=useState(true),[error,setError]=useState('');
  const serial=useRef(0),current=items.find(e=>e.id===selected),remaining=items.filter(e=>!e.read),complete=!loading&&!error&&!cursor&&items.length>0&&!remaining.length;
  const[queueRevision,setQueueRevision]=useState(0);
@@ -54,7 +54,8 @@ export function UnreadPage({actor}:{actor:Member}){
   }catch(e){if(n===serial.current)setError((e as Error).message);}finally{if(n===serial.current)setLoading(false);}
  }
  return <WorkspaceFrame selected={!!current} list={<>
-  <header className="page-head"><div><h1>未读更新</h1></div><button className="button" disabled={loading} onClick={()=>void load()}>刷新队列</button></header>
+  {!compact&&<header className="page-head"><div><h1>档案更新</h1></div><button className="button" disabled={loading} onClick={()=>void load()}>刷新队列</button></header>}
+  {compact&&<div className="notification-refresh"><p className="section-description">打开档案会确认当前可见更新，已阅条目保留在本次位置。</p><button className="button" disabled={loading} onClick={()=>void load()}>刷新</button></div>}
   <div className="unread-progress"><span>{items.filter(e=>e.read).length} / {items.length}{cursor?'＋':''} 已阅</span><button className="text-button" disabled={loading||!hasNext} onClick={()=>void next()}>下一处未读 →</button></div>
   <PageError error={error} retry={()=>void load(items.length&&cursor?cursor:undefined)}/>
   <section className="updates-list" aria-label="本次未读队列"><p className="section-description">打开档案即清除已有未读。已阅条目保留在本次位置。</p>
