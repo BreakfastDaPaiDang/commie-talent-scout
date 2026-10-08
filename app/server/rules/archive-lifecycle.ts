@@ -3,6 +3,7 @@ import {Failure} from '../types.ts';
 import type {Archive,BoundMember} from '../archives.ts';
 import type {TagState} from '../tag-state.ts';
 import type {Source} from '../commands.ts';
+import {planRules,type RuleModule} from './contract.ts';
 
 export type Transition={old:Archive;status:string;memberIds:string[];reopen:boolean};
 type Effects=Transition&{
@@ -116,6 +117,19 @@ export const archiveTransitionRules=[
  {id:'reopen',when:reopensArchive,apply:recordReopening},
 ] as const;
 
+export const archiveLifecycleModule:RuleModule<Effects,D1PreparedStatement>={
+ id:'archive-lifecycle',source:'app/server/rules/archive-lifecycle.ts',
+ triggers:[{file:'app/server/archives.ts',entry:'transition'},{file:'app/server/work-tasks.ts',entry:'restoreCancelledAudit'}],
+ rules:archiveTransitionRules,
+ verification:{
+  transaction:{file:'app/server/commands.ts',entry:'command'},
+  guard:{file:'app/server/archives.ts',entry:'guard'},
+  tests:['tests/archive-lifecycle.test.mjs','tests/monthly-work-tasks.test.mjs','tests/work-tasks.test.mjs','tests/business-rule-view.test.mjs','tests/rule-contract.test.ts'],
+  idempotency:'command 请求收据；transitionChanged 排除无变化操作；档案版本事务校验；任务取消仅匹配 open，消息沿用现有唯一约束。',
+  failure:'预校验失败不提交；事务内权限或版本冲突、SQL 失败整体回滚。保留现有行为，不新增任务轮次语义。',
+ },
+};
+
 export function planArchiveEffects(context:Effects){
- return archiveTransitionRules.flatMap(rule=>rule.when(context)?rule.apply(context):[]);
+ return planRules(archiveLifecycleModule,context).statements;
 }

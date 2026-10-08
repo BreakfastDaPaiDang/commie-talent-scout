@@ -20,6 +20,23 @@
 | 组织交流 | 组织 | 否 | 是 |
 | 已弃用 | 人物、组织 | 是 | 否 |
 
+## 共同契约
+
+模块：`archive-lifecycle`；计划器：[planRules](../../app/server/rules/contract.ts#L29)。计划按规则顺序返回 steps 和 statements，不执行提交。
+
+触发入口：[transition](../../app/server/archives.ts#L116)、[restoreCancelledAudit](../../app/server/work-tasks.ts#L278)。
+事务提交：[command](../../app/server/commands.ts#L21)；版本保护：[guard](../../app/server/archives.ts#L47)。
+幂等边界：command 请求收据；transitionChanged 排除无变化操作；档案版本事务校验；任务取消仅匹配 open，消息沿用现有唯一约束。
+失败边界：预校验失败不提交；事务内权限或版本冲突、SQL 失败整体回滚。保留现有行为，不新增任务轮次语义。
+
+- 验证：[tests/archive-lifecycle.test.mjs](../../tests/archive-lifecycle.test.mjs)
+- 验证：[tests/monthly-work-tasks.test.mjs](../../tests/monthly-work-tasks.test.mjs)
+- 验证：[tests/work-tasks.test.mjs](../../tests/work-tasks.test.mjs)
+- 验证：[tests/business-rule-view.test.mjs](../../tests/business-rule-view.test.mjs)
+- 验证：[tests/rule-contract.test.ts](../../tests/rule-contract.test.ts)
+
+这些边界说明是模块内的维护元数据，并非自动推导的证明；条件、实际影响及顺序以以下执行函数与行为测试为准。
+
 ## 触发与事务边界
 
 网页 HTTP 与 MCP 的状态修改、显式重开都进入 [transition](../../app/server/archives.ts#L116)。该入口调用下表定义产生 SQL，最后一起提交；规则不单独写库。
@@ -29,7 +46,7 @@
 - 档案事务条件：[guard](../../app/server/archives.ts#L47)。
 - 授权、原子提交与重试收据：[command](../../app/server/commands.ts#L21)。
 - 重开时词义差异、历史与权限：由上述 transition 调用 [TagState](../../app/server/tag-state.ts) 读取；不在生成器中解释 SQL 或任意函数。
-- 取消自动审核任务：[cancel](../../app/server/work-tasks.ts#L198) 通过 [restoreCancelledAudit](../../app/server/work-tasks.ts#L278) 调用 [auditCancellationTarget](../../app/server/rules/archive-lifecycle.ts#L31) 取得本次引荐前的外部关系，复用同一 planArchiveEffects 并在任务事务中提交。历史无法确认或档案已变更身份时不猜测退回状态。
+- 取消自动审核任务：[cancel](../../app/server/work-tasks.ts#L198) 通过 [restoreCancelledAudit](../../app/server/work-tasks.ts#L278) 调用 [auditCancellationTarget](../../app/server/rules/archive-lifecycle.ts#L32) 取得本次引荐前的外部关系，复用同一 planArchiveEffects 并在任务事务中提交。历史无法确认或档案已变更身份时不猜测退回状态。
 
 以下条件和结果来自实际参与执行的函数引用及函数体。源码链接供追溯，不把人工说明作为规则来源。
 
@@ -37,14 +54,14 @@
 
 | 标识 | 条件函数 | 结果函数 |
 | --- | --- | --- |
-| save-state | [transitionChanged](../../app/server/rules/archive-lifecycle.ts#L21) | [saveStateAndBindings](../../app/server/rules/archive-lifecycle.ts#L87) |
-| state-history | [stateChanged](../../app/server/rules/archive-lifecycle.ts#L24) | [recordStateChange](../../app/server/rules/archive-lifecycle.ts#L92) |
-| members-history | [onlyMembersChanged](../../app/server/rules/archive-lifecycle.ts#L25) | [recordMembersChange](../../app/server/rules/archive-lifecycle.ts#L95) |
-| withdraw-audit | [withdrawsAudit](../../app/server/rules/archive-lifecycle.ts#L28) | [cancelWithdrawnAudit](../../app/server/rules/archive-lifecycle.ts#L37) |
-| cancel-inapplicable-tasks | [cancelInapplicableTasksWhen](../../app/server/rules/archive-lifecycle.ts#L79) | [cancelsInapplicableTasks](../../app/server/rules/archive-lifecycle.ts#L49) |
-| notify-manual-tasks | [notifyManualTasksWhen](../../app/server/rules/archive-lifecycle.ts#L83) | [notifyManualTasks](../../app/server/rules/archive-lifecycle.ts#L64) |
-| close | [closesArchive](../../app/server/rules/archive-lifecycle.ts#L26) | [freezeTagsAndRecordClosure](../../app/server/rules/archive-lifecycle.ts#L98) |
-| reopen | [reopensArchive](../../app/server/rules/archive-lifecycle.ts#L27) | [recordReopening](../../app/server/rules/archive-lifecycle.ts#L102) |
+| save-state | [transitionChanged](../../app/server/rules/archive-lifecycle.ts#L22) | [saveStateAndBindings](../../app/server/rules/archive-lifecycle.ts#L88) |
+| state-history | [stateChanged](../../app/server/rules/archive-lifecycle.ts#L25) | [recordStateChange](../../app/server/rules/archive-lifecycle.ts#L93) |
+| members-history | [onlyMembersChanged](../../app/server/rules/archive-lifecycle.ts#L26) | [recordMembersChange](../../app/server/rules/archive-lifecycle.ts#L96) |
+| withdraw-audit | [withdrawsAudit](../../app/server/rules/archive-lifecycle.ts#L29) | [cancelWithdrawnAudit](../../app/server/rules/archive-lifecycle.ts#L38) |
+| cancel-inapplicable-tasks | [cancelInapplicableTasksWhen](../../app/server/rules/archive-lifecycle.ts#L80) | [cancelsInapplicableTasks](../../app/server/rules/archive-lifecycle.ts#L50) |
+| notify-manual-tasks | [notifyManualTasksWhen](../../app/server/rules/archive-lifecycle.ts#L84) | [notifyManualTasks](../../app/server/rules/archive-lifecycle.ts#L65) |
+| close | [closesArchive](../../app/server/rules/archive-lifecycle.ts#L27) | [freezeTagsAndRecordClosure](../../app/server/rules/archive-lifecycle.ts#L99) |
+| reopen | [reopensArchive](../../app/server/rules/archive-lifecycle.ts#L28) | [recordReopening](../../app/server/rules/archive-lifecycle.ts#L103) |
 
 ```mermaid
 flowchart TD
@@ -88,7 +105,7 @@ flowchart TD
 
 ### assertReopenAllowed
 
-[assertReopenAllowed](../../app/server/rules/archive-lifecycle.ts#L14)
+[assertReopenAllowed](../../app/server/rules/archive-lifecycle.ts#L15)
 
 ```javascript
 function assertReopenAllowed(c) {
@@ -98,7 +115,7 @@ function assertReopenAllowed(c) {
 
 ### assertStateAndResponsibility
 
-[assertStateAndResponsibility](../../app/server/rules/archive-lifecycle.ts#L17)
+[assertStateAndResponsibility](../../app/server/rules/archive-lifecycle.ts#L18)
 
 ```javascript
 function assertStateAndResponsibility(type, status, ids) {
@@ -109,7 +126,7 @@ function assertStateAndResponsibility(type, status, ids) {
 
 ### transitionChanged
 
-[transitionChanged](../../app/server/rules/archive-lifecycle.ts#L21)
+[transitionChanged](../../app/server/rules/archive-lifecycle.ts#L22)
 
 ```javascript
 function transitionChanged(c) {
@@ -119,17 +136,17 @@ function transitionChanged(c) {
 
 ### planArchiveEffects
 
-[planArchiveEffects](../../app/server/rules/archive-lifecycle.ts#L119)
+[planArchiveEffects](../../app/server/rules/archive-lifecycle.ts#L133)
 
 ```javascript
 function planArchiveEffects(context) {
-    return archiveTransitionRules.flatMap((rule)=>rule.when(context) ? rule.apply(context) : []);
+    return planRules(archiveLifecycleModule, context).statements;
 }
 ```
 
 ### auditCancellationTarget
 
-[auditCancellationTarget](../../app/server/rules/archive-lifecycle.ts#L31)
+[auditCancellationTarget](../../app/server/rules/archive-lifecycle.ts#L32)
 
 ```javascript
 function auditCancellationTarget(task, old, change) {
@@ -145,7 +162,7 @@ function auditCancellationTarget(task, old, change) {
 
 ### saveStateAndBindings
 
-[saveStateAndBindings](../../app/server/rules/archive-lifecycle.ts#L87)
+[saveStateAndBindings](../../app/server/rules/archive-lifecycle.ts#L88)
 
 ```javascript
 function saveStateAndBindings(c) {
@@ -160,7 +177,7 @@ function saveStateAndBindings(c) {
 
 ### stateChanged
 
-[stateChanged](../../app/server/rules/archive-lifecycle.ts#L24)
+[stateChanged](../../app/server/rules/archive-lifecycle.ts#L25)
 
 ```javascript
 function stateChanged(c) {
@@ -170,7 +187,7 @@ function stateChanged(c) {
 
 ### recordStateChange
 
-[recordStateChange](../../app/server/rules/archive-lifecycle.ts#L92)
+[recordStateChange](../../app/server/rules/archive-lifecycle.ts#L93)
 
 ```javascript
 function recordStateChange(c) {
@@ -188,7 +205,7 @@ function recordStateChange(c) {
 
 ### onlyMembersChanged
 
-[onlyMembersChanged](../../app/server/rules/archive-lifecycle.ts#L25)
+[onlyMembersChanged](../../app/server/rules/archive-lifecycle.ts#L26)
 
 ```javascript
 function onlyMembersChanged(c) {
@@ -198,7 +215,7 @@ function onlyMembersChanged(c) {
 
 ### recordMembersChange
 
-[recordMembersChange](../../app/server/rules/archive-lifecycle.ts#L95)
+[recordMembersChange](../../app/server/rules/archive-lifecycle.ts#L96)
 
 ```javascript
 function recordMembersChange(c) {
@@ -216,7 +233,7 @@ function recordMembersChange(c) {
 
 ### withdrawsAudit
 
-[withdrawsAudit](../../app/server/rules/archive-lifecycle.ts#L28)
+[withdrawsAudit](../../app/server/rules/archive-lifecycle.ts#L29)
 
 ```javascript
 function withdrawsAudit(c) {
@@ -234,7 +251,7 @@ function withdrawsAudit(c) {
 
 ### cancelWithdrawnAudit
 
-[cancelWithdrawnAudit](../../app/server/rules/archive-lifecycle.ts#L37)
+[cancelWithdrawnAudit](../../app/server/rules/archive-lifecycle.ts#L38)
 
 ```javascript
 function cancelWithdrawnAudit(c) {
@@ -252,7 +269,7 @@ function cancelWithdrawnAudit(c) {
 
 ### cancelInapplicableTasksWhen
 
-[cancelInapplicableTasksWhen](../../app/server/rules/archive-lifecycle.ts#L79)
+[cancelInapplicableTasksWhen](../../app/server/rules/archive-lifecycle.ts#L80)
 
 ```javascript
 function cancelInapplicableTasksWhen(c) {
@@ -262,7 +279,7 @@ function cancelInapplicableTasksWhen(c) {
 
 ### cancelsInapplicableTasks
 
-[cancelsInapplicableTasks](../../app/server/rules/archive-lifecycle.ts#L49)
+[cancelsInapplicableTasks](../../app/server/rules/archive-lifecycle.ts#L50)
 
 ```javascript
 function cancelsInapplicableTasks(c) {
@@ -283,7 +300,7 @@ function cancelsInapplicableTasks(c) {
 
 ### notifyManualTasksWhen
 
-[notifyManualTasksWhen](../../app/server/rules/archive-lifecycle.ts#L83)
+[notifyManualTasksWhen](../../app/server/rules/archive-lifecycle.ts#L84)
 
 ```javascript
 function notifyManualTasksWhen(c) {
@@ -293,7 +310,7 @@ function notifyManualTasksWhen(c) {
 
 ### notifyManualTasks
 
-[notifyManualTasks](../../app/server/rules/archive-lifecycle.ts#L64)
+[notifyManualTasks](../../app/server/rules/archive-lifecycle.ts#L65)
 
 ```javascript
 function notifyManualTasks(c) {
@@ -314,7 +331,7 @@ function notifyManualTasks(c) {
 
 ### closesArchive
 
-[closesArchive](../../app/server/rules/archive-lifecycle.ts#L26)
+[closesArchive](../../app/server/rules/archive-lifecycle.ts#L27)
 
 ```javascript
 function closesArchive(c) {
@@ -324,7 +341,7 @@ function closesArchive(c) {
 
 ### freezeTagsAndRecordClosure
 
-[freezeTagsAndRecordClosure](../../app/server/rules/archive-lifecycle.ts#L98)
+[freezeTagsAndRecordClosure](../../app/server/rules/archive-lifecycle.ts#L99)
 
 ```javascript
 function freezeTagsAndRecordClosure(c) {
@@ -343,7 +360,7 @@ function freezeTagsAndRecordClosure(c) {
 
 ### reopensArchive
 
-[reopensArchive](../../app/server/rules/archive-lifecycle.ts#L27)
+[reopensArchive](../../app/server/rules/archive-lifecycle.ts#L28)
 
 ```javascript
 function reopensArchive(c) {
@@ -353,7 +370,7 @@ function reopensArchive(c) {
 
 ### recordReopening
 
-[recordReopening](../../app/server/rules/archive-lifecycle.ts#L102)
+[recordReopening](../../app/server/rules/archive-lifecycle.ts#L103)
 
 ```javascript
 function recordReopening(c) {

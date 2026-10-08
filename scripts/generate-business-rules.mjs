@@ -2,7 +2,8 @@ import {readFileSync,writeFileSync,mkdirSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {resolve} from 'node:path';
 import {archiveStatePolicy} from '../app/shared/archive-states.ts';
-import {archiveTransitionRules,assertReopenAllowed,assertStateAndResponsibility,transitionChanged,planArchiveEffects,auditCancellationTarget} from '../app/server/rules/archive-lifecycle.ts';
+import {archiveLifecycleModule,archiveTransitionRules,assertReopenAllowed,assertStateAndResponsibility,transitionChanged,planArchiveEffects,auditCancellationTarget} from '../app/server/rules/archive-lifecycle.ts';
+import {planRules} from '../app/server/rules/contract.ts';
 
 const root=new URL('../',import.meta.url),output=new URL('docs/generated/archive-rules.md',root);
 const lifecycle='app/server/rules/archive-lifecycle.ts';
@@ -20,6 +21,13 @@ export function renderBusinessRules(){
   '','## 状态策略','','直接读取 [archiveStatePolicy](../../app/shared/archive-states.ts)：网页/MCP 可选状态、状态校验、关闭和负责成员要求均使用该定义。',
   '','| 状态 | 档案类型 | 自动关闭 | 要求负责成员 |','| --- | --- | --- | --- |'];
  for(const p of archiveStatePolicy)lines.push(`| ${p.status} | ${p.types.map(t=>t==='person'?'人物':'组织').join('、')} | ${p.closed?'是':'否'} | ${p.requiresMembers?'是':'否'} |`);
+ const module=archiveLifecycleModule,v=module.verification;
+ lines.push('','## 共同契约', '',`模块：\`${module.id}\`；计划器：${link('app/server/rules/contract.ts',planRules.name)}。计划按规则顺序返回 steps 和 statements，不执行提交。`,
+  '',`触发入口：${module.triggers.map(t=>link(t.file,t.entry)).join('、')}。`,
+  `事务提交：${link(v.transaction.file,v.transaction.entry)}；版本保护：${link(v.guard.file,v.guard.entry)}。`,
+  `幂等边界：${v.idempotency}`,`失败边界：${v.failure}`,
+  '',...v.tests.map(file=>{readFileSync(new URL(file,root));return `- 验证：[${file}](../../${file})`;}),
+  '','这些边界说明是模块内的维护元数据，并非自动推导的证明；条件、实际影响及顺序以以下执行函数与行为测试为准。');
  lines.push('','## 触发与事务边界','',
   '网页 HTTP 与 MCP 的状态修改、显式重开都进入 '+link('app/server/archives.ts','transition')+'。该入口调用下表定义产生 SQL，最后一起提交；规则不单独写库。',
   '',`- 读取与预校验：${link('app/server/archives.ts','get')}（存在性、删除权限、关闭锁定、版本）。`,
