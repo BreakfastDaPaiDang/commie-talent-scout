@@ -11,7 +11,7 @@
 3. 选一项前置依赖已完成的 Issue。想先熟悉项目，可以从 [#64](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/64) 个性化标签开始；主线从 [#55](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/55) 规则整理开始；[#56](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/56) 视觉方案也能先做。
 4. 让 AI 先解释现有相关路径，再完成当前 Issue 并演示验收。验收结果清楚后再接下一项，不一次性要求 AI 做完整个版本。
 
-`ready-for-agent` 表示该项要求已经足够清楚，不表示前置任务已完成。总览标记 `ready-for-human` 是方便接手人统筹版本，并不增加产品审批关卡。进度以 GitHub Issue 和里程碑为准，本文不另外维护完成勾选。
+`ready-for-agent` 表示该项要求已经足够清楚，不表示前置任务已完成。总览标记 `ready-for-human` 是方便接手人统筹版本，并不增加产品审批关卡。进度以 GitHub Issue 和里程碑为准，本文不另外维护完成勾选。当前 PRD 已更新至修订 2，任务生命周期以“开启／关闭”和派生“逾期”分开为准。
 
 ## 文档怎么找
 
@@ -49,9 +49,9 @@ Issue 是具体工作与验收清单，PRD 是需求正文，ADR 是架构原因
 | --- | --- | --- |
 | S01 · [#55](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/55) | 小范围重构：集中业务规则，并自动生成规则视图 | 无 |
 | S02 · [#56](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/56) | 从生图意向到可操作的任务看板与新版导航方案 | 无 |
-| S03 · [#57](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/57) | 通过网页和 MCP 创建、领取并完成一项人事任务 | [#55](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/55)、[#56](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/56) |
+| S03 · [#57](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/57) | 通过网页和 MCP 创建、领取并完成一项人事任务，统一标签、优先级与发起人 | [#55](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/55)、[#56](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/56) |
 | S04 · [#58](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/58) | 支持主动放弃、延期、重开与任务评论历史 | [#57](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/57) |
-| S05 · [#59](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/59) | 升级消息提醒页，并按期限提醒和自动结束任务 | [#58](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/58) |
+| S05 · [#59](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/59) | 升级消息提醒页，并按期限提醒和标记逾期任务 | [#58](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/58) |
 | S06 · [#60](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/60) | 打通引荐审核、入社转档与入社对接 | [#58](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/58) |
 | S07 · [#61](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/61) | 生成独立月度任务，并支持留档时完成关联任务 | [#59](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/59)、[#60](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/60) |
 | S08 · [#62](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/62) | 处理转为社友、退出及档案变化引起的任务联动 | [#61](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/61) |
@@ -67,7 +67,7 @@ flowchart TD
   S01["S01 小范围重构"] --> S03["S03 创建、领取、完成"]
   S02["S02 生图与交互方案"] --> S03
   S03 --> S04["S04 放弃、延期、评论、重开"]
-  S04 --> S05["S05 消息与到期收尾"]
+  S04 --> S05["S05 消息与逾期提醒"]
   S04 --> S06["S06 引荐、社员、入社对接"]
   S05 --> S07["S07 月度任务与自动完成"]
   S06 --> S07
@@ -121,11 +121,11 @@ flowchart TD
 
 - 社员身份与登录账号分开；同一个人的档案从外部到入社、退出都延续。
 - 任务只由本人接取，一项任务只有一名当前负责人；放弃回到待领取，不算失败。
-- 任务关闭后只读；重新开启要有新期限；到期没有宽限期。
+- 任务关闭后只读；重新开启要有新期限；逾期保持开启，不由系统自动关闭；负责人可延期、完成或放弃。
 - 上月与下月各是一个任务，允许补作业；同月份的重复生成必须去重。
 - 接取者可以如实完成，包括目前联系不到；不得加上“必须有回复／新观察才能完成”的硬门槛。
 - 交付要求是把结果写进档案，任务评论不重复存一份；自动完成减少操作，不成为唯一完成入口。
-- 统计界面暂不改，不做自动考核；新任务由大家主动从看板领取。
+- 统计界面暂不改，不做自动考核；新任务由大家主动从看板领取。任务标签复用公共标签资产，优先级使用 P0/P1/P2，发起人支持成员与早纪（人事版）。
 - 先用生图探索看板意向，再落实共享界面和真实交互；不拿生成图替代完整界面验收。
 - 规则视图从实际可执行定义生成，不手工维护第二份规则表。
 
@@ -139,7 +139,7 @@ flowchart TD
 
 ## 合并、发布与最后迁移
 
-S01 确定的[分阶段集成方案](./integration.md)说明 `integration/1.0.0`、可独立合入的兼容改动以及生产迁移边界。现有档案实现见[自动生成规则视图](../../generated/archive-rules.md)，对应[局部验收](../../validation/1.0.0-s01-executable-rules.md)。暂缓的 1.0.0.1 工作倾向推送提案单独保存在本地 `proposal/1.0.0.1-handoff`，本版仍按 PRD 修订 1 实施。
+S01 确定的[分阶段集成方案](./integration.md)说明 `integration/1.0.0`、可独立合入的兼容改动以及生产迁移边界。现有档案实现见[自动生成规则视图](../../generated/archive-rules.md)，对应[局部验收](../../validation/1.0.0-s01-executable-rules.md)。暂缓的 1.0.0.1 工作倾向推送提案单独保存在本地 `proposal/1.0.0.1-handoff`，本版按 PRD 修订 2 实施。
 
 当前 `main` 的推送会触发生产自动发布。开发使用功能分支和 PR；尚不兼容旧数据的改动应进入 1.0.0 集成分支或既定发布门控，具体方式由 S01 先说明。不能把“已经合并”当成“生产已具备完整新规则”。
 
@@ -152,17 +152,17 @@ S11 在隔离环境完成全流程和迁移演练；S12 才核对真实档案、
 <details>
 <summary>用户故事与验收覆盖索引（核对是否漏项时展开）</summary>
 
-编号来自 [PRD](../../PRD-1.0.0.md) 第 12、13 节。56 条用户故事、32 项验收均已分配；跨模块场景由功能项各自验证，再在 S11 汇总。S12 的正式执行不能被 S11 的演练替代。
+编号来自 [PRD](../../PRD-1.0.0.md) 第 12、13 节。60 条用户故事、32 项验收均已分配；跨模块场景由功能项各自验证，再在 S11 汇总。S12 的正式执行不能被 S11 的演练替代。
 
 | Issue | 用户故事 | 验收场景 |
 | --- | --- | --- |
 | S01 · [#55](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/55) | 50、51 | A25、A27 |
 | S02 · [#56](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/56) | 1、21、31、35、45、52、53 | A01、A23、A29 |
-| S03 · [#57](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/57) | 20、21、22、27、34、35、48、49、52 | A10、A16、A23、A25、A28 |
+| S03 · [#57](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/57) | 20、21、22、27、34、35、48、49、52、57、58、59 | A10、A16、A23、A25、A28 |
 | S04 · [#58](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/58) | 23、24、30、31、32、33、34、35、48 | A11、A12、A18、A23、A25、A26 |
 | S05 · [#59](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/59) | 25、26、45、46、47、48 | A12、A13、A14、A15、A24、A25 |
 | S06 · [#60](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/60) | 1、2、3、4、5、6、9、10、15、36、37、44、48 | A01、A02、A03、A05、A21、A25 |
-| S07 · [#61](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/61) | 28、29、30、38、39、40、41、48、55 | A16、A17、A19、A20、A30 |
+| S07 · [#61](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/61) | 28、29、30、38、39、40、41、48、55、60 | A16、A17、A19、A20、A30 |
 | S08 · [#62](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/62) | 7、8、10、32、42、43 | A04、A21、A22、A26 |
 | S09 · [#63](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/63) | 17、18、19、48 | A08、A09、A25 |
 | S10 · [#64](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/64) | 11、12、13、14、15、16 | A06、A07、A25 |
