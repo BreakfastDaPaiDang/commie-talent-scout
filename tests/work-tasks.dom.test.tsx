@@ -22,3 +22,16 @@ test('task page exposes comment history, admin editing and versioned observation
  try{const {WorkTasksPage}=await import('../app/client/WorkTasksPage');await act(async()=>{f.root.render(<WorkTasksPage actor={actor} onOpenArchive={()=>{}}/>);});const toggle=f.w.document.querySelector('.work-task-history > button') as HTMLButtonElement;assert.ok(toggle);await act(async()=>{toggle.click();await new Promise(resolve=>setTimeout(resolve,20));});assert.ok((f.w.document.body.textContent??'').includes('修改任务'));assert.ok((f.w.document.body.textContent??'').includes('标题：旧标题 → 新标题'));assert.ok((f.w.document.body.textContent??'').includes('编辑历史（2）'));assert.ok([...f.w.document.querySelectorAll('.work-task-comment footer button')].some(button=>button.textContent==='编辑'));assert.ok((f.w.document.body.textContent??'').includes('观察版本 1'));
  }finally{await f.close();}
 });
+
+test('task book keeps the personal action list separate from other members work',async()=>{
+ const f=environment();
+ f.w.history.replaceState(null,'','http://localhost/tasks');
+ const mine={...task,title:'我的进行中'};
+ const waiting={...task,id:'c880c0af-ddb4-4005-9e7e-8e9b0e48dac2',title:'待领取工作',owner_id:null,owner_name:null,version:1};
+ const other={...task,id:'d880c0af-ddb4-4005-9e7e-8e9b0e48dac3',title:'其他人的工作',owner_id:'other-member',owner_name:'其他成员',version:1};
+ globalThis.fetch=async url=>{const path=String(url);if(path.includes('/work-tasks?'))return Response.json({tasks:[mine,waiting,other]});return Response.json({events:[],comments:[]});};
+ try{const {WorkTasksPage}=await import('../app/client/WorkTasksPage');await act(async()=>{f.root.render(<WorkTasksPage actor={actor} onOpenArchive={()=>{}}/>);});
+  const text=f.w.document.body.textContent??'';
+  assert.ok(text.includes('任务簿'));assert.ok(text.includes('看板大厅'));assert.ok(text.includes('我的进行中'));assert.ok(text.includes('待领取工作'));assert.equal(text.includes('其他人的工作'),false);assert.equal(f.w.document.querySelector('.task-scene'),null);
+ }finally{await f.close();}
+});
