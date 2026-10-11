@@ -11,6 +11,7 @@ const task={id,archive_id:archive.id,archive_preview:archive,kind:'custom' as co
 function environment(){
  const dom=new JSDOM('<!doctype html><div id="root"></div>',{url:'http://localhost/tasks?task='+id,pretendToBeVisual:true}),w=dom.window;
  for(const key of ['window','document','HTMLElement','Event','CustomEvent','location','history','localStorage','sessionStorage'])Object.defineProperty(globalThis,key,{value:key==='window'?w:(w as unknown as Record<string,unknown>)[key],configurable:true,writable:true});
+ w.HTMLDialogElement.prototype.showModal=function(){this.open=true;};w.HTMLDialogElement.prototype.close=function(){this.open=false;};
  Object.assign(globalThis,{IS_REACT_ACT_ENVIRONMENT:true,requestAnimationFrame:(f:()=>void)=>setTimeout(f,0)});
  const root=createRoot(w.document.getElementById('root')!);
  return {dom,w,root,async close(){await act(async()=>root.unmount());dom.window.close();}};
@@ -19,7 +20,7 @@ test('task page exposes comment history, admin editing and versioned observation
  const f=environment();
  const detail={events:[{kind:'task.edited',actor_name:'管理员',before_json:JSON.stringify({title:'旧标题',deadline_at:'2099-01-01T00:00:00Z'}),after_json:JSON.stringify({title:'新标题',deadline_at:'2099-02-01T00:00:00Z'}),created_at:'2026-10-08T12:01:00Z'}],comments:[{id:'comment',task_id:id,author_id:'other',author_name:'其他成员',body:'当前评论',references:[{observation_id:'observation',archive_id:archive.id,content_version:1}],history:[{version:1,body:'旧评论',deleted:false,references:[],created_at:'2026-10-08T12:00:00Z'},{version:2,body:'当前评论',deleted:false,references:[{observation_id:'observation',archive_id:archive.id,content_version:1}],created_at:'2026-10-08T12:01:00Z'}],created_at:'2026-10-08T12:00:00Z',updated_at:'2026-10-08T12:01:00Z',deleted:false,version:2}]};
  globalThis.fetch=async url=>{const path=String(url);if(path.includes('/work-tasks?'))return Response.json({tasks:[task]});if(path.endsWith('/work-tasks/'+id))return Response.json(detail);return Response.json({});};
- try{const {WorkTasksPage}=await import('../app/client/WorkTasksPage');await act(async()=>{f.root.render(<WorkTasksPage actor={actor} onOpenArchive={()=>{}}/>);await new Promise(resolve=>setTimeout(resolve,30));});assert.ok((f.w.document.body.textContent??'').includes('修改任务'));assert.ok((f.w.document.body.textContent??'').includes('标题：旧标题 → 新标题'));assert.ok((f.w.document.body.textContent??'').includes('编辑历史（2）'));assert.ok([...f.w.document.querySelectorAll('.work-task-comment footer button')].some(button=>button.textContent==='编辑'));assert.ok((f.w.document.body.textContent??'').includes('观察版本 1'));assert.ok(f.w.document.querySelector('[aria-label="任务评论"]'));
+ try{const {WorkTasksPage}=await import('../app/client/WorkTasksPage');await act(async()=>{f.root.render(<WorkTasksPage actor={actor} onOpenArchive={()=>{}}/>);await new Promise(resolve=>setTimeout(resolve,30));});assert.ok((f.w.document.body.textContent??'').includes('修改任务'));assert.ok((f.w.document.body.textContent??'').includes('标题：旧标题 → 新标题'));assert.ok((f.w.document.body.textContent??'').includes('编辑历史（2）'));assert.ok([...f.w.document.querySelectorAll('.work-task-comment footer button')].some(button=>button.textContent==='编辑'));assert.ok((f.w.document.body.textContent??'').includes('观察版本 1'));assert.ok(f.w.document.querySelector('[aria-label="任务评论"]'));const editButton=f.w.document.querySelector<HTMLButtonElement>('.task-edit-button');assert.ok(editButton);await act(async()=>{editButton?.click();});assert.ok((f.w.document.body.textContent??'').includes('截止时间'));assert.ok((f.w.document.body.textContent??'').includes('提交交付'));assert.ok((f.w.document.body.textContent??'').includes('延期'));assert.ok((f.w.document.body.textContent??'').includes('放弃'));
  }finally{await f.close();}
 });
 
@@ -32,6 +33,6 @@ test('task book keeps the personal action list separate from other members work'
  globalThis.fetch=async url=>{const path=String(url);if(path.includes('/work-tasks?'))return Response.json({tasks:[mine,waiting,other]});return Response.json({events:[],comments:[]});};
  try{const {WorkTasksPage}=await import('../app/client/WorkTasksPage');await act(async()=>{f.root.render(<WorkTasksPage actor={actor} onOpenArchive={()=>{}}/>);});
   const text=f.w.document.body.textContent??'';
-  assert.ok(text.includes('任务簿'));assert.ok(text.includes('看板大厅'));assert.ok(text.includes('我的进行中'));assert.ok(text.includes('待领取工作'));assert.equal(text.includes('其他人的工作'),false);assert.equal(f.w.document.querySelector('.task-scene'),null);
+  assert.ok(text.includes('任务簿'));assert.ok(text.includes('看板大厅'));assert.ok(text.includes('我的进行中'));assert.ok(text.includes('待领取工作'));assert.ok(f.w.document.querySelector('.task-mark-waiting'));assert.equal(text.includes('其他人的工作'),false);assert.equal(f.w.document.querySelector('.task-scene'),null);
  }finally{await f.close();}
 });

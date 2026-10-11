@@ -226,7 +226,7 @@ test('task history supports content edits, deadline extension, comments with per
  f.sqlite.prepare('INSERT INTO observations(id,archive_id,author_id,created_at,updated_at) VALUES(?,?,?,?,?)').run(observation,archive.id,f.actor.id,at,at);
  f.sqlite.prepare('INSERT INTO observation_versions(observation_id,version,body,editor_id,created_at) VALUES(?,?,?,?,?)').run(observation,1,'正文只应在观察接口返回',f.actor.id,at);
  const service=new WorkTasks(f.env,f.actor,'web'),task=await service.create({archive_id:archive.id,kind:'custom',title:'原始标题',purpose:'原始目的',delivery:'原始交付',deadline_at:'2099-01-01T00:00:00.000Z',request_id:uuid()});
- const edited=await service.edit({id:task.id,expected_version:1,title:'更新标题',request_id:uuid()});assert.equal(edited.version,2);
+ const edited=await service.edit({id:task.id,expected_version:1,title:'更新标题',deadline_at:'2099-01-15T00:00:00.000Z',request_id:uuid()});assert.equal(edited.version,2);assert.equal(edited.deadline_at,'2099-01-15T00:00:00.000Z');
  const claimed=await service.claim({id:task.id,expected_version:edited.version,request_id:uuid()});
  const extended=await service.extend({id:task.id,expected_version:claimed.version,deadline_at:'2099-02-01T00:00:00.000Z',reason:'补充核对时间',request_id:uuid()});assert.equal(extended.version,4);
  const comment=await service.addComment({task_id:task.id,body:'已完成第一轮核对',references:[{observation_id:observation,content_version:1}],request_id:uuid()});
