@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 5190 --strictPort",
-    "dev:worker": "wrangler dev --env staging --port 8790",
+    "db:local:migrate": "wrangler d1 migrations apply cts-staging --local --env staging --config wrangler.jsonc",
+    "dev:worker": "npm run db:local:migrate && wrangler dev --env staging --port 8790",
     "dev:scheduled": "node scripts/dev-scheduled.mjs",
     "setup:demo": "node scripts/setup-demo.mjs",
     "setup:demo:reset": "node scripts/setup-demo.mjs --reset",
