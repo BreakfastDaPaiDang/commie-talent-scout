@@ -6,15 +6,16 @@
 
 ```powershell
 npm ci
-npx wrangler d1 migrations apply cts-staging --env staging --local
-node scripts/bootstrap.mjs --target staging
+npm run setup:demo
 npm run build
 npm run dev:worker
 ```
 
-浏览器打开 `http://127.0.0.1:8790/`。开发前端时另开 `npm run dev`，使用 `http://127.0.0.1:5190/`，接口代理到 8790。本地初始化凭证保存在 `secrets/bootstrap-staging-local-admin.json`，首次登录必须改密。不要重复初始化已有数据；失败但状态为 pending 时，应先检查数据库和私有恢复文件。
+`setup:demo` 只操作本地 Wrangler 的 D1/R2 模拟环境，不需要 Cloudflare 账号，也不会连接 staging 或生产。它会准备虚构的人物、组织、社员、任务、标签、观察记录、评论历史和图片，并在 `secrets/demo-local-accounts.json` 写入本次生成的本地账号与 MCP Token；该文件不会被 Git 跟踪。浏览器打开 `http://127.0.0.1:8790/`，使用脚本输出的 `demo_admin` 登录。需要清空并重建本地演示资料时运行 `npm run setup:demo:reset`。
 
-检查使用 `npm run check`、`npm test`、`npm run test:dom`、`npm run build` 和 `node scripts/check-ui.mjs`；真实接口界面验收按 [前端约定](./agents/frontend.md)执行。重新构建后，如果本地 Worker 对新静态文件返回 HTML，请重启 `dev:worker` 使资源索引更新。
+开发前端时另开 `npm run dev`，使用 `http://127.0.0.1:5190/`，接口代理到 8790。演示账号只属于本地环境，不要复制到 `https://scout-staging.dapaidang.org`；远程 staging 仍按独立账号和凭证验收。旧的 `node scripts/bootstrap.mjs --target staging` 仍可用于只需要空数据库的本地场景，但新开发者优先使用演示初始化。
+
+检查使用 `npm run check`、`npm test`、`npm run test:dom`、`npm run build` 和 `node scripts/check-ui.mjs`；本地演示初始化及 D1/R2 复现检查使用 `npm run test:demo`。真实接口界面验收按 [前端约定](./agents/frontend.md)执行。重新构建后，如果本地 Worker 对新静态文件返回 HTML，请重启 `dev:worker` 使资源索引更新。
 
 档案生命周期规则视图使用 `npm run rules:generate` 从执行定义生成，提交代码时一并提交结果；`npm run rules:check` 检查过期，CI 同样执行。真实网页/MCP 关闭与重开联验使用 `node scripts/verify-archive-lifecycle.mjs`（可加 `--remote` 检查隔离 staging）。新版接入和生产边界见 [1.0.0 集成方案](./releases/1.0.0/integration.md)。
 
