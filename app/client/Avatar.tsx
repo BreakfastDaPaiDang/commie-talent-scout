@@ -46,5 +46,5 @@ export function Placeholder({ type = "person", className = "" }: {type?: "person
 
 export function Avatar({name='',type='person',src,size='normal'}:{name?:string;type?:'person'|'org';src?:string;size?:string}){
   const[failed,setFailed]=useState<string[]>([]);
-  return <span className={`avatar avatar-${type} avatar-${size}`} title={name}>{src&&!failed.includes(src)?<img src={src} alt={`${name}的头像`} onError={()=>setFailed(old=>[...old,src])}/>:<Placeholder type={type}/>}</span>;
+  return <span className={`avatar avatar-${type} avatar-${size}`} title={name}>{src&&!failed.includes(src)?<img src={src} alt={`${name}的头像`} loading={size==='hero'?'eager':'lazy'} decoding="async" onError={()=>setFailed(old=>[...old,src])}/>:<Placeholder type={type}/>}</span>;
 }
