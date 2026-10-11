@@ -10,19 +10,23 @@ import {auditCancellationTarget,planArchiveEffects} from './rules/archive-lifecy
 import {monthDeadline,monthKey,monthKeyAt} from '../shared/monthly-tasks.ts';
 
 const taskKinds=['audit','onboarding','monthly','cooperation','custom'] as const;
+const taskPriorities=['P0','P1','P2'] as const;
+const taskLabelNames:Record<string,string>={audit:'人事审核',onboarding:'入社对接',monthly:'月度沟通',cooperation:'组织合作',custom:'临时工作'};
+const taskPriorityDefaults:Record<typeof taskKinds[number],typeof taskPriorities[number]>={audit:'P1',onboarding:'P1',monthly:'P2',cooperation:'P2',custom:'P2'};
+const systemInitiator={kind:'system' as const,key:'zaoji-hr',name:'早纪（人事版）',avatar_key:'zaoji-hr'};
 export const TASK_REMINDER_WINDOW_MS=24*60*60*1000;
 export const workTaskCommentReferenceInput=z.object({observation_id:z.uuid(),content_version:z.number().int().min(1)}).strict();
 const monthlyKeyInput=z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/,'月份必须使用 YYYY-MM 格式');
-export const workTaskCreateInput=z.object({archive_id:z.uuid().nullable().default(null),kind:z.enum(taskKinds),title:z.string().trim().min(1).max(160),purpose:z.string().trim().min(1).max(4000),delivery:z.string().trim().min(1).max(4000),deadline_at:z.string().datetime(),source:z.enum(['manual','rule']).default('manual'),period_key:monthlyKeyInput.optional(),request_id:requestId}).strict();
+export const workTaskCreateInput=z.object({archive_id:z.uuid().nullable().default(null),kind:z.enum(taskKinds),labels:z.array(z.string().trim().min(1).max(80)).max(8).default([]),priority:z.enum(taskPriorities).optional(),title:z.string().trim().min(1).max(160),purpose:z.string().trim().min(1).max(4000),delivery:z.string().trim().min(1).max(4000),deadline_at:z.string().datetime(),source:z.enum(['manual','rule']).default('manual'),period_key:monthlyKeyInput.optional(),request_id:requestId}).strict();
 export const monthlyPreviewInput=z.object({month:monthlyKeyInput.optional()}).strict();
-export const monthlyGenerateInput=z.object({month:monthlyKeyInput.optional(),request_id:requestId}).strict();
+export const monthlyGenerateInput=z.object({month:monthlyKeyInput.optional(),initiator_kind:z.enum(['member','system']).default('member'),request_id:requestId}).strict();
 export const workTaskClaimInput=z.object({id:z.uuid(),expected_version:expectedVersion,request_id:requestId}).strict();
 export const workTaskAssignInput=z.object({id:z.uuid(),member_id:z.uuid(),expected_version:expectedVersion,reason:z.string().trim().min(1).max(500),request_id:requestId}).strict();
 export const workTaskCompleteInput=z.object({id:z.uuid(),expected_version:expectedVersion,result_kind:z.enum(['completed','continue','not_suitable','unable_to_contact','joined','discarded']),result_text:z.string().trim().min(1).max(5000),references:z.array(workTaskCommentReferenceInput).max(20).default([]),request_id:requestId}).strict();
 export const workTaskReleaseInput=z.object({id:z.uuid(),expected_version:expectedVersion,deadline_at:z.string().datetime(),reason:z.string().trim().max(500).default('主动交还，重新等待接取'),request_id:requestId}).strict();
 export const workTaskCancelInput=z.object({id:z.uuid(),expected_version:expectedVersion,reason:z.string().trim().min(1).max(500),request_id:requestId}).strict();
 export const workTaskExtendInput=z.object({id:z.uuid(),expected_version:expectedVersion,deadline_at:z.string().datetime(),reason:z.string().trim().max(500).default('延期任务期限'),request_id:requestId}).strict();
-export const workTaskEditInput=z.object({id:z.uuid(),expected_version:expectedVersion,title:z.string().trim().min(1).max(160).optional(),purpose:z.string().trim().min(1).max(4000).optional(),delivery:z.string().trim().min(1).max(4000).optional(),deadline_at:z.string().datetime().optional(),request_id:requestId}).strict().refine(a=>a.title!==undefined||a.purpose!==undefined||a.delivery!==undefined||a.deadline_at!==undefined,{message:'至少需要调整一项任务内容'});
+export const workTaskEditInput=z.object({id:z.uuid(),expected_version:expectedVersion,title:z.string().trim().min(1).max(160).optional(),purpose:z.string().trim().min(1).max(4000).optional(),delivery:z.string().trim().min(1).max(4000).optional(),labels:z.array(z.string().trim().min(1).max(80)).max(8).optional(),priority:z.enum(taskPriorities).optional(),deadline_at:z.string().datetime().optional(),request_id:requestId}).strict().refine(a=>a.title!==undefined||a.purpose!==undefined||a.delivery!==undefined||a.labels!==undefined||a.priority!==undefined||a.deadline_at!==undefined,{message:'至少需要调整一项任务内容'});
 export const workTaskReopenInput=z.object({id:z.uuid(),expected_version:expectedVersion,deadline_at:z.string().datetime(),owner_mode:z.enum(['keep','unassigned']).default('keep'),reason:z.string().trim().max(500).default('重新开启任务'),request_id:requestId}).strict();
 export const workTaskCommentCreateInput=z.object({task_id:z.uuid(),body:z.string().trim().min(1).max(5000),references:z.array(workTaskCommentReferenceInput).max(20).default([]),request_id:requestId}).strict();
 export const workTaskCommentEditInput=z.object({id:z.uuid(),expected_version:expectedVersion,body:z.string().trim().min(1).max(5000),references:z.array(workTaskCommentReferenceInput).max(20).optional(),request_id:requestId}).strict();
@@ -30,7 +34,7 @@ export const workTaskCommentDeleteInput=z.object({id:z.uuid(),expected_version:e
 export const workTaskCommentRestoreInput=z.object({id:z.uuid(),expected_version:expectedVersion,request_id:requestId}).strict();
 export const workTaskReferInput=z.object({archive_id:z.uuid(),expected_version:expectedVersion,deadline_at:z.string().datetime(),request_id:requestId}).strict();
 export const workTaskMembershipInput=z.object({archive_id:z.uuid(),expected_version:expectedVersion,deadline_at:z.string().datetime(),request_id:requestId}).strict();
-type Row={id:string;archive_id:string|null;kind:typeof taskKinds[number];title:string;purpose:string;delivery:string;source:'manual'|'rule';status:'open'|'completed'|'expired'|'cancelled';owner_id:string|null;deadline_at:string;created_by:string;created_at:string;updated_at:string;version:number;result_kind:string|null;result_text:string|null;result_references_json:string;completed_at:string|null;closed_reason:string|null;period_key:string|null};
+type Row={id:string;archive_id:string|null;kind:typeof taskKinds[number];labels_json:string;priority:typeof taskPriorities[number];initiator_kind:'member'|'system';initiator_id:string|null;title:string;purpose:string;delivery:string;source:'manual'|'rule';status:'open'|'completed'|'expired'|'cancelled';owner_id:string|null;deadline_at:string;created_by:string;created_at:string;updated_at:string;version:number;result_kind:string|null;result_text:string|null;result_references_json:string;completed_at:string|null;closed_reason:string|null;period_key:string|null};
 type CommentRow={id:string;task_id:string;author_id:string;author_name:string|null;body:string;references_json:string;created_at:string;updated_at:string;deleted_at:string|null;version:number};
 type CommentVersionRow={comment_id:string;task_id:string;version:number;actor_id:string|null;source:'web'|'mcp'|'system';body:string;references_json:string;deleted_at:string|null;created_at:string};
 
@@ -39,7 +43,7 @@ export class WorkTasks {
   private stmt(sql:string,...args:unknown[]){return this.env.DB.prepare(sql).bind(...args);}
   private event(task:string,kind:string,before:unknown,after:unknown,reason?:string){return this.stmt('INSERT INTO work_task_events(id,task_id,actor_id,source,kind,before_json,after_json,reason,created_at) VALUES(?,?,?,?,?,?,?,?,?)',uid(),task,this.actor.id,this.source,kind,before?JSON.stringify(before):null,after?JSON.stringify(after):null,reason??null,now());}
   private async get(id:string,version?:number){const row=await this.stmt('SELECT * FROM work_tasks WHERE id=?',id).first<Row>();if(!row)throw new Failure(404,'NOT_FOUND','工作任务不存在');if(version!==undefined&&row.version!==version)throw new Failure(409,'VERSION_CONFLICT','工作任务已被更新，请刷新后重试');return row;}
-  private assertOpenDeadline(task:Row){if(task.status!=='open')throw new Failure(409,'TASK_NOT_OPEN','只可操作开放中的任务');if(Date.parse(task.deadline_at)<=Date.now())throw new Failure(409,'TASK_EXPIRED','任务已超过截止时间，请先重新读取并按规则重新开启');}
+  private assertOpenTask(task:Row){if(task.status!=='open')throw new Failure(409,'TASK_NOT_OPEN','只可操作开放中的任务');}
   private commentTaskGuard(key:string,taskId:string,openOnly=true){return this.stmt(`INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(SELECT 1 FROM work_tasks WHERE id=? ${openOnly?"AND status='open'":''}) THEN 1 ELSE 0 END)`,key,taskId);}
   private referenceGuard(key:string,task:Row,references:ReadonlyArray<{observation_id:string;content_version:number}>){
     if(!references.length)return null;
@@ -86,7 +90,7 @@ export class WorkTasks {
   }
   async create(input:unknown){
     const a=workTaskCreateInput.parse(input);
-    return command(this.env,this.actor,{requestId:a.request_id,operation:'work_task.create',parameters:{archive_id:a.archive_id,kind:a.kind,title:a.title,purpose:a.purpose,delivery:a.delivery,deadline_at:a.deadline_at,source:a.source,period_key:a.period_key}},async()=>{
+    return command(this.env,this.actor,{requestId:a.request_id,operation:'work_task.create',parameters:{archive_id:a.archive_id,kind:a.kind,labels:a.labels,priority:a.priority,title:a.title,purpose:a.purpose,delivery:a.delivery,deadline_at:a.deadline_at,source:a.source,period_key:a.period_key}},async()=>{
       if(a.deadline_at<=now())throw new Failure(400,'DEADLINE_REQUIRED','开启任务必须有未来期限');
       if(a.kind==='monthly'&&!a.period_key)throw new Failure(400,'MONTH_REQUIRED','Monthly task requires a period');
       if(a.kind==='monthly'&&!a.archive_id)throw new Failure(400,'MONTH_ARCHIVE_REQUIRED','Monthly tasks must be linked to an archive');
@@ -96,8 +100,8 @@ export class WorkTasks {
         if(existing)return {result:{...existing,changed:false,reused:true},statements:[]};
       }
       if(a.archive_id){const archive=await this.stmt('SELECT closed,deleted,status FROM archives WHERE id=?',a.archive_id).first<{closed:number;deleted:number;status:string}>();if(!archive)throw new Failure(404,'ARCHIVE_NOT_FOUND','关联档案不存在');if(archive.deleted)throw new Failure(404,'ARCHIVE_NOT_FOUND','Linked archive is unavailable');if(archive.closed)throw new Failure(409,'ARCHIVE_CLOSED','关闭档案不能创建工作任务');}
-      const id=uid(),at=now(),result={id,archive_id:a.archive_id,kind:a.kind,title:a.title,purpose:a.purpose,delivery:a.delivery,source:a.source,status:'open' as const,owner_id:null,deadline_at:a.deadline_at,period_key:a.period_key??null,created_by:this.actor.id,created_at:at,updated_at:at,version:1,result_kind:null,result_text:null,result_references_json:'[]',completed_at:null,closed_reason:null,changed:true,reused:false};
-      return {result,statements:[this.stmt('INSERT INTO work_tasks(id,archive_id,kind,title,purpose,delivery,source,status,deadline_at,created_by,created_at,updated_at,period_key) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)',id,a.archive_id,a.kind,a.title,a.purpose,a.delivery,a.source,'open',a.deadline_at,this.actor.id,at,at,a.period_key??null),this.event(id,'task.created',null,result)]};
+      const id=uid(),at=now(),labels=a.labels.length?a.labels:[a.kind],priority=a.priority??taskPriorityDefaults[a.kind],result={id,archive_id:a.archive_id,kind:a.kind,labels_json:JSON.stringify(labels),labels,priority,initiator_kind:'member' as const,initiator_id:this.actor.id,title:a.title,purpose:a.purpose,delivery:a.delivery,source:a.source,status:'open' as const,owner_id:null,deadline_at:a.deadline_at,period_key:a.period_key??null,created_by:this.actor.id,created_at:at,updated_at:at,version:1,result_kind:null,result_text:null,result_references_json:'[]',completed_at:null,closed_reason:null,changed:true,reused:false};
+      return {result,statements:[this.stmt('INSERT INTO work_tasks(id,archive_id,kind,labels_json,priority,initiator_kind,initiator_id,title,purpose,delivery,source,status,deadline_at,created_by,created_at,updated_at,period_key) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',id,a.archive_id,a.kind,JSON.stringify(labels),priority,'member',this.actor.id,a.title,a.purpose,a.delivery,a.source,'open',a.deadline_at,this.actor.id,at,at,a.period_key??null),this.event(id,'task.created',null,result)]};
     });
   }
   async list(input:unknown={}){
@@ -110,6 +114,8 @@ export class WorkTasks {
     const rows=await this.stmt(`SELECT t.*,
       (SELECT name FROM members WHERE id=t.owner_id) owner_name,
       (SELECT version FROM members WHERE id=t.owner_id) owner_version,
+      (SELECT name FROM members WHERE id=t.initiator_id) initiator_name,
+      (SELECT version FROM members WHERE id=t.initiator_id) initiator_version,
       ar.type archive_type,
       ar.name archive_name,
       ar.status archive_status,
@@ -125,6 +131,12 @@ export class WorkTasks {
     const archiveIds=[...new Set(tasks.map(task=>task.archive_id).filter((id):id is string=>!!id))];
     const tagSummaries=archiveIds.length?await new TagState(this.env,this.actor).summaries(archiveIds):new Map<string,{tags:TagLabel[];total:number}>();
     for(const task of tasks){
+      const labelKeys=JSON.parse(String(task.labels_json??'[]')) as string[];
+      task.label_keys=labelKeys;
+      task.labels=labelKeys.map(key=>taskLabelNames[key]??key);
+      task.overdue=task.status==='open'&&Date.parse(String(task.deadline_at))<=Date.now();
+      task.initiator_name=task.initiator_kind==='system'?systemInitiator.name:(task.initiator_name??'未知发起人');
+      task.initiator_avatar_key=task.initiator_kind==='system'?systemInitiator.avatar_key:null;
       const resultRefs=JSON.parse(String(task.result_references_json??'[]')) as {observation_id:string;content_version:number}[],visibleResultRefs=[];for(const reference of resultRefs){const current=await this.visibleReference(task as unknown as Row,reference);if(current)visibleResultRefs.push(current);}task.result_references=visibleResultRefs;task.result_references_restricted=visibleResultRefs.length!==resultRefs.length;delete task.result_references_json;
       if(task.archive_id&&task.archive_name){
         task.archive_preview={
@@ -148,6 +160,8 @@ export class WorkTasks {
       delete task.archive_updated_at;
       delete task.archive_observation_count;
       delete task.archive_latest_observation;
+      delete task.labels_json;
+      delete task.initiator_version;
     }
     if(a.scope==='admin') for(const task of tasks){const candidates=await this.candidates(task as unknown as Row);task.candidate_count=candidates.length;task.push_stage=pushStage(this.pushable(task as unknown as Row),now());}
     return {tasks};
@@ -161,7 +175,7 @@ export class WorkTasks {
     const a=workTaskClaimInput.parse(input);
     try{
       return await command(this.env,this.actor,{requestId:a.request_id,operation:'work_task.claim',parameters:{id:a.id,expected_version:a.expected_version}},async()=>{
-        const task=await this.get(a.id,a.expected_version);this.assertOpenDeadline(task);if(task.owner_id)throw new Failure(409,'TASK_ALREADY_CLAIMED','任务已经有人领取');
+        const task=await this.get(a.id,a.expected_version);this.assertOpenTask(task);if(task.owner_id)throw new Failure(409,'TASK_ALREADY_CLAIMED','任务已经有人领取');
         const key=uid(),at=now(),result={id:a.id,owner_id:this.actor.id,status:'open',version:task.version+1,changed:true};
         return {result,statements:[this.stmt('INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(SELECT 1 FROM work_tasks WHERE id=? AND version=? AND status=\'open\' AND owner_id IS NULL) THEN 1 ELSE 0 END)',key,a.id,a.expected_version),this.stmt('UPDATE work_tasks SET owner_id=?,version=version+1,updated_at=? WHERE id=? AND version=? AND status=\'open\' AND owner_id IS NULL',this.actor.id,at,a.id,a.expected_version),this.event(a.id,'task.claimed',{owner_id:null,version:task.version},{owner_id:this.actor.id,version:task.version+1}),this.stmt('DELETE FROM mutation_guards WHERE id=?',key)]};
       });
@@ -183,7 +197,7 @@ export class WorkTasks {
   async complete(input:unknown){
     const a=workTaskCompleteInput.parse(input);
     return command(this.env,this.actor,{requestId:a.request_id,operation:'work_task.complete',parameters:{id:a.id,expected_version:a.expected_version,result_kind:a.result_kind,result_text:a.result_text,references:a.references}},async()=>{
-      const task=await this.get(a.id,a.expected_version);this.assertOpenDeadline(task);if(task.owner_id!==this.actor.id)throw new Failure(403,'TASK_OWNER_REQUIRED','只有当前负责人可以提交完成结果');await this.validateReferences(task,a.references);
+      const task=await this.get(a.id,a.expected_version);this.assertOpenTask(task);if(task.owner_id!==this.actor.id)throw new Failure(403,'TASK_OWNER_REQUIRED','只有当前负责人可以提交完成结果');await this.validateReferences(task,a.references);
       const key=uid(),at=now(),result={id:a.id,status:'completed',result_kind:a.result_kind,result_text:a.result_text,references:a.references,version:task.version+1,changed:true},refGuard=this.referenceGuard(key+':references',task,a.references);
       return {result,statements:[this.stmt("INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(SELECT 1 FROM work_tasks WHERE id=? AND version=? AND status='open' AND owner_id=?) THEN 1 ELSE 0 END)",key,a.id,a.expected_version,this.actor.id),...(refGuard?[refGuard]:[]),this.stmt("UPDATE work_tasks SET status='completed',result_kind=?,result_text=?,result_references_json=?,completed_at=?,updated_at=?,version=version+1 WHERE id=? AND version=? AND status='open' AND owner_id=?",a.result_kind,a.result_text,JSON.stringify(a.references),at,at,a.id,a.expected_version,this.actor.id),this.event(a.id,'task.completed',{status:task.status,owner_id:task.owner_id,version:task.version},{status:'completed',owner_id:task.owner_id,result_kind:a.result_kind,result_text:a.result_text,reference_count:a.references.length,version:task.version+1}),this.stmt('DELETE FROM mutation_guards WHERE id IN (?,?)',key,key+':references')]};
     });
@@ -191,7 +205,7 @@ export class WorkTasks {
   async release(input:unknown){
     const a=workTaskReleaseInput.parse(input);
     return command(this.env,this.actor,{requestId:a.request_id,operation:'work_task.release',parameters:{id:a.id,expected_version:a.expected_version,deadline_at:a.deadline_at,reason:a.reason}},async()=>{
-      const task=await this.get(a.id,a.expected_version);this.assertOpenDeadline(task);if(task.owner_id!==this.actor.id)throw new Failure(403,'TASK_OWNER_REQUIRED','只有当前负责人可以主动交还任务');if(a.deadline_at<=now())throw new Failure(400,'DEADLINE_REQUIRED','重新等待接取必须有未来期限');
+      const task=await this.get(a.id,a.expected_version);this.assertOpenTask(task);if(task.owner_id!==this.actor.id)throw new Failure(403,'TASK_OWNER_REQUIRED','只有当前负责人可以主动交还任务');if(a.deadline_at<=now())throw new Failure(400,'DEADLINE_REQUIRED','重新等待接取必须有未来期限');
       const key=uid(),at=now(),result={id:a.id,status:'open',owner_id:null,deadline_at:a.deadline_at,version:task.version+1,changed:true};
       return {result,statements:[this.stmt('INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(SELECT 1 FROM work_tasks WHERE id=? AND version=? AND status=\'open\' AND owner_id=?) THEN 1 ELSE 0 END)',key,a.id,a.expected_version,this.actor.id),this.stmt('UPDATE work_tasks SET owner_id=NULL,deadline_at=?,updated_at=?,version=version+1 WHERE id=? AND version=? AND status=\'open\' AND owner_id=?',a.deadline_at,at,a.id,a.expected_version,this.actor.id),this.event(a.id,'task.released',{owner_id:task.owner_id,deadline_at:task.deadline_at,version:task.version},{owner_id:null,deadline_at:a.deadline_at,version:task.version+1},a.reason),this.stmt('DELETE FROM mutation_guards WHERE id=?',key)]};
     });
@@ -199,7 +213,7 @@ export class WorkTasks {
   async cancel(input:unknown){
     const a=workTaskCancelInput.parse(input);
     return command(this.env,this.actor,{requestId:a.request_id,operation:'work_task.cancel',parameters:{id:a.id,expected_version:a.expected_version,reason:a.reason}},async()=>{
-      const task=await this.get(a.id,a.expected_version);this.assertOpenDeadline(task);
+      const task=await this.get(a.id,a.expected_version);this.assertOpenTask(task);
       const creatorMayCancel=task.created_by===this.actor.id&&!task.owner_id,ownerMayCancel=task.owner_id===this.actor.id;if(this.actor.role!=='admin'&&!creatorMayCancel&&!ownerMayCancel)throw new Failure(403,'TASK_CANCEL_FORBIDDEN','只有创建者取消未接取任务，或管理员取消已接取任务');
       const key=uid(),at=now(),restoration=await this.restoreCancelledAudit(task,at),result={id:a.id,status:'cancelled',owner_id:task.owner_id,version:task.version+1,changed:true,...restoration.result};
       return {result,statements:[this.stmt("INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(SELECT 1 FROM work_tasks WHERE id=? AND version=? AND status='open') THEN 1 ELSE 0 END)",key,a.id,a.expected_version),this.stmt("UPDATE work_tasks SET status='cancelled',closed_reason=?,updated_at=?,version=version+1 WHERE id=? AND version=? AND status='open'",a.reason,at,a.id,a.expected_version),this.event(a.id,'task.cancelled',{status:task.status,owner_id:task.owner_id,version:task.version},{status:'cancelled',owner_id:task.owner_id,version:task.version+1},a.reason),...restoration.statements,this.stmt('DELETE FROM mutation_guards WHERE id=?',key)]};
@@ -207,22 +221,22 @@ export class WorkTasks {
   }
   async edit(input:unknown){
     const a=workTaskEditInput.parse(input),admin=this.actor.role==='admin';
-    return command(this.env,this.actor,{requestId:a.request_id,operation:'work_task.edit',parameters:{id:a.id,expected_version:a.expected_version,title:a.title,purpose:a.purpose,delivery:a.delivery,deadline_at:a.deadline_at},requireAdmin:admin},async()=>{
+    return command(this.env,this.actor,{requestId:a.request_id,operation:'work_task.edit',parameters:{id:a.id,expected_version:a.expected_version,title:a.title,purpose:a.purpose,delivery:a.delivery,labels:a.labels,priority:a.priority,deadline_at:a.deadline_at},requireAdmin:admin},async()=>{
       const task=await this.get(a.id,a.expected_version);
-      this.assertOpenDeadline(task);
+      this.assertOpenTask(task);
       if(this.actor.role!=='admin'&&task.created_by!==this.actor.id&&task.owner_id!==this.actor.id)throw new Failure(403,'TASK_EDIT_FORBIDDEN','只有创建者或当前负责人可以维护任务内容');
       if(a.deadline_at!==undefined&&Date.parse(a.deadline_at)<=Date.now())throw new Failure(400,'DEADLINE_REQUIRED','截止时间必须仍在未来');
       if(a.deadline_at!==undefined&&task.kind==='monthly'&&Date.parse(a.deadline_at)!==Date.parse(monthDeadline(task.period_key!)))throw new Failure(400,'MONTH_DEADLINE_REQUIRED','月度任务的截止时间必须保持在该月最后时刻');
-      const next={title:a.title??task.title,purpose:a.purpose??task.purpose,delivery:a.delivery??task.delivery,deadline_at:a.deadline_at??task.deadline_at},changed=next.title!==task.title||next.purpose!==task.purpose||next.delivery!==task.delivery||next.deadline_at!==task.deadline_at;
+      const labelKeys=a.labels??JSON.parse(task.labels_json||'[]') as string[],nextPriority=a.priority??task.priority,key=uid(),at=now(),next={title:a.title??task.title,purpose:a.purpose??task.purpose,delivery:a.delivery??task.delivery,deadline_at:a.deadline_at??task.deadline_at,labels_json:JSON.stringify(labelKeys),priority:nextPriority},changed=next.title!==task.title||next.purpose!==task.purpose||next.delivery!==task.delivery||next.deadline_at!==task.deadline_at||next.labels_json!==task.labels_json||next.priority!==task.priority;
       if(!changed)return {result:{id:task.id,status:task.status,version:task.version,changed:false},statements:[]};
-      const key=uid(),at=now(),result={id:task.id,status:task.status,title:next.title,purpose:next.purpose,delivery:next.delivery,deadline_at:next.deadline_at,version:task.version+1,changed:true};
-      return {result,statements:[this.stmt("INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(SELECT 1 FROM work_tasks t WHERE t.id=? AND t.version=? AND t.status='open' AND (t.created_by=? OR t.owner_id=? OR EXISTS(SELECT 1 FROM members m WHERE m.id=? AND m.role='admin' AND m.frozen=0))) THEN 1 ELSE 0 END)",key,a.id,a.expected_version,this.actor.id,this.actor.id,this.actor.id),this.stmt('UPDATE work_tasks SET title=?,purpose=?,delivery=?,deadline_at=?,updated_at=?,version=version+1 WHERE id=? AND version=? AND status=\'open\'',next.title,next.purpose,next.delivery,next.deadline_at,at,a.id,a.expected_version),this.event(a.id,'task.edited',{title:task.title,purpose:task.purpose,delivery:task.delivery,deadline_at:task.deadline_at,version:task.version},result),this.stmt('DELETE FROM mutation_guards WHERE id=?',key)]};
+      const result={id:task.id,status:task.status,title:next.title,purpose:next.purpose,delivery:next.delivery,deadline_at:next.deadline_at,labels:labelKeys,priority:nextPriority,version:task.version+1,changed:true};
+      return {result,statements:[this.stmt("INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(SELECT 1 FROM work_tasks t WHERE t.id=? AND t.version=? AND t.status='open' AND (t.created_by=? OR t.owner_id=? OR EXISTS(SELECT 1 FROM members m WHERE m.id=? AND m.role='admin' AND m.frozen=0))) THEN 1 ELSE 0 END)",key,a.id,a.expected_version,this.actor.id,this.actor.id,this.actor.id),this.stmt('UPDATE work_tasks SET title=?,purpose=?,delivery=?,deadline_at=?,labels_json=?,priority=?,updated_at=?,version=version+1 WHERE id=? AND version=? AND status=\'open\'',next.title,next.purpose,next.delivery,next.deadline_at,next.labels_json,next.priority,at,a.id,a.expected_version),this.event(a.id,'task.edited',{title:task.title,purpose:task.purpose,delivery:task.delivery,deadline_at:task.deadline_at,labels:JSON.parse(task.labels_json||'[]'),priority:task.priority,version:task.version},result),this.stmt('DELETE FROM mutation_guards WHERE id=?',key)]};
     });
   }
   async extend(input:unknown){
     const a=workTaskExtendInput.parse(input);
     return command(this.env,this.actor,{requestId:a.request_id,operation:'work_task.extend',parameters:{id:a.id,expected_version:a.expected_version,deadline_at:a.deadline_at,reason:a.reason}},async()=>{
-      const task=await this.get(a.id,a.expected_version);this.assertOpenDeadline(task);if(task.owner_id!==this.actor.id)throw new Failure(403,'TASK_OWNER_REQUIRED','只有当前负责人可以延期任务');
+      const task=await this.get(a.id,a.expected_version);this.assertOpenTask(task);if(task.owner_id!==this.actor.id)throw new Failure(403,'TASK_OWNER_REQUIRED','只有当前负责人可以延期任务');
       if(Date.parse(a.deadline_at)<=Date.now()||Date.parse(a.deadline_at)<=Date.parse(task.deadline_at))throw new Failure(400,'DEADLINE_REQUIRED','新的截止时间必须晚于原期限并且仍在未来');
       const key=uid(),at=now(),result={id:task.id,status:'open',deadline_at:a.deadline_at,version:task.version+1,changed:true};
       return {result,statements:[this.stmt("INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(SELECT 1 FROM work_tasks WHERE id=? AND version=? AND status='open' AND owner_id=?) THEN 1 ELSE 0 END)",key,a.id,a.expected_version,this.actor.id),this.stmt("UPDATE work_tasks SET deadline_at=?,updated_at=?,version=version+1 WHERE id=? AND version=? AND status='open' AND owner_id=?",a.deadline_at,at,a.id,a.expected_version,this.actor.id),this.event(a.id,'task.deadline_changed',{deadline_at:task.deadline_at,version:task.version},{deadline_at:a.deadline_at,version:task.version+1},a.reason),this.stmt('DELETE FROM mutation_guards WHERE id=?',key)]};
@@ -244,7 +258,7 @@ export class WorkTasks {
   async addComment(input:unknown){
     const a=workTaskCommentCreateInput.parse(input);
     return command(this.env,this.actor,{requestId:a.request_id,operation:'work_task.comment.create',parameters:{task_id:a.task_id,body:a.body,references:a.references}},async()=>{
-      const task=await this.get(a.task_id);this.assertOpenDeadline(task);await this.validateReferences(task,a.references);
+      const task=await this.get(a.task_id);this.assertOpenTask(task);await this.validateReferences(task,a.references);
       const id=uid(),at=now(),key=uid(),result={id,task_id:task.id,author_id:this.actor.id,body:a.body,references:a.references,version:1,changed:true};const refGuard=this.referenceGuard(key+':references',task,a.references);
       return {result,statements:[this.commentTaskGuard(key,task.id),...(refGuard?[refGuard]:[]),this.stmt('INSERT INTO work_task_comments(id,task_id,author_id,body,references_json,created_at,updated_at) VALUES(?,?,?,?,?,?,?)',id,task.id,this.actor.id,a.body,JSON.stringify(a.references),at,at),this.stmt('INSERT INTO work_task_comment_versions(comment_id,task_id,version,actor_id,source,body,references_json,created_at) VALUES(?,?,?,?,?,?,?,?)',id,task.id,1,this.actor.id,this.source,a.body,JSON.stringify(a.references),at),this.event(task.id,'task.comment_created',{comment_id:id},{comment_id:id,version:1,reference_count:a.references.length}),this.stmt('DELETE FROM mutation_guards WHERE id IN (?,?)',key,key+':references')]};
     });
@@ -252,7 +266,7 @@ export class WorkTasks {
   async editComment(input:unknown){
     const a=workTaskCommentEditInput.parse(input);
     return command(this.env,this.actor,{requestId:a.request_id,operation:'work_task.comment.edit',parameters:{id:a.id,expected_version:a.expected_version,body:a.body,references:a.references}},async()=>{
-      const row=await this.stmt('SELECT * FROM work_task_comments WHERE id=?',a.id).first<CommentRow>();if(!row)throw new Failure(404,'NOT_FOUND','评论不存在');const task=await this.get(row.task_id);this.assertOpenDeadline(task);if(row.deleted_at)throw new Failure(409,'COMMENT_DELETED','已删除评论请先恢复');if(this.actor.role!=='admin'&&row.author_id!==this.actor.id)throw new Failure(403,'COMMENT_AUTHOR_REQUIRED','只有评论作者或管理员可以修改评论');if(row.version!==a.expected_version)throw new Failure(409,'VERSION_CONFLICT','评论已被更新，请刷新后重试');
+      const row=await this.stmt('SELECT * FROM work_task_comments WHERE id=?',a.id).first<CommentRow>();if(!row)throw new Failure(404,'NOT_FOUND','评论不存在');const task=await this.get(row.task_id);this.assertOpenTask(task);if(row.deleted_at)throw new Failure(409,'COMMENT_DELETED','已删除评论请先恢复');if(this.actor.role!=='admin'&&row.author_id!==this.actor.id)throw new Failure(403,'COMMENT_AUTHOR_REQUIRED','只有评论作者或管理员可以修改评论');if(row.version!==a.expected_version)throw new Failure(409,'VERSION_CONFLICT','评论已被更新，请刷新后重试');
       const oldReferences=JSON.parse(row.references_json||'[]') as {observation_id:string;content_version:number}[],hiddenReferences=[] as {observation_id:string;content_version:number}[];
       for(const reference of oldReferences)if(!await this.visibleReference(task,reference))hiddenReferences.push(reference);
       const requestedReferences=a.references??oldReferences.filter(reference=>!hiddenReferences.some(hidden=>hidden.observation_id===reference.observation_id&&hidden.content_version===reference.content_version));
@@ -265,7 +279,7 @@ export class WorkTasks {
   async deleteComment(input:unknown){
     const a=workTaskCommentDeleteInput.parse(input);
     return command(this.env,this.actor,{requestId:a.request_id,operation:'work_task.comment.delete',parameters:{id:a.id,expected_version:a.expected_version}},async()=>{
-      const row=await this.stmt('SELECT * FROM work_task_comments WHERE id=?',a.id).first<CommentRow>();if(!row)throw new Failure(404,'NOT_FOUND','评论不存在');const task=await this.get(row.task_id);this.assertOpenDeadline(task);if(row.deleted_at)return {result:{id:row.id,task_id:row.task_id,deleted:true,version:row.version,changed:false},statements:[]};if(row.version!==a.expected_version)throw new Failure(409,'VERSION_CONFLICT','评论已被更新，请刷新后重试');if(this.actor.role!=='admin'&&row.author_id!==this.actor.id)throw new Failure(403,'COMMENT_AUTHOR_REQUIRED','只有评论作者或管理员可以删除评论');
+      const row=await this.stmt('SELECT * FROM work_task_comments WHERE id=?',a.id).first<CommentRow>();if(!row)throw new Failure(404,'NOT_FOUND','评论不存在');const task=await this.get(row.task_id);this.assertOpenTask(task);if(row.deleted_at)return {result:{id:row.id,task_id:row.task_id,deleted:true,version:row.version,changed:false},statements:[]};if(row.version!==a.expected_version)throw new Failure(409,'VERSION_CONFLICT','评论已被更新，请刷新后重试');if(this.actor.role!=='admin'&&row.author_id!==this.actor.id)throw new Failure(403,'COMMENT_AUTHOR_REQUIRED','只有评论作者或管理员可以删除评论');
       const key=uid(),at=now(),result={id:row.id,task_id:row.task_id,deleted:true,deleted_at:at,version:row.version+1,changed:true};
       return {result,statements:[this.stmt("INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(SELECT 1 FROM work_task_comments c JOIN work_tasks t ON t.id=c.task_id WHERE c.id=? AND c.version=? AND c.deleted_at IS NULL AND t.status='open' AND (c.author_id=? OR EXISTS(SELECT 1 FROM members m WHERE m.id=? AND m.role='admin' AND m.frozen=0))) THEN 1 ELSE 0 END)",key,a.id,a.expected_version,this.actor.id,this.actor.id),this.stmt('UPDATE work_task_comments SET deleted_at=?,updated_at=?,version=version+1 WHERE id=? AND version=? AND deleted_at IS NULL',at,at,a.id,a.expected_version),this.stmt('INSERT INTO work_task_comment_versions(comment_id,task_id,version,actor_id,source,body,references_json,deleted_at,created_at) VALUES(?,?,?,?,?,?,?,?,?)',row.id,task.id,row.version+1,this.actor.id,this.source,row.body,row.references_json,at,at),this.event(task.id,'task.comment_deleted',{comment_id:row.id,version:row.version},{comment_id:row.id,version:row.version+1}),this.stmt('DELETE FROM mutation_guards WHERE id=?',key)]};
     });
@@ -273,7 +287,7 @@ export class WorkTasks {
   async restoreComment(input:unknown){
     const a=workTaskCommentRestoreInput.parse(input);
     return command(this.env,this.actor,{requestId:a.request_id,operation:'work_task.comment.restore',parameters:{id:a.id,expected_version:a.expected_version}},async()=>{
-      const row=await this.stmt('SELECT * FROM work_task_comments WHERE id=?',a.id).first<CommentRow>();if(!row)throw new Failure(404,'NOT_FOUND','评论不存在');const task=await this.get(row.task_id);this.assertOpenDeadline(task);if(!row.deleted_at)return {result:{id:row.id,task_id:row.task_id,deleted:false,version:row.version,changed:false},statements:[]};if(row.version!==a.expected_version)throw new Failure(409,'VERSION_CONFLICT','评论已被更新，请刷新后重试');if(this.actor.role!=='admin'&&row.author_id!==this.actor.id)throw new Failure(403,'COMMENT_AUTHOR_REQUIRED','只有评论作者或管理员可以恢复评论');
+      const row=await this.stmt('SELECT * FROM work_task_comments WHERE id=?',a.id).first<CommentRow>();if(!row)throw new Failure(404,'NOT_FOUND','评论不存在');const task=await this.get(row.task_id);this.assertOpenTask(task);if(!row.deleted_at)return {result:{id:row.id,task_id:row.task_id,deleted:false,version:row.version,changed:false},statements:[]};if(row.version!==a.expected_version)throw new Failure(409,'VERSION_CONFLICT','评论已被更新，请刷新后重试');if(this.actor.role!=='admin'&&row.author_id!==this.actor.id)throw new Failure(403,'COMMENT_AUTHOR_REQUIRED','只有评论作者或管理员可以恢复评论');
       const key=uid(),at=now(),result={id:row.id,task_id:row.task_id,deleted:false,version:row.version+1,changed:true};
       return {result,statements:[this.stmt("INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(SELECT 1 FROM work_task_comments c JOIN work_tasks t ON t.id=c.task_id WHERE c.id=? AND c.version=? AND c.deleted_at IS NOT NULL AND t.status='open' AND (c.author_id=? OR EXISTS(SELECT 1 FROM members m WHERE m.id=? AND m.role='admin' AND m.frozen=0))) THEN 1 ELSE 0 END)",key,a.id,a.expected_version,this.actor.id,this.actor.id),this.stmt('UPDATE work_task_comments SET deleted_at=NULL,updated_at=?,version=version+1 WHERE id=? AND version=? AND deleted_at IS NOT NULL',at,a.id,a.expected_version),this.stmt('INSERT INTO work_task_comment_versions(comment_id,task_id,version,actor_id,source,body,references_json,deleted_at,created_at) VALUES(?,?,?,?,?,?,?,?,?)',row.id,task.id,row.version+1,this.actor.id,this.source,row.body,row.references_json,null,at),this.event(task.id,'task.comment_restored',{comment_id:row.id,version:row.version},{comment_id:row.id,version:row.version+1}),this.stmt('DELETE FROM mutation_guards WHERE id=?',key)]};
     });
@@ -288,18 +302,17 @@ export class WorkTasks {
     return {result:{archive_id:old.id,archive_status:status,archive_version:old.version+1},statements:[archives.guard(old.id,old.version,key),...planArchiveEffects({old,status,memberIds:members.map(member=>member.id).sort(),reopen:false,at,actorId:this.actor.id,source:this.source,members,bindings,tags:new TagState(this.env,this.actor),stmt:this.stmt.bind(this),event:archives.event.bind(archives)}),this.stmt('DELETE FROM mutation_guards WHERE id=?',key)]};
   }
   async detail(id:string){
-    const task=await this.get(id);if(task.archive_id)await new Archives(this.env,this.actor,this.source).get(task.archive_id);const resultRefs=JSON.parse(task.result_references_json??'[]') as {observation_id:string;content_version:number}[],visibleResultRefs=[];for(const reference of resultRefs){const current=await this.visibleReference(task,reference);if(current)visibleResultRefs.push(current);}const safeTask={...task,result_references:visibleResultRefs,result_references_restricted:visibleResultRefs.length!==resultRefs.length};delete (safeTask as {result_references_json?:string}).result_references_json;const events=await this.stmt('SELECT e.id,e.actor_id,(SELECT name FROM members WHERE id=e.actor_id) actor_name,e.source,e.kind,e.before_json,e.after_json,e.reason,e.created_at FROM work_task_events e WHERE e.task_id=? ORDER BY e.rowid DESC LIMIT 100',id).all<Record<string,unknown>>();return {task:safeTask,events:events.results,comments:await this.comments(task)};
+    const task=await this.get(id);if(task.archive_id)await new Archives(this.env,this.actor,this.source).get(task.archive_id);const resultRefs=JSON.parse(task.result_references_json??'[]') as {observation_id:string;content_version:number}[],visibleResultRefs=[];for(const reference of resultRefs){const current=await this.visibleReference(task,reference);if(current)visibleResultRefs.push(current);}const initiator=task.initiator_kind==='system'?systemInitiator:await this.stmt('SELECT name,version FROM members WHERE id=?',task.initiator_id).first<{name:string;version:number}>();const labelKeys=JSON.parse(task.labels_json??'[]') as string[];const safeTask={...task,label_keys:labelKeys,labels:labelKeys.map(key=>taskLabelNames[key]??key),overdue:task.status==='open'&&Date.parse(task.deadline_at)<=Date.now(),initiator_name:initiator?.name??'未知发起人',initiator_version:initiator&&'version' in initiator?initiator.version:null,initiator_avatar_key:task.initiator_kind==='system'?systemInitiator.avatar_key:null,result_references:visibleResultRefs,result_references_restricted:visibleResultRefs.length!==resultRefs.length};delete (safeTask as {result_references_json?:string;labels_json?:string}).result_references_json;delete (safeTask as {labels_json?:string}).labels_json;const events=await this.stmt('SELECT e.id,e.actor_id,(SELECT name FROM members WHERE id=e.actor_id) actor_name,e.source,e.kind,e.before_json,e.after_json,e.reason,e.created_at FROM work_task_events e WHERE e.task_id=? ORDER BY e.rowid DESC LIMIT 100',id).all<Record<string,unknown>>();return {task:safeTask,events:events.results,comments:await this.comments(task)};
   }
   async expire(at=now()){
     const rows=await this.stmt("SELECT * FROM work_tasks WHERE status='open' AND deadline_at<=? ORDER BY deadline_at,id",at).all<Row>();
     const statements:D1PreparedStatement[]=[];
     for(const task of rows.results){
-      const key=uid(),owned=!!task.owner_id,reason=owned?'completion_deadline_missed':'claim_deadline_missed';
-      statements.push(this.stmt("INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(SELECT 1 FROM work_tasks WHERE id=? AND version=? AND status='open' AND deadline_at<=?) THEN 1 ELSE 0 END)",key,task.id,task.version,at),this.stmt("UPDATE work_tasks SET status='expired',closed_reason=?,updated_at=?,version=version+1 WHERE id=? AND version=? AND status='open' AND deadline_at<=?",reason,at,task.id,task.version,at));
-      if(owned)statements.push(this.stmt("INSERT OR IGNORE INTO messages(id,recipient_id,kind,task_id,object_type,object_id,title,body,task_version,deadline_at,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)",uid(),task.owner_id,'task_expired_uncompleted',task.id,'work_task',task.id,'任务已逾期未完成','负责人未在完成期限前提交结果。',task.version+1,task.deadline_at,at));
-      statements.push(this.stmt('INSERT INTO work_task_events(id,task_id,actor_id,source,kind,before_json,after_json,reason,created_at) VALUES(?,?,?,?,?,?,?,?,?)',uid(),task.id,this.actor.id,'system','task.expired',JSON.stringify({status:task.status,owner_id:task.owner_id,deadline_at:task.deadline_at,version:task.version}),JSON.stringify({status:'expired',owner_id:task.owner_id,closed_reason:reason,version:task.version+1}),reason,at),this.stmt('DELETE FROM mutation_guards WHERE id=?',key));
+      if(!task.owner_id)continue;
+      const exists=await this.stmt("SELECT 1 FROM messages WHERE recipient_id=? AND kind='task_overdue' AND object_type='work_task' AND object_id=? AND deadline_at=?",task.owner_id,task.id,task.deadline_at).first();
+      if(!exists)statements.push(this.stmt("INSERT OR IGNORE INTO messages(id,recipient_id,kind,task_id,object_type,object_id,title,body,task_version,deadline_at,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)",uid(),task.owner_id,'task_overdue',task.id,'work_task',task.id,'任务已逾期','任务仍保持开启，请提交交付、延期或主动交还。',task.version,task.deadline_at,at));
     }
-    if(statements.length)await this.env.DB.batch(statements);return {count:rows.results.length};
+    if(statements.length)await this.env.DB.batch(statements);return {count:statements.length,reminded:statements.length,overdue_count:rows.results.length};
   }
   async refer(input:unknown){
     const a=workTaskReferInput.parse(input);
@@ -309,8 +322,8 @@ export class WorkTasks {
       if(isMemberStatus(archive.status))throw new Failure(409,'INVALID_REFERRAL_STAGE','社员不能作为外部人物提交审核');
       const existing=await this.stmt("SELECT id,version FROM work_tasks WHERE archive_id=? AND kind='audit' AND status='open'",a.archive_id).first<{id:string;version:number}>();if(existing)return {result:{id:existing.id,task_id:existing.id,archive_id:a.archive_id,status:'open',archive_status:'人事审核',archive_version:archive.version,reused:true,changed:false},statements:[]};
       if(a.deadline_at<=now())throw new Failure(400,'DEADLINE_REQUIRED','审核任务必须有未来期限');
-      const taskId=uid(),key=uid(),at=now(),nextVersion=archive.version+1,task={id:taskId,archive_id:a.archive_id,kind:'audit',title:`${archive.name} · 人事审核`,purpose:'了解对方情况、意愿以及可能参与的方向，形成有依据的审核结论。',delivery:'提交审核期间的观察与结论，结果留在关联人物档案。',source:'rule',status:'open',owner_id:null,deadline_at:a.deadline_at,created_at:at,updated_at:at,version:1};
-      return {result:{id:taskId,task_id:taskId,archive_id:a.archive_id,status:'open',archive_status:'人事审核',archive_version:nextVersion,reused:false,changed:true},statements:[this.stmt('INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(SELECT 1 FROM archives WHERE id=? AND version=? AND deleted=0 AND closed=0) THEN 1 ELSE 0 END)',key,a.archive_id,a.expected_version),this.stmt("UPDATE archives SET status='人事审核',closed=0,version=version+1,updated_at=? WHERE id=? AND version=? AND deleted=0 AND closed=0",at,a.archive_id,a.expected_version),this.stmt('INSERT INTO work_tasks(id,archive_id,kind,title,purpose,delivery,source,status,deadline_at,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',taskId,a.archive_id,task.kind,task.title,task.purpose,task.delivery,task.source,'open',task.deadline_at,this.actor.id,at,at),this.stmt('INSERT INTO archive_events(id,archive_id,actor_id,source,kind,before_json,after_json,created_at) VALUES(?,?,?,?,?,?,?,?)',uid(),a.archive_id,this.actor.id,this.source,'archive.state_changed',JSON.stringify({status:archive.status}),JSON.stringify({status:'人事审核',task_id:taskId}),at),this.event(taskId,'task.created',null,task),this.stmt('DELETE FROM mutation_guards WHERE id=?',key)]};
+      const taskId=uid(),key=uid(),at=now(),nextVersion=archive.version+1,task={id:taskId,archive_id:a.archive_id,kind:'audit',labels:['audit'],priority:'P1',initiator_kind:'member',initiator_id:this.actor.id,title:`${archive.name} · 人事审核`,purpose:'了解对方情况、意愿以及可能参与的方向，形成有依据的审核结论。',delivery:'提交审核期间的观察与结论，结果留在关联人物档案。',source:'rule',status:'open',owner_id:null,deadline_at:a.deadline_at,created_at:at,updated_at:at,version:1};
+      return {result:{id:taskId,task_id:taskId,archive_id:a.archive_id,status:'open',archive_status:'人事审核',archive_version:nextVersion,reused:false,changed:true},statements:[this.stmt('INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(SELECT 1 FROM archives WHERE id=? AND version=? AND deleted=0 AND closed=0) THEN 1 ELSE 0 END)',key,a.archive_id,a.expected_version),this.stmt("UPDATE archives SET status='人事审核',closed=0,version=version+1,updated_at=? WHERE id=? AND version=? AND deleted=0 AND closed=0",at,a.archive_id,a.expected_version),this.stmt('INSERT INTO work_tasks(id,archive_id,kind,labels_json,priority,initiator_kind,initiator_id,title,purpose,delivery,source,status,deadline_at,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',taskId,a.archive_id,task.kind,JSON.stringify(task.labels),task.priority,task.initiator_kind,task.initiator_id,task.title,task.purpose,task.delivery,task.source,'open',task.deadline_at,this.actor.id,at,at),this.stmt('INSERT INTO archive_events(id,archive_id,actor_id,source,kind,before_json,after_json,created_at) VALUES(?,?,?,?,?,?,?,?)',uid(),a.archive_id,this.actor.id,this.source,'archive.state_changed',JSON.stringify({status:archive.status}),JSON.stringify({status:'人事审核',task_id:taskId}),at),this.event(taskId,'task.created',null,task),this.stmt('DELETE FROM mutation_guards WHERE id=?',key)]};
     });
   }
   async confirmMembership(input:unknown){
@@ -321,8 +334,8 @@ export class WorkTasks {
       const audit=await this.stmt("SELECT id FROM work_tasks WHERE archive_id=? AND kind='audit' AND status='completed' ORDER BY completed_at DESC LIMIT 1",a.archive_id).first<{id:string}>();if(!audit)throw new Failure(409,'AUDIT_RESULT_REQUIRED','请先完成并提交人事审核结果');
       const existing=await this.stmt("SELECT id FROM work_tasks WHERE archive_id=? AND kind='onboarding' AND status='open'",a.archive_id).first<{id:string}>();if(existing)return {result:{id:existing.id,task_id:existing.id,archive_id:a.archive_id,status:'open',archive_status:'已加入待对接',archive_version:archive.version,reused:true,changed:false},statements:[]};
       if(a.deadline_at<=now())throw new Failure(400,'DEADLINE_REQUIRED','入社对接任务必须有未来期限');
-      const taskId=uid(),key=uid(),at=now(),nextVersion=archive.version+1,task={id:taskId,archive_id:a.archive_id,kind:'onboarding',title:`${archive.name} · 入社对接`,purpose:'向新社员介绍组织与参与方式，落实后续联系和参与安排。',delivery:'提交对接期间的结果，并记录未解决事项或后续安排。',source:'rule',status:'open',owner_id:null,deadline_at:a.deadline_at,created_at:at,updated_at:at,version:1};
-      return {result:{id:taskId,task_id:taskId,archive_id:a.archive_id,status:'open',archive_status:'已加入待对接',archive_version:nextVersion,reused:false,changed:true},statements:[this.stmt('INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(SELECT 1 FROM archives WHERE id=? AND version=? AND deleted=0 AND closed=0) THEN 1 ELSE 0 END)',key,a.archive_id,a.expected_version),this.stmt("UPDATE archives SET status='已加入待对接',closed=0,version=version+1,updated_at=? WHERE id=? AND version=? AND deleted=0 AND closed=0",at,a.archive_id,a.expected_version),this.stmt('INSERT INTO work_tasks(id,archive_id,kind,title,purpose,delivery,source,status,deadline_at,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',taskId,a.archive_id,task.kind,task.title,task.purpose,task.delivery,task.source,'open',task.deadline_at,this.actor.id,at,at),this.stmt('INSERT INTO archive_events(id,archive_id,actor_id,source,kind,before_json,after_json,created_at) VALUES(?,?,?,?,?,?,?,?)',uid(),a.archive_id,this.actor.id,this.source,'archive.membership_confirmed',JSON.stringify({status:archive.status,audit_task_id:audit.id}),JSON.stringify({status:'已加入待对接',task_id:taskId}),at),this.event(taskId,'task.created',null,task),this.stmt('DELETE FROM mutation_guards WHERE id=?',key)]};
+      const taskId=uid(),key=uid(),at=now(),nextVersion=archive.version+1,task={id:taskId,archive_id:a.archive_id,kind:'onboarding',labels:['onboarding'],priority:'P1',initiator_kind:'member',initiator_id:this.actor.id,title:`${archive.name} · 入社对接`,purpose:'向新社员介绍组织与参与方式，落实后续联系和参与安排。',delivery:'提交对接期间的结果，并记录未解决事项或后续安排。',source:'rule',status:'open',owner_id:null,deadline_at:a.deadline_at,created_at:at,updated_at:at,version:1};
+      return {result:{id:taskId,task_id:taskId,archive_id:a.archive_id,status:'open',archive_status:'已加入待对接',archive_version:nextVersion,reused:false,changed:true},statements:[this.stmt('INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(SELECT 1 FROM archives WHERE id=? AND version=? AND deleted=0 AND closed=0) THEN 1 ELSE 0 END)',key,a.archive_id,a.expected_version),this.stmt("UPDATE archives SET status='已加入待对接',closed=0,version=version+1,updated_at=? WHERE id=? AND version=? AND deleted=0 AND closed=0",at,a.archive_id,a.expected_version),this.stmt('INSERT INTO work_tasks(id,archive_id,kind,labels_json,priority,initiator_kind,initiator_id,title,purpose,delivery,source,status,deadline_at,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',taskId,a.archive_id,task.kind,JSON.stringify(task.labels),task.priority,task.initiator_kind,task.initiator_id,task.title,task.purpose,task.delivery,task.source,'open',task.deadline_at,this.actor.id,at,at),this.stmt('INSERT INTO archive_events(id,archive_id,actor_id,source,kind,before_json,after_json,created_at) VALUES(?,?,?,?,?,?,?,?)',uid(),a.archive_id,this.actor.id,this.source,'archive.membership_confirmed',JSON.stringify({status:archive.status,audit_task_id:audit.id}),JSON.stringify({status:'已加入待对接',task_id:taskId}),at),this.event(taskId,'task.created',null,task),this.stmt('DELETE FROM mutation_guards WHERE id=?',key)]};
     });
   }
   private async monthlyTargets(month:string){
@@ -344,12 +357,12 @@ export class WorkTasks {
   }
   async generateScheduledMonthly(){
     if(this.env.MONTHLY_TASKS_ENABLED!=='true')return null;
-    return this.generateMonthly({request_id:uid()});
+    return this.generateMonthly({request_id:uid(),initiator_kind:'system'});
   }
   async generateMonthly(input:unknown){
     assertAdmin(this.actor);const a=monthlyGenerateInput.parse(input),month=monthKey(a.month??monthKeyAt()),deadline=monthDeadline(month),targets=await this.monthlyTargets(month);
     const newTargets=targets.filter(target=>!target.existing_task_id);
-    const generated=await command(this.env,this.actor,{requestId:a.request_id,operation:'work_task.generate_monthly',parameters:{month}},async()=>{
+    const generated=await command(this.env,this.actor,{requestId:a.request_id,operation:'work_task.generate_monthly',parameters:{month,initiator_kind:a.initiator_kind}},async()=>{
       const at=now(),statements:D1PreparedStatement[]=[];
       for(const target of targets){
         const key=uid(),taskId=uid(),member=target.type==='person'&&isMemberStatus(target.status);
@@ -357,7 +370,7 @@ export class WorkTasks {
         const purpose=member?'了解近期生活、参与、困难、需要支持或想调整的事项，结合已有联系自然交流；联系不到也如实记录。':'了解近期变化、联系与需求，把有用结果写入关联档案；没有适用资料时如实交代。';
         const delivery='将本次跟进结果及后续关注事项写入关联档案的观察记录；无需在任务评论重复提交。';
         statements.push(this.stmt('INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(SELECT 1 FROM archives WHERE id=? AND version=? AND deleted=0 AND closed=0 AND status=?) THEN 1 ELSE 0 END)',key,target.id,target.version,target.status));
-        statements.push(this.stmt('INSERT OR IGNORE INTO work_tasks(id,archive_id,kind,title,purpose,delivery,source,status,deadline_at,created_by,created_at,updated_at,period_key) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)',taskId,target.id,'monthly',title,purpose,delivery,'rule','open',deadline,this.actor.id,at,at,month));
+        statements.push(this.stmt('INSERT OR IGNORE INTO work_tasks(id,archive_id,kind,labels_json,priority,initiator_kind,initiator_id,title,purpose,delivery,source,status,deadline_at,created_by,created_at,updated_at,period_key) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',taskId,target.id,'monthly',JSON.stringify(['monthly']), 'P2', a.initiator_kind, a.initiator_kind==='system'?null:this.actor.id,title,purpose,delivery,'rule','open',deadline,this.actor.id,at,at,month));
         statements.push(this.stmt(`INSERT INTO work_task_events(id,task_id,actor_id,source,kind,before_json,after_json,reason,created_at)
           SELECT ?,t.id,?,?,'task.created',NULL,?,NULL,? FROM work_tasks t
           WHERE t.id=? AND NOT EXISTS(SELECT 1 FROM work_task_events e WHERE e.task_id=t.id AND e.kind='task.created')`,uid(),this.actor.id,this.source,JSON.stringify({kind:'monthly',period_key:month,deadline_at:deadline}),at,taskId));
@@ -370,7 +383,7 @@ export class WorkTasks {
   async assign(input:unknown){
     assertAdmin(this.actor);const a=workTaskAssignInput.parse(input);
     return command(this.env,this.actor,{requestId:a.request_id,operation:'work_task.assign',parameters:{id:a.id,member_id:a.member_id,expected_version:a.expected_version,reason:a.reason},requireAdmin:true},async()=>{
-      const task=await this.get(a.id,a.expected_version);this.assertOpenDeadline(task);
+      const task=await this.get(a.id,a.expected_version);this.assertOpenTask(task);
       const member=await this.stmt('SELECT id,frozen FROM members WHERE id=?',a.member_id).first<{id:string;frozen:number}>();if(!member||member.frozen)throw new Failure(409,'MEMBER_NOT_ELIGIBLE','只能指派给未冻结的成员');
       const key=uid(),at=now(),result={id:a.id,owner_id:a.member_id,status:'open',version:task.version+1,changed:true,assigned:true};
       return {result,statements:[this.stmt('INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(SELECT 1 FROM work_tasks WHERE id=? AND version=? AND status=\'open\') THEN 1 ELSE 0 END)',key,a.id,a.expected_version),this.stmt('UPDATE work_tasks SET owner_id=?,version=version+1,updated_at=? WHERE id=? AND version=? AND status=\'open\'',a.member_id,at,a.id,a.expected_version),this.event(a.id,'task.assigned',{owner_id:task.owner_id,version:task.version},{owner_id:a.member_id,version:task.version+1},a.reason),this.stmt('DELETE FROM mutation_guards WHERE id=?',key)]};

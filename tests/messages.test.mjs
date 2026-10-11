@@ -17,13 +17,13 @@ test('deadline reminders are owner-scoped, strict, and idempotent',async t=>{
  f.sqlite.prepare('UPDATE members SET frozen=1 WHERE id=?').run(f.actor.id);assert.equal((await messages.list({})).messages.length,0,'frozen recipients cannot read message content');
 });
 
-test('deadline processing distinguishes unclaimed and owned expiries without grace',async t=>{
+test('deadline processing keeps tasks open and only reminds owned expiries',async t=>{
  const f=fixture();t.after(f.close);const tasks=new WorkTasks(f.env,f.actor,'mcp'),unclaimed=await tasks.create({kind:'custom',title:'无人领取',purpose:'等待领取',delivery:'结果记录',deadline_at:future(24),request_id:uuid()});
  f.sqlite.prepare("UPDATE work_tasks SET deadline_at='2020-01-01T00:00:00.000Z' WHERE id=?").run(unclaimed.id);
  const owned=await tasks.create({kind:'custom',title:'已领取',purpose:'提交',delivery:'结果',deadline_at:future(24),request_id:uuid()});const claimed=await tasks.claim({id:owned.id,expected_version:owned.version,request_id:uuid()});
  f.sqlite.prepare("UPDATE work_tasks SET deadline_at='2020-01-01T00:00:00.000Z' WHERE id=?").run(owned.id);
- const result=await tasks.expire('2020-01-02T00:00:00.000Z');assert.equal(result.count,2);
- assert.equal(f.sqlite.prepare('SELECT closed_reason FROM work_tasks WHERE id=?').get(unclaimed.id).closed_reason,'claim_deadline_missed');assert.equal(f.sqlite.prepare('SELECT closed_reason FROM work_tasks WHERE id=?').get(owned.id).closed_reason,'completion_deadline_missed');
- assert.equal(f.sqlite.prepare("SELECT count(*) n FROM messages WHERE task_id=? AND kind='task_expired_uncompleted'").get(owned.id).n,1);assert.equal((await tasks.expire('2020-01-03T00:00:00.000Z')).count,0);
+ const result=await tasks.expire('2020-01-02T00:00:00.000Z');assert.equal(result.count,1);assert.equal(result.overdue_count,2);
+ assert.equal(f.sqlite.prepare('SELECT status,closed_reason FROM work_tasks WHERE id=?').get(unclaimed.id).status,'open');assert.equal(f.sqlite.prepare('SELECT status,closed_reason FROM work_tasks WHERE id=?').get(owned.id).status,'open');
+ assert.equal(f.sqlite.prepare("SELECT count(*) n FROM messages WHERE task_id=? AND kind='task_overdue'").get(owned.id).n,1);assert.equal((await tasks.expire('2020-01-03T00:00:00.000Z')).count,0);
  assert.equal(claimed.owner_id,f.actor.id);
 });

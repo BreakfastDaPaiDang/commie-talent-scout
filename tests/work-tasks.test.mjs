@@ -249,15 +249,11 @@ test('task history supports content edits, deadline extension, comments with per
   const detail=await owner.detail(task.id);assert.equal(detail.comments[0].body,'管理员修订评论');assert.deepEqual(detail.comments[0].history.map(version=>version.body),['成员原始评论','管理员修订评论']);
  });
 
- test('expiry and reopen preserve the prior closure result while respecting owner and admin modes',async t=>{
+test('expiry is a derived reminder and never blocks the owner from completing',async t=>{
  const f=fixture();t.after(f.close);const service=new WorkTasks(f.env,f.actor,'web');
  const task=await service.create(taskInput());const claimed=await service.claim({id:task.id,expected_version:task.version,request_id:uuid()});
- const expired=await service.expire('2099-02-01T00:00:00.000Z');assert.equal(expired.count,1);assert.equal((await service.detail(task.id)).task.status,'expired');
- const reopened=await service.reopen({id:task.id,expected_version:claimed.version+1,deadline_at:'2099-03-01T00:00:00.000Z',owner_mode:'keep',request_id:uuid()});assert.equal(reopened.owner_id,f.actor.id);assert.equal(reopened.status,'open');
- const completed=await service.complete({id:task.id,expected_version:reopened.version,result_kind:'completed',result_text:'重开后完成',request_id:uuid()});assert.equal(completed.status,'completed');
- const detail=await service.detail(task.id);assert.deepEqual(detail.events.map(event=>event.kind),['task.completed','task.reopened','task.expired','task.claimed','task.created']);
- const second=await service.create(taskInput());const secondClaim=await service.claim({id:second.id,expected_version:1,request_id:uuid()});await service.expire('2099-02-01T00:00:00.000Z');
- f.sqlite.prepare("UPDATE members SET role='admin' WHERE id=?").run(f.actor.id);f.actor.role='admin';
- const unassigned=await service.reopen({id:second.id,expected_version:secondClaim.version+1,deadline_at:'2099-03-01T00:00:00.000Z',owner_mode:'unassigned',request_id:uuid()});assert.equal(unassigned.owner_id,null);
- await assert.rejects(service.reopen({id:task.id,expected_version:completed.version,deadline_at:'2099-04-01T00:00:00.000Z',owner_mode:'unassigned',request_id:uuid()}),{code:'TASK_NOT_REOPENABLE'});
+ f.sqlite.prepare("UPDATE work_tasks SET deadline_at='2020-01-01T00:00:00.000Z' WHERE id=?").run(task.id);
+ const expired=await service.expire('2020-01-02T00:00:00.000Z');assert.equal(expired.count,1);assert.equal((await service.detail(task.id)).task.status,'open');assert.equal((await service.detail(task.id)).task.overdue,true);
+ const completed=await service.complete({id:task.id,expected_version:claimed.version,result_kind:'completed',result_text:'逾期后仍完成',request_id:uuid()});assert.equal(completed.status,'completed');
+ const detail=await service.detail(task.id);assert.deepEqual(detail.events.map(event=>event.kind),['task.completed','task.claimed','task.created']);
 });

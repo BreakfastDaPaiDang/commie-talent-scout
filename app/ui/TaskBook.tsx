@@ -27,3 +27,11 @@ export function TaskDetailCard({stage,title,kind,code,edit,metadata,purpose,deli
  {actions&&<div className="task-scene-actions">{actions}</div>}{children}
  </article>;
 }
+
+export function TaskBoardColumn({stage,title,subtitle,count,children}: {stage:TaskStage;title:string;subtitle:string;count:number;children:ReactNode}) {
+ return <section className={`task-board-column stage-${stage}`} aria-label={title}><header><div className="task-board-column-title"><TaskMark stage={stage}/><div><h2>{title} <small>{count}</small></h2><p>{subtitle}</p></div></div></header><div className="task-board-column-list">{children}</div></section>;
+}
+
+export function TaskBoardCard({stage,title,subject,owner,initiator,labels,priority,deadline,overdue,result,selected,onSelect,action}: {stage:TaskStage;title:string;subject:ReactNode;owner?:ReactNode;initiator?:ReactNode;labels?:string[];priority?:string;deadline:string;overdue?:boolean;result?:string;selected?:boolean;onSelect:()=>void;action?:ReactNode}) {
+ return <article className={`task-board-card stage-${stage} ${selected?'selected':''} ${overdue?'overdue':''}`}><button type="button" className="task-board-card-main" onClick={onSelect} aria-pressed={selected}><div className="task-board-card-head"><TaskMark stage={stage}/><h3>{title}</h3>{priority&&<span className={`task-priority priority-${priority.toLowerCase()}`}>{priority}</span>}</div><div className="task-board-card-subject">{subject}</div><div className="task-board-card-meta">{owner&&<span><Icon name="people" size={14}/>{owner}</span>}{initiator&&<span><span className="task-board-meta-label">发起</span>{initiator}</span>}<time className={overdue?'urgent':''}><Icon name="history" size={14}/>{overdue?'已逾期 · ':''}{deadline}</time></div><div className="task-board-card-foot">{labels?.map(label=><span className="task-board-label" key={label}>{label}</span>)}{result&&<span className="task-board-result">{result}</span>}</div></button>{action&&<div className="task-board-card-action">{action}</div>}</article>;
+}
