@@ -5,5 +5,7 @@ export default defineConfig({
   plugins:[pdfAssets()],
   root: 'app/client', publicDir: '../../public',
   build: { outDir: '../../dist', emptyOutDir: true },
-  server: { proxy: Object.fromEntries(['/api','/images','/avatars','/uploads','/mcp','/materials','/material-uploads'].map(path=>[path,workerProxy])) },
+  // Keep the API proxy from catching Vite's root-level source modules such as
+  // `api.ts` and `images.css`. Those names share a prefix with the API routes.
+  server: { proxy: Object.fromEntries(['/api/','/images/','/avatars/','/uploads/','/mcp','/materials/','/material-uploads/'].map(path=>[path,workerProxy])) },
 });
