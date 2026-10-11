@@ -109,6 +109,7 @@ export class WorkTasks {
     if(a.scope==='recommended') {where.push('(t.kind IN (\'audit\',\'onboarding\',\'monthly\',\'cooperation\') AND EXISTS (SELECT 1 FROM member_work_preferences p WHERE p.member_id=? AND (p.all_work=1 OR instr(p.kinds_json,\'"\'||t.kind||\'"\')>0)) AND t.owner_id IS NULL)');args.push(this.actor.id);}
     const rows=await this.stmt(`SELECT t.*,
       (SELECT name FROM members WHERE id=t.owner_id) owner_name,
+      (SELECT version FROM members WHERE id=t.owner_id) owner_version,
       ar.type archive_type,
       ar.name archive_name,
       ar.status archive_status,
