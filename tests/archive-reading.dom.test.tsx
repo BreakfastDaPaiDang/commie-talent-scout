@@ -8,6 +8,7 @@ const id='b880c0af-ddb4-4005-9e7e-8e9b0e48dac1',ticket='9584fe0a-7eaf-45c7-b198-
 const actor={id:'00863713-2463-471a-925f-ad9c2f5eeb91',username:'fixture',name:'虚构测试成员',role:'member' as const,must_change_password:false,version:1,qq:null,avatar_id:null};
 const archive={id,type:'person',name:'虚构整档阅读',status:'视奸观察',closed:false,deleted:false,version:1,contacts:[],links:[],members:[],bindings:{},tags:[],avatar_id:null,observation_count:45,latest_observation:'正文',updated_at:'2026-09-08T12:00:00Z'};
 const delivery={ticket,archive_id:id,through_seq:50};
+function queueResponse(r:{events:unknown[];snapshot?:number;next_cursor?:string|null}){return Response.json({notifications:r.events.map(data=>({source:'archive',read:false,data})),snapshot:String(r.snapshot??50),next_cursor:r.next_cursor??null});}
 function environment(){
  const dom=new JSDOM('<!doctype html><div id="root"></div>',{url:'http://localhost/?archive='+id,pretendToBeVisual:true}),w=dom.window;
  for(const key of ['window','document','HTMLElement','HTMLImageElement','Event','CustomEvent','location','history','localStorage','sessionStorage'])Object.defineProperty(globalThis,key,{value:key==='window'?w:(w as unknown as Record<string,unknown>)[key],configurable:true,writable:true});
@@ -25,8 +26,7 @@ test('a successful foreground detail acknowledges the archive once; background r
  globalThis.fetch=async(url,options)=>{
   const path=String(url);
   if(path==='/api/archives/'+id){detailReads++;return Response.json({archive,archive_reading:{...delivery,ticket:detailReads===1?ticket:'8b4c3ef3-9522-4f7d-aa66-7b97ebd80477',through_seq:detailReads===1?50:51}});}
-  if(path==='/api/reading/archive'){sent.push(JSON.parse(String(options?.body)).ticket);return Response.json({member_id:actor.id,archive_id:id,through_seq:50,confirmed:true,unread_event_ids:[]});}
-  if(path==='/api/reading/confirm')assert.fail('web detail must not confirm individual content events');
+  if(path==='/api/notifications/confirm'){assert.equal(JSON.parse(String(options?.body)).mode,'archive');sent.push(JSON.parse(String(options?.body)).ticket);return Response.json({member_id:actor.id,archive_id:id,through_seq:50,confirmed:true,unread_event_ids:[]});}
   return otherResponse(path);
  };
  f.w.addEventListener('cts-archive-reading-confirmed',e=>confirmed.push((e as CustomEvent).detail));
@@ -45,13 +45,13 @@ test('the unread queue marks an opened archive together and next navigates to a 
  const entries=[entry('event-a',50),entry('event-b',49),entry('event-c',48,otherId)],nextRequests:string[]=[];
  globalThis.fetch=async(url,options)=>{
   const path=String(url),u=new URL(path,'http://localhost');
-  if(u.pathname==='/api/reading/events'){
-   if(u.searchParams.has('exclude_archive_id')){nextRequests.push(u.searchParams.get('exclude_archive_id')!);return Response.json({events:[entries[2]],snapshot:50,next_cursor:null});}
-   return Response.json({events:entries,snapshot:50,next_cursor:null});
+  if(u.pathname==='/api/notifications'){
+   if(u.searchParams.has('exclude_archive_id')){nextRequests.push(u.searchParams.get('exclude_archive_id')!);return queueResponse({events:[entries[2]],snapshot:50,next_cursor:null});}
+   return queueResponse({events:entries,snapshot:50,next_cursor:null});
   }
   if(path==='/api/archives/'+id)return Response.json({archive,archive_reading:delivery});
   if(path==='/api/archives/'+otherId)return Response.json({archive:{...archive,id:otherId,name:'虚构下一张组织',type:'org'},archive_reading:null});
-  if(path==='/api/reading/archive')return Response.json({member_id:actor.id,archive_id:id,through_seq:50,confirmed:true,unread_event_ids:[]});
+  if(path==='/api/notifications/confirm')return Response.json({member_id:actor.id,archive_id:id,through_seq:50,confirmed:true,unread_event_ids:[]});
   if(u.pathname.startsWith('/api/events/'))return Response.json({event:entries.find(e=>e.id===u.pathname.split('/').pop())});
   return otherResponse(path);
  };
@@ -71,7 +71,7 @@ test('archive acknowledgement waits for a visible uncovered detail and retries t
  Object.assign(globalThis,{IntersectionObserver:class{constructor(){observerCount++;}observe(){}disconnect(){}}});
  f.w.HTMLElement.prototype.getClientRects=function(){return {length:shown?1:0} as DOMRectList;};
  Object.defineProperty(f.w.document,'visibilityState',{value:'hidden',configurable:true});
- globalThis.fetch=async(url,options)=>{assert.equal(String(url),'/api/reading/archive');sent.push(JSON.parse(String(options?.body)).ticket);return sent.length===1?Response.json({error:{code:'UNAVAILABLE',message:'一次虚构中断'}},{status:503}):Response.json({member_id:actor.id,archive_id:id,through_seq:50,confirmed:true,unread_event_ids:[]});};
+ globalThis.fetch=async(url,options)=>{assert.equal(String(url),'/api/notifications/confirm');sent.push(JSON.parse(String(options?.body)).ticket);return sent.length===1?Response.json({error:{code:'UNAVAILABLE',message:'一次虚构中断'}},{status:503}):Response.json({member_id:actor.id,archive_id:id,through_seq:50,confirmed:true,unread_event_ids:[]});};
  try{
   await act(async()=>f.root.render(<div ref={container}><ArchiveReadingScope.Provider value={true}><ArchiveRead delivery={delivery} container={container}/><ReadBoundary reading={{event_id:'body',ticket:'individual'}}/></ArchiveReadingScope.Provider></div>));
   await act(async()=>{await new Promise(r=>setTimeout(r,300));});assert.equal(sent.length,0);assert.equal(observerCount,0,'the web opening suppresses legacy per-event auto-reading');
@@ -85,7 +85,7 @@ test('archive acknowledgement waits for a visible uncovered detail and retries t
 
 test('failed or superseded detail responses never acknowledge an archive',async()=>{
  const f=environment(),{ArchivesPage}=await import('../app/client/ArchivesPage');let release!:(r:Response)=>void;const delayed=new Promise<Response>(resolve=>{release=resolve;}),sent:string[]=[];
- globalThis.fetch=async(url)=>{const path=String(url);if(path==='/api/archives/'+id)return delayed;if(path==='/api/reading/archive'){sent.push(path);return Response.json({});}return otherResponse(path);};
+ globalThis.fetch=async(url)=>{const path=String(url);if(path==='/api/archives/'+id)return delayed;if(path==='/api/notifications/confirm'){sent.push(path);return Response.json({});}return otherResponse(path);};
  try{
   await act(async()=>f.root.render(<ArchivesPage actor={actor} type="person"/>));assert.equal(sent.length,0);
   const close=f.w.document.querySelector<HTMLButtonElement>('button[aria-label="关闭档案详情"]')!;
@@ -98,9 +98,9 @@ test('refreshing the unread queue reopens a still-selected archive for its new e
  const f=environment(),{UnreadPage}=await import('../app/client/UnreadPage');f.w.history.replaceState(null,'','/unread');let round=0,confirmations=0;
  globalThis.fetch=async(url)=>{
   const path=String(url),entry={id:'event-'+round,seq:50+round,archive_id:id,archive_name:archive.name,type:'person',closed:0,kind:'archive.created',actor_id:'writer',actor_name:'虚构作者',created_at:'2026-09-08T12:00:00Z',observation:null,before:null,after:{}};
-  if(path.startsWith('/api/reading/events'))return Response.json({events:[entry],snapshot:entry.seq,next_cursor:null});
+  if(path.startsWith('/api/notifications?'))return queueResponse({events:[entry],snapshot:entry.seq,next_cursor:null});
   if(path==='/api/archives/'+id)return Response.json({archive,archive_reading:{...delivery,ticket:round===0?ticket:'8b4c3ef3-9522-4f7d-aa66-7b97ebd80477',through_seq:entry.seq}});
-  if(path==='/api/reading/archive'){confirmations++;return Response.json({member_id:actor.id,archive_id:id,through_seq:entry.seq,confirmed:true,unread_event_ids:[]});}
+  if(path==='/api/notifications/confirm'){confirmations++;return Response.json({member_id:actor.id,archive_id:id,through_seq:entry.seq,confirmed:true,unread_event_ids:[]});}
   if(path.startsWith('/api/events/'))return Response.json({event:entry});return otherResponse(path);
  };
  try{
@@ -113,7 +113,7 @@ test('refreshing the unread queue reopens a still-selected archive for its new e
 test('queue confirmation belongs to the current member and preserves the server remaining-event exceptions',async()=>{
  const f=environment(),{UnreadPage}=await import('../app/client/UnreadPage');f.w.history.replaceState(null,'','/unread');
  const entries=['first','protected'].map((key,i)=>({id:key,seq:50-i,archive_id:id,archive_name:archive.name,type:'person',closed:0,kind:'archive.created',actor_id:'writer',actor_name:'虚构作者',created_at:'2026-09-08T12:00:00Z',observation:null,before:null,after:{}}));
- globalThis.fetch=async url=>{const path=String(url);if(path.startsWith('/api/reading/events'))return Response.json({events:entries,snapshot:50,next_cursor:null});if(path==='/api/archives/'+id)return Response.json({archive,archive_reading:null});if(path.startsWith('/api/events/'))return Response.json({event:entries[0]});return otherResponse(path);};
+ globalThis.fetch=async url=>{const path=String(url);if(path.startsWith('/api/notifications?'))return queueResponse({events:entries,snapshot:50,next_cursor:null});if(path==='/api/archives/'+id)return Response.json({archive,archive_reading:null});if(path.startsWith('/api/events/'))return Response.json({event:entries[0]});return otherResponse(path);};
  try{
   await act(async()=>f.root.render(<UnreadPage actor={actor}/>));await settle();
   await act(async()=>f.w.dispatchEvent(new f.w.CustomEvent('cts-archive-reading-confirmed',{detail:{member_id:'a-previous-session',archive_id:id,through_seq:50,confirmed:true,unread_event_ids:[]}})));
@@ -128,7 +128,7 @@ test('a late next-unread response cannot replace an archive explicitly selected 
  const ids=[id,'459e49d6-f943-41b9-8a3c-f21ed41c5d6a','8b4c3ef3-9522-4f7d-aa66-7b97ebd80477'],entries=ids.map((key,i)=>({id:'event-'+i,seq:50-i,archive_id:key,archive_name:'虚构队列 '+i,type:'person',closed:0,kind:'archive.created',actor_id:'writer',actor_name:'虚构作者',created_at:'2026-09-08T12:00:00Z',observation:null,before:null,after:{}}));
  let release!:(r:Response)=>void;const pending=new Promise<Response>(r=>{release=r;});
  globalThis.fetch=async url=>{
-  const u=new URL(String(url),'http://localhost');if(u.pathname==='/api/reading/events')return u.searchParams.has('exclude_archive_id')?pending:Response.json({events:entries,snapshot:50,next_cursor:null});
+  const u=new URL(String(url),'http://localhost');if(u.pathname==='/api/notifications')return u.searchParams.has('exclude_archive_id')?pending:queueResponse({events:entries,snapshot:50,next_cursor:null});
   if(u.pathname.startsWith('/api/archives/')&&!u.pathname.endsWith('/timeline')){const entry=entries.find(e=>e.archive_id===u.pathname.split('/').pop())!;return Response.json({archive:{...archive,id:entry.archive_id,name:entry.archive_name},archive_reading:null});}
   if(u.pathname.startsWith('/api/events/'))return Response.json({event:entries.find(e=>e.id===u.pathname.split('/').pop())});return otherResponse(String(url));
  };
@@ -136,8 +136,8 @@ test('a late next-unread response cannot replace an archive explicitly selected 
   await act(async()=>f.root.render(<UnreadPage actor={actor}/>));await settle();
   const next=Array.from(f.w.document.querySelectorAll('button')).find(e=>e.textContent==='下一处未读 →')!;await act(async()=>next.click());
   const third=Array.from(f.w.document.querySelectorAll<HTMLButtonElement>('.update-row')).find(e=>e.textContent!.includes('虚构队列 2'))!;await act(async()=>third.click());await settle();
-  await act(async()=>release(Response.json({events:[entries[1]]})));await settle();assert.equal(f.w.document.querySelector('.entity-heading h1')!.textContent,'虚构队列 2');
- }finally{release(Response.json({events:[]}));await f.close();}
+  await act(async()=>release(queueResponse({events:[entries[1]]})));await settle();assert.equal(f.w.document.querySelector('.entity-heading h1')!.textContent,'虚构队列 2');
+ }finally{release(queueResponse({events:[]}));await f.close();}
 });
 
 test('an older unread-count response cannot restore a badge after the latest archive confirmation cleared it',async()=>{
@@ -155,9 +155,9 @@ test('opening the only unread archive completes a paginated queue without an ext
  const entries=Array.from({length:30},(_,i)=>({id:'event-'+i,seq:50-i,archive_id:id,archive_name:archive.name,type:'person',closed:0,kind:'archive.created',actor_id:'writer',actor_name:'虚构作者',created_at:'2026-09-08T12:00:00Z',observation:null,before:null,after:{}}));
  globalThis.fetch=async url=>{
   const u=new URL(String(url),'http://localhost');
-  if(u.pathname==='/api/reading/events'){if(u.searchParams.get('limit')==='1'){checks++;return Response.json({events:[],snapshot:50,next_cursor:null});}return Response.json({events:entries,snapshot:50,next_cursor:'21'});}
+  if(u.pathname==='/api/notifications'){if(u.searchParams.get('limit')==='1'){checks++;return queueResponse({events:[],snapshot:50,next_cursor:null});}return queueResponse({events:entries,snapshot:50,next_cursor:'21'});}
   if(u.pathname==='/api/archives/'+id)return Response.json({archive,archive_reading:delivery});
-  if(u.pathname==='/api/reading/archive')return Response.json({member_id:actor.id,archive_id:id,through_seq:50,confirmed:true,unread_event_ids:[]});
+  if(u.pathname==='/api/notifications/confirm')return Response.json({member_id:actor.id,archive_id:id,through_seq:50,confirmed:true,unread_event_ids:[]});
   if(u.pathname.startsWith('/api/events/'))return Response.json({event:entries[0]});return otherResponse(String(url));
  };
  try{

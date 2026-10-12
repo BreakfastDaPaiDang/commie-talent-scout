@@ -1,3 +1,4 @@
+import {Notifications} from './notifications.ts';
 import {McpServer} from '@modelcontextprotocol/server';
 import {z} from 'zod';
 import {Reading,confirmReadingInput,unreadListInput} from './reading.ts';
@@ -20,5 +21,5 @@ export function registerReadingTools(server:McpServer,env:Env,actor:Actor,reply:
  server.registerTool('get_unread_summary',{description:'当前成员未读更新数量，人物与组织分开；只返回计数，不推进阅读进度。阅读流程见 reading 指南。',annotations:read,inputSchema:{},outputSchema:z.object({groups:z.array(record),total:z.number()})},()=>reply(()=>service.summary(),r=>({total:r.total})));
  server.registerTool('list_unread_events',{description:'分页列出本次跨人物/组织的未读队列，沿用 snapshot 和 next_cursor；仅含导航元数据，不确认阅读。按用户任务范围读取所需事件。',annotations:read,inputSchema:unreadListInput,outputSchema:z.object({events:z.array(record),snapshot:z.number(),next_cursor:z.string().nullable()})},a=>reply(()=>service.list(a),r=>({count:(r.events as unknown[]).length})));
  server.registerTool('get_archive_event',{description:'按事件 ID 读取可见的具体事件及当前观察正文，直达搜索或未读目标；删除或关闭目标保留可见上下文。实际收到内容后按 reading.ticket 确认阅读。',annotations:read,inputSchema:{id:z.uuid()},outputSchema:z.object({event:record})},a=>reply(()=>new Observations(env,actor,'mcp').event(a.id),r=>({id:(r.event as Record<string,unknown>).id})));
- server.registerTool('confirm_reading',{description:'仅在实际收到前次工具返回的完整内容之后，确认其中 reading.ticket 对应事件。按事件幂等更新本人阅读进度，不改业务内容或活动排序；摘要、未返回和失败内容不能确认。',annotations:{...read,readOnlyHint:false},inputSchema:confirmReadingInput,outputSchema:z.object({confirmed:z.array(record),unconfirmed:z.array(z.string())})},a=>reply(()=>service.confirm(a),r=>({confirmed:(r.confirmed as unknown[]).length,unconfirmed:(r.unconfirmed as unknown[]).length})));
+ server.registerTool('confirm_reading',{description:'仅在实际收到前次工具返回的完整内容之后，确认其中 reading.ticket 对应事件。按事件幂等更新本人阅读进度，不改业务内容或活动排序；摘要、未返回和失败内容不能确认。',annotations:{...read,readOnlyHint:false},inputSchema:confirmReadingInput,outputSchema:z.object({confirmed:z.array(record),unconfirmed:z.array(z.string())})},a=>reply(()=>new Notifications(env,actor).confirm({...a,mode:'event'}),r=>({confirmed:(r.confirmed as unknown[]).length,unconfirmed:(r.unconfirmed as unknown[]).length})));
 }

@@ -1,3 +1,4 @@
+import {notificationPage} from './notification-api';
 import {CaughtUp,UpdateRow,WorkspaceFrame} from '../ui/Workspace';
 import {Avatar} from './Avatar';
 import {avatarUrl} from './AvatarEditor';
@@ -15,13 +16,13 @@ export function UnreadBadge({onCount}:{onCount?:(total:number)=>void}={}){
  return <>{total!==null&&total>0&&<span className="nav-unread">{total}</span>}</>;
 }
 export function UnreadPage({actor,compact=false}:{actor:Member;compact?:boolean}){
- const[items,setItems]=useState<Entry[]>([]),[selected,setSelected]=useState<string|null>(null),[cursor,setCursor]=useState<string|null>(null),[snapshot,setSnapshot]=useState<number|undefined>(),[loading,setLoading]=useState(true),[error,setError]=useState('');
+ const[items,setItems]=useState<Entry[]>([]),[selected,setSelected]=useState<string|null>(null),[cursor,setCursor]=useState<string|null>(null),[snapshot,setSnapshot]=useState<string|undefined>(),[loading,setLoading]=useState(true),[error,setError]=useState('');
  const serial=useRef(0),current=items.find(e=>e.id===selected),remaining=items.filter(e=>!e.read),complete=!loading&&!error&&!cursor&&items.length>0&&!remaining.length;
  const[queueRevision,setQueueRevision]=useState(0);
  const archiveReads=useRef(new Map<string,ArchiveReadConfirmation>()),eventReads=useRef(new Set<string>());
  const reconcile=(entries:Entry[])=>entries.map(e=>{const opening=archiveReads.current.get(e.archive_id);return eventReads.current.has(e.id)||(opening&&e.seq<=opening.through_seq&&!opening.unread_event_ids.includes(e.id))?{...e,read:true}:e;});
  const hasNext=remaining.some(e=>e.archive_id!==current?.archive_id)||!!cursor;
- async function load(before?:string){const n=++serial.current;if(!before){archiveReads.current.clear();eventReads.current.clear();}setLoading(true);setError('');try{const r=await api<{events:Entry[];snapshot:number;next_cursor:string|null}>('/reading/events?'+new URLSearchParams({...(before?{before,snapshot:String(snapshot)}:{})}));if(n!==serial.current)return;setItems(old=>reconcile(before?[...old,...r.events.filter(e=>!old.some(existing=>existing.id===e.id))]:r.events));setSnapshot(r.snapshot);setCursor(r.next_cursor);if(!before){setSelected(r.events[0]?.id??null);setQueueRevision(value=>value+1);}}catch(e){if(n===serial.current)setError((e as Error).message);}finally{if(n===serial.current)setLoading(false);}}
+ async function load(before?:string){const n=++serial.current;if(!before){archiveReads.current.clear();eventReads.current.clear();}setLoading(true);setError('');try{const page=await notificationPage<Entry>('archive',{unread:'true',...(before?{cursor:before,snapshot:String(snapshot)}:{})}),r={...page,events:page.items};if(n!==serial.current)return;setItems(old=>reconcile(before?[...old,...r.events.filter(e=>!old.some(existing=>existing.id===e.id))]:r.events));setSnapshot(r.snapshot);setCursor(r.next_cursor);if(!before){setSelected(r.events[0]?.id??null);setQueueRevision(value=>value+1);}}catch(e){if(n===serial.current)setError((e as Error).message);}finally{if(n===serial.current)setLoading(false);}}
  useEffect(()=>{
   archiveReads.current.clear();eventReads.current.clear();void load();
   const read=(event:Event)=>{for(const id of (event as CustomEvent<string[]>).detail)eventReads.current.add(id);setItems(reconcile);};
@@ -34,7 +35,7 @@ export function UnreadPage({actor,compact=false}:{actor:Member;compact?:boolean}
   let cancelled=false;const n=serial.current;
   // The unopened pages may consist entirely of the archive just acknowledged.
   // Resolve that stale cursor without making the member click Next to finish.
-  void api<{events:Entry[];next_cursor:string|null}>('/reading/events?'+new URLSearchParams({snapshot:String(snapshot),limit:'1'})).then(r=>{
+  void notificationPage<Entry>('archive',{unread:'true',snapshot:String(snapshot),limit:'1'}).then(page=>{const r={...page,events:page.items};
    if(cancelled||n!==serial.current)return;
    setItems(old=>[...old.map(e=>r.events.some(current=>current.id===e.id)?{...e,read:false}:e),...r.events.filter(e=>!old.some(existing=>existing.id===e.id))]);setCursor(r.next_cursor);
   }).catch(e=>{if(!cancelled&&n===serial.current)setError(e.message);});
@@ -46,7 +47,7 @@ export function UnreadPage({actor,compact=false}:{actor:Member;compact?:boolean}
   try{
    // Ask the shared personal unread query, including beyond the loaded page. A
    // local event list cannot prove an archive is still unread after another read.
-   const r=await api<{events:Entry[]}>('/reading/events?'+new URLSearchParams({...(current?{exclude_archive_id:current.archive_id}:{}),snapshot:String(snapshot),limit:'1'}));
+   const page=await notificationPage<Entry>('archive',{unread:'true',...(current?{exclude_archive_id:current.archive_id}:{}),snapshot:String(snapshot),limit:'1'}),r={events:page.items};
    if(n!==serial.current)return;
    const target=r.events[0];
    if(target){setItems(old=>old.some(e=>e.id===target.id)?old.map(e=>e.id===target.id?{...target,read:false}:e):[...old,target]);setSelected(target.id);}

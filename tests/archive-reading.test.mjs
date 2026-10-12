@@ -102,6 +102,7 @@ test('freezing, downgrading or deleting between receipt lookup and the atomic co
   };
   await assert.rejects(opening.confirm({ticket:ticket.ticket}),{code:'READING_EXPIRED'});
   f.sqlite.prepare('UPDATE archives SET deleted=0 WHERE id=?').run(a.id);
+  f.sqlite.prepare('UPDATE members SET frozen=0 WHERE id=?').run(f.actor.id);
   assert.equal((await new Reading(f.env,f.actor).summary()).total,1);
  });
 });

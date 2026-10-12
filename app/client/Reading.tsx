@@ -10,7 +10,7 @@ export function ArchiveRead({delivery,container}:{delivery:ArchiveReadDelivery;c
   let cancelled=false,busy=false,done=false,retryAt=0;
   const confirm=()=>{
    if(cancelled||busy||done||Date.now()<retryAt||document.visibilityState!=='visible'||document.querySelector('dialog[open],[role="dialog"]')||!container.current?.getClientRects().length)return;
-   busy=true;void api<ArchiveReadConfirmation>('/reading/archive',{ticket:delivery.ticket}).then(result=>{
+   busy=true;void api<ArchiveReadConfirmation>('/notifications/confirm',{mode:'archive',ticket:delivery.ticket}).then(result=>{
     done=true;window.dispatchEvent(new CustomEvent('cts-archive-reading-confirmed',{detail:result}));window.dispatchEvent(new CustomEvent('cts-reading-confirmed',{detail:[]}));if(!cancelled)setError('');
    }).catch(e=>{if(cancelled)return;if(e instanceof ApiError&&e.status<500&&e.status!==429){done=true;setError(e.message);}else{setError('阅读进度暂未保存，正在重试');retryAt=Date.now()+5000;}}).finally(()=>{busy=false;});
   };
@@ -34,7 +34,7 @@ export function ReadBoundary({reading,imageOnly=false}:{reading?:ReadDelivery|nu
    const eligible=intersecting&&document.visibilityState==='visible'&&!document.querySelector('dialog[open],[role="dialog"]')&&element.getClientRects().length>0&&(!imageOnly||Array.from(element.closest('article')?.querySelectorAll('.image-gallery img')??[]).slice(0,1).some(img=>img instanceof HTMLImageElement&&img.complete&&img.naturalWidth>0));
    if(!eligible){started=0;return;}if(done||busy||Date.now()<retryAt)return;
    if(!started){started=Date.now();return;}if(Date.now()-started<500)return;
-   busy=true;void api<{confirmed:ReadDelivery[];unconfirmed:string[]}>('/reading/confirm',{tickets:[reading.ticket]}).then(result=>{
+   busy=true;void api<{confirmed:ReadDelivery[];unconfirmed:string[]}>('/notifications/confirm',{mode:'event',tickets:[reading.ticket]}).then(result=>{
     if(result.confirmed.length)window.dispatchEvent(new CustomEvent('cts-reading-confirmed',{detail:result.confirmed.map(r=>r.event_id)}));if(cancelled)return;done=true;setError(result.unconfirmed.length?'内容已变化，正在重新读取':'');if(result.unconfirmed.length)window.dispatchEvent(new CustomEvent('cts-reading-stale'));
    }).catch(()=>{if(!cancelled){setError('阅读进度暂未保存，正在重试');retryAt=Date.now()+5000;}}).finally(()=>{busy=false;});
   },250);

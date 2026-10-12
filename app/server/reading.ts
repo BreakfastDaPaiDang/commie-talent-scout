@@ -1,20 +1,12 @@
 import {z} from 'zod';
-import {Failure,now,uid,type Actor,type Env} from './types.ts';
-import {evidenceVisibilitySql} from './tag-state.ts';
+import {now,uid,type Actor,type Env} from './types.ts';
+import {eventVisibility,unreadPredicate} from './reading-predicates.ts';
+export {eventVisibility,unreadPredicate} from './reading-predicates.ts';
+import {NotificationQuery} from './notification-query.ts';
 
 export type ReadDelivery={event_id:string;ticket:string};
 export const confirmReadingInput=z.object({tickets:z.array(z.uuid()).min(1).max(100)}).strict();
 export const unreadListInput=z.object({archive_id:z.uuid().optional(),exclude_archive_id:z.uuid().optional(),exclude_event_id:z.uuid().optional(),before:z.coerce.number().int().positive().optional(),snapshot:z.coerce.number().int().nonnegative().optional(),limit:z.coerce.number().int().min(1).max(100).default(30)});
-// The same visibility predicate is used before pagination, in counts and at confirmation.
-export function eventVisibility(actor:Actor,alias='e'){
- const one=(column:string)=>`EXISTS(SELECT 1 FROM json_each(${alias}.${column}) binding WHERE ${evidenceVisibilitySql("json_extract(binding.value,'$.evidence')")})`;
- return {sql:`(${alias}.kind<>'archive.tags_changed' OR ${one('before_json')} OR ${one('after_json')})`,args:[actor.id,actor.role,actor.id,actor.role]};
-}
-export function unreadPredicate(actor:Actor,alias='e'){
- const visible=eventVisibility(actor,alias);
- return {sql:`EXISTS(SELECT 1 FROM archives readable WHERE readable.id=${alias}.archive_id AND readable.deleted=0) AND ${alias}.actor_id<>? AND ${alias}.created_at>=(SELECT created_at FROM members WHERE id=?) AND NOT EXISTS(SELECT 1 FROM event_read_marks mark WHERE mark.member_id=? AND mark.event_id=${alias}.id) AND ${visible.sql}`,args:[actor.id,actor.id,actor.id,...visible.args]};
-}
-
 // A GET only creates a delivery receipt. The recipient confirms it after receiving/rendering
 // that exact content. MCP event receipts and webpage opening snapshots both create
 // independent event marks; neither maintains an advancing archive read watermark.
@@ -41,11 +33,6 @@ export class Reading{
   const rows=await this.stmt(`SELECT d.id ticket,d.event_id,EXISTS(SELECT 1 FROM event_read_marks m WHERE m.member_id=d.member_id AND m.event_id=d.event_id) confirmed FROM reading_deliveries d WHERE d.id IN (SELECT value FROM json_each(?)) AND d.credential_id=? AND d.member_id=?`,JSON.stringify(tickets),this.actor.credential_id,this.actor.id).all<{ticket:string;event_id:string;confirmed:number}>();
   return {confirmed:rows.results.filter(r=>r.confirmed).map(({ticket,event_id})=>({ticket,event_id})),unconfirmed:tickets.filter(t=>!rows.results.some(r=>r.ticket===t&&r.confirmed))};
  }
- async summary(){const u=unreadPredicate(this.actor);const r=await this.stmt(`SELECT a.type,count(*) events,count(DISTINCT a.id) archives FROM archive_events e JOIN archives a ON a.id=e.archive_id WHERE ${u.sql} GROUP BY a.type`,...u.args).all<{type:string;events:number;archives:number}>();return {groups:r.results,total:r.results.reduce((sum,r)=>sum+r.events,0)};}
- async list(input:unknown){
-  const a=unreadListInput.parse(input),u=unreadPredicate(this.actor),snapshot=a.snapshot??Number((await this.stmt('SELECT coalesce(max(seq),0) seq FROM archive_events').first<{seq:number}>())!.seq);
-  if(a.before&&a.before>snapshot+1)throw new Failure(400,'INVALID_CURSOR','分页位置超出本次队列');
-  const rows=await this.stmt(`SELECT e.id,e.seq,e.archive_id,e.actor_id,e.kind,e.observation_id,e.created_at,m.name actor_name,a.name archive_name,a.type,a.closed FROM archive_events e JOIN archives a ON a.id=e.archive_id JOIN members m ON m.id=e.actor_id WHERE e.seq<=? ${a.before?'AND e.seq<?':''} ${a.archive_id?'AND e.archive_id=?':''} ${a.exclude_archive_id?'AND e.archive_id<>?':''} ${a.exclude_event_id?'AND e.id<>?':''} AND ${u.sql} ORDER BY e.seq DESC LIMIT ?`,snapshot,...(a.before?[a.before]:[]),...(a.archive_id?[a.archive_id]:[]),...(a.exclude_archive_id?[a.exclude_archive_id]:[]),...(a.exclude_event_id?[a.exclude_event_id]:[]),...u.args,a.limit+1).all<Record<string,unknown>>();
-  return {events:rows.results.slice(0,a.limit),snapshot,next_cursor:rows.results.length>a.limit?String(rows.results[a.limit-1].seq):null};
- }
+ async summary(){return new NotificationQuery(this.env,this.actor).archiveSummary();}
+ async list(input:unknown){return new NotificationQuery(this.env,this.actor).archiveEvents(unreadListInput.parse(input));}
 }
