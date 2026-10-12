@@ -171,7 +171,6 @@ export class WorkTasks {
       delete task.archive_observation_count;
       delete task.archive_latest_observation;
       delete task.labels_json;
-      delete task.initiator_version;
     }
     if(a.scope==='admin') for(const task of tasks){const candidates=await this.candidates(task as unknown as Row);task.candidate_count=candidates.length;task.push_stage=pushStage(this.pushable(task as unknown as Row),now());}
     return {tasks,next_offset};

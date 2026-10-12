@@ -64,3 +64,16 @@ test('hall defaults to 30 days of closures, can show 90 or all, and resets witho
   assert.equal(select.value,'30');assert.deepEqual(titles(),['长期开放','关闭10']);
  }finally{await f.close();}
 });
+
+
+test('initiator avatar is present in the task book, hall card and hall detail',async()=>{
+ const f=environment(),initiator={...task,initiator_kind:'member',initiator_id:'30000000-0000-4000-8000-000000000001',initiator_name:'虚构发起人',initiator_version:7};
+ globalThis.fetch=async url=>String(url).includes('/work-tasks?')?Response.json({tasks:[initiator]}):Response.json({events:[],comments:[]});
+ // React was imported before JSDOM; emulate its legacy focus-tracking hooks.
+ Object.assign(f.w.HTMLElement.prototype,{attachEvent(){},detachEvent(){}});
+ const assertAvatar=(selector:string)=>{const img=f.w.document.querySelector(selector+' img[alt="虚构发起人的头像"]');assert.ok(img);assert.equal(img.getAttribute('src'),'/avatars/members/'+initiator.initiator_id+'?v=7');};
+ try{
+  const {WorkTasksPage}=await import('../app/client/WorkTasksPage');await act(async()=>f.root.render(<WorkTasksPage actor={actor} onOpenArchive={()=>{}}/>));assertAvatar('.task-scene-meta-grid');
+  await act(async()=>[...f.w.document.querySelectorAll('button')].find(b=>b.textContent==='看板大厅')!.click());assertAvatar('.task-board-card');await act(async()=>f.w.document.querySelector<HTMLButtonElement>('.task-board-card-main')!.click());assertAvatar('dialog');
+ }finally{await f.close();}
+});

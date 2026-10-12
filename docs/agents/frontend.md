@@ -1,5 +1,9 @@
 # 原型到正式前端
 
+## 任务发起人头像（2026-10-12 / #77）
+
+任务列表保留 `initiator_version`，不再在响应清理时删掉；任务簿详情、看板详情和看板卡片复用发起人展示与现有 `Avatar`。不改变布局或身份。服务测试核对网页/MCP 列表与详情的头像版本，DOM 回归覆盖三个显示位置。启动本地 Worker 8790 和 Vite 5190 后运行 `node scripts/verify-task-initiator-avatar.mjs`，使用真实上传头像检查桌面/手机加载，结束时恢复原头像、取消虚构任务并撤销验收凭据；可用 `CTS_UI_BASE` 指定正式构建预览。
+
 ## 档案关闭历史筛选（2026-10-12 / #76）
 
 外部人物、社员、组织共用 `ScopeToolbar` 的折叠条件摘要和 `ClosedHistoryFilter`；正式页与原型引用同一组件。收起显示“已关闭档案：最近 30 天”，展开在原筛选区选择 30／90 天或全部，重置恢复 30 天，不新增说明面板。正式 API 在计数、分页前筛选，旧 API/MCP 默认范围不变，回收站保留原范围。`verify-archive-closed-history.mjs` 检查真实 HTTP/MCP 和桌面／手机展开、折叠、切换、重置。见 [验收记录](../validation/archive-closed-history-76.md)。

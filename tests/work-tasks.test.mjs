@@ -295,3 +295,16 @@ test('closed_at follows closing events, not later edits, and list pages keep all
  assert.equal(next.next_offset,null);
  assert.deepEqual(new Set([...firstPage.tasks,...next.tasks].map(x=>x.id)),new Set([old.id,second.id]));
 });
+
+
+test('task lists and details retain the initiator avatar version across profile updates',async t=>{
+ const f=fixture();t.after(f.close);const service=new WorkTasks(f.env,f.actor,'web');
+ const created=await service.create(taskInput());
+ for(const version of [1,7]){
+  f.sqlite.prepare('UPDATE members SET version=? WHERE id=?').run(version,f.actor.id);
+  for(const source of ['web','mcp']){
+   const reader=new WorkTasks(f.env,f.actor,source),listed=(await reader.list({scope:'all'})).tasks[0],detail=(await reader.detail(created.id)).task;
+   assert.equal(listed.initiator_id,f.actor.id);assert.equal(listed.initiator_version,version,'list must preserve the avatar cache version used by both task pages');assert.equal(detail.initiator_version,version);
+  }
+ }
+});
