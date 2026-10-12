@@ -1,6 +1,6 @@
 {
   "format": 1,
-  "count": 32,
+  "count": 33,
   "migrations": {
     "0001_identity.sql": {
       "sha256": "ceb732997de6972d3f88ae3a15b52b4df0def3418cc4b0834cd289ce55daff6a",
@@ -161,6 +161,11 @@
       "sha256": "b0cc37bad47c94ec6c5504caf1f75985389a7874316764790283c993bb78684b",
       "backwards_compatible": true,
       "reason": "Adds an optional unique person-account link. Existing unlinked archives stay unchanged. Linked names are protected and synchronized through account history; old clients can maintain matching names but cannot diverge them."
+    },
+    "0033_saki_username.sql": {
+      "sha256": "8ecef9f31476b49dfde6a4616d29482857fa4fbb756909b87c1b461d564bd37c",
+      "backwards_compatible": true,
+      "reason": "Renames only the existing service username/key, preserving ID, avatar, authority and all historical references. Old code resolves service identity by stable ID."
     }
   }
 }

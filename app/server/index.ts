@@ -1,3 +1,4 @@
+import {generateMemberMonthlyFollowUps,generateScheduledMemberMonthlyFollowUps} from './member-monthly-follow-ups.ts';
 import {runTaskNotifications} from './task-notifications.ts';
 import {generateArchiveFollowUps,generateScheduledArchiveFollowUps} from './archive-follow-ups.ts';
 import {TagDeletion} from './tag-deletion.ts';
@@ -179,6 +180,7 @@ app.post('/api/work-tasks/comments/restore',async c=>c.json(await new WorkTasks(
 app.post('/api/work-tasks/complete',async c=>c.json(await new WorkTasks(c.env,await authenticate(c.req.raw,c.env),'web').complete(await c.req.json())));
 app.post('/api/work-tasks/release',async c=>c.json(await new WorkTasks(c.env,await authenticate(c.req.raw,c.env),'web').release(await c.req.json())));
 app.post('/api/work-tasks/cancel',async c=>c.json(await new WorkTasks(c.env,await authenticate(c.req.raw,c.env),'web').cancel(await c.req.json())));
+app.post('/api/work-tasks/member-monthly/generate',async c=>c.json(await generateMemberMonthlyFollowUps(c.env,await authenticate(c.req.raw,c.env),await c.req.json())));
 app.post('/api/work-tasks/archive-follow-up/generate',async c=>c.json(await generateArchiveFollowUps(c.env,await authenticate(c.req.raw,c.env),await c.req.json())));
 app.post('/api/archives/refer',async c=>c.json(await new WorkTasks(c.env,await authenticate(c.req.raw,c.env),'web').refer(await c.req.json())));
 app.post('/api/archives/confirm-membership',async c=>c.json(await new WorkTasks(c.env,await authenticate(c.req.raw,c.env),'web').confirmMembership(await c.req.json())));
@@ -199,6 +201,7 @@ export default {
   async scheduled(_event:ScheduledController,env:Env) {
     await cleanupJournal(env);
     await generateScheduledArchiveFollowUps(env);
+    await generateScheduledMemberMonthlyFollowUps(env);
     await runTaskNotifications(env,'overdue');
     await runTaskNotifications(env,'due');
     await env.DB.batch([

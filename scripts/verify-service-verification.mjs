@@ -20,7 +20,7 @@ try{
  const context=await browser.newContext(),[cookieName,...cookieValue]=v.sessionCookie.split('=');await context.addCookies([{name:cookieName,value:cookieValue.join('='),url:v.base}]);const page=await context.newPage();
  const out='tmp/verification/service-verification-'+v.target;mkdirSync(out,{recursive:true});
  for(const width of [1440,390]){
-  await page.setViewportSize({width,height:1000});await page.goto(v.base+'/admin/members');const first=page.getByRole('row').filter({has:page.getByRole('button')}).first();await first.waitFor();assert.ok((await first.innerText()).includes('zaoji-hr'));await first.locator('img').evaluate(e=>e.decode());await page.screenshot({path:out+`/accounts-${width}.png`});
+  await page.setViewportSize({width,height:1000});await page.goto(v.base+'/admin/members');const first=page.getByRole('row').filter({has:page.getByRole('button')}).first();await first.waitFor();assert.ok((await first.innerText()).includes('saki-hr'));await first.locator('img').evaluate(e=>e.decode());await page.screenshot({path:out+`/accounts-${width}.png`});
  }
  const fetched=await v.call('get_observation',{id:observation.id});assert.equal(fetched.observation.author_id,v.actor.id);checks.push('desktop/mobile account UI opens with service session and original avatar');
 }finally{

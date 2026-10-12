@@ -1,3 +1,4 @@
+import {memberMonthlyModule,planMemberMonthly,memberMonth} from '../app/rules/member-monthly-follow-up.ts';
 import {archiveFollowUpModule,planArchiveFollowUp} from '../app/rules/archive-follow-up.ts';
 import {readFileSync,writeFileSync,mkdirSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
@@ -54,6 +55,9 @@ export function renderBusinessRules(){
   '',`条件复用 [archiveReminder](../../app/rules/archive-reminders.ts)；候选查询复用 [archiveOrderCte](../../app/server/archive-order.ts)，事务内复核档案版本与更新时间。`,
   '',...follow.verification.tests.map(file=>`- 验证：[${file}](../../${file})`));
  for(const fn of new Set([...follow.rules.flatMap(r=>[r.when,r.apply]),planArchiveFollowUp]))lines.push(`### ${fn.name}`,'',link(follow.source,fn.name),'','```javascript',source(fn),'```','');
+ const monthly=memberMonthlyModule;
+ lines.push('','## 正式社员月度人事跟进','',`模块：\`${monthly.id}\`；触发入口：${monthly.triggers.map(t=>link(t.file,t.entry)).join('、')}。`,monthly.verification.idempotency,monthly.verification.failure);
+ for(const fn of new Set([memberMonth,...monthly.rules.flatMap(r=>[r.when,r.apply]),planMemberMonthly]))lines.push(`### ${fn.name}`,'',link(monthly.source,fn.name),'','```javascript',source(fn),'```','');
  return lines.join('\n');
 }
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){

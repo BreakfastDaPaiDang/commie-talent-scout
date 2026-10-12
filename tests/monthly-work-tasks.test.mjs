@@ -29,7 +29,7 @@ test('old monthly generation is removed; historical tasks still support explicit
  assert.equal(typeof tasks.generateMonthly,'undefined');
  assert.equal(typeof tasks.previewMonthly,'undefined');
  assert.equal(typeof tasks.generateScheduledMonthly,'undefined');
- assert.equal(workTaskToolNames.some(name=>name.includes('monthly')),false);
+ assert.deepEqual(workTaskToolNames.filter(name=>name.includes('monthly')),['generate_member_monthly_follow_up_tasks']);
  await assert.rejects(tasks.create({kind:'monthly',archive_id:a.id,period_key:'2099-01',title:'旧入口',purpose:'不再生成',delivery:'留档',deadline_at:deadline,request_id:uuid()}),{code:'MONTHLY_GENERATION_REMOVED'});
  const claimed=await tasks.claim({id:task.id,expected_version:task.version,request_id:uuid()});
  const observation=await observations.create({archive_id:a.id,body:'真实沟通记录',request_id:uuid()});

@@ -31,7 +31,7 @@ test('verification grant authenticates service on web/MCP without a password or 
  assert.equal(f.sqlite.prepare('SELECT role FROM members WHERE id=?').get(zaojiSubject.id).role,'member');
  assert.ok(Date.parse(f.connection.expires_at)<=Date.parse(f.session.expires_at));assert.ok(Date.parse(f.session.expires_at)<=Date.now()+3600000);
  const web=await authenticate(new Request('https://fixture.invalid/api/workspace',{headers:{Cookie:'cts_session='+f.session.secret}}),f.env);assert.equal(web.id,zaojiSubject.id);
- await assert.rejects(login(new Request('https://fixture.invalid/api/auth/login'),f.env,{username:'zaoji-hr',password:'!service-no-password'}),{code:'INVALID_LOGIN'});
+ await assert.rejects(login(new Request('https://fixture.invalid/api/auth/login'),f.env,{username:'saki-hr',password:'!service-no-password'}),{code:'INVALID_LOGIN'});
  const request_id=uuid(),archive=await new Archives(f.env,f.agent,'mcp').create({type:'person',name:'虚构验收档案',status:'个人接触',member_ids:[f.agent.id],request_id});
  assert.equal((await getRequestResult(f.env,f.agent,request_id)).execution_purpose,'verification');
  const receipt=f.sqlite.prepare('SELECT operation,credential_id,execution_purpose FROM commands WHERE request_id=?').get(request_id);assert.equal(receipt.credential_id,f.connection.id);assert.equal(receipt.operation,'archive.create');
@@ -66,6 +66,6 @@ test('service admin capability uses ordinary task and upload guards; stale human
  await assert.rejects(tasks.edit({id:task.id,expected_version:2,title:'过时管理员身份',purpose:'目的',delivery:'交付',request_id:uuid()}),{code:'PRECONDITION_CHANGED'});
 });
 test('freezing service invalidates verification credentials permanently; unfreeze requires a new grant',async t=>{
- const f=await setup(t),members=new Members(f.env,f.actor,'web');await members.setFrozen({id:zaojiSubject.id,expected_version:1,frozen:true,request_id:uuid()});
- assert.equal(await credentialActor(f.env,f.root.credential_id),null);await members.setFrozen({id:zaojiSubject.id,expected_version:2,frozen:false,request_id:uuid()});assert.equal(await credentialActor(f.env,f.root.credential_id),null);
+ const f=await setup(t),members=new Members(f.env,f.actor,'web'),initialVersion=(await members.detail(zaojiSubject.id)).member.version;await members.setFrozen({id:zaojiSubject.id,expected_version:initialVersion,frozen:true,request_id:uuid()});
+ assert.equal(await credentialActor(f.env,f.root.credential_id),null);await members.setFrozen({id:zaojiSubject.id,expected_version:initialVersion+1,frozen:false,request_id:uuid()});assert.equal(await credentialActor(f.env,f.root.credential_id),null);
 });
