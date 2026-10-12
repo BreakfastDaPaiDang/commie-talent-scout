@@ -2,16 +2,14 @@ ALTER TABLE archives ADD COLUMN linked_account_id TEXT REFERENCES members(id);
 CREATE UNIQUE INDEX archives_linked_account ON archives(linked_account_id) WHERE linked_account_id IS NOT NULL;
 
 CREATE TRIGGER archive_account_insert BEFORE INSERT ON archives
-WHEN NEW.linked_account_id IS NOT NULL
+WHEN NEW.linked_account_id IS NOT NULL AND (NEW.type<>'person' OR NOT EXISTS(SELECT 1 FROM members WHERE id=NEW.linked_account_id AND identity_kind='human' AND name=NEW.name))
 BEGIN
- SELECT CASE WHEN NEW.type<>'person' OR NOT EXISTS(SELECT 1 FROM members WHERE id=NEW.linked_account_id AND identity_kind='human' AND name=NEW.name)
- THEN RAISE(ABORT,'invalid archive account identity') END;
+ SELECT RAISE(ABORT,'invalid archive account identity');
 END;
 CREATE TRIGGER archive_account_update BEFORE UPDATE OF linked_account_id,name,type ON archives
-WHEN NEW.linked_account_id IS NOT NULL
+WHEN NEW.linked_account_id IS NOT NULL AND (NEW.type<>'person' OR NOT EXISTS(SELECT 1 FROM members WHERE id=NEW.linked_account_id AND identity_kind='human' AND name=NEW.name))
 BEGIN
- SELECT CASE WHEN NEW.type<>'person' OR NOT EXISTS(SELECT 1 FROM members WHERE id=NEW.linked_account_id AND identity_kind='human' AND name=NEW.name)
- THEN RAISE(ABORT,'invalid archive account identity') END;
+ SELECT RAISE(ABORT,'invalid archive account identity');
 END;
 
 -- The account profile command writes this event in the same transaction as the

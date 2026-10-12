@@ -158,7 +158,7 @@
       "reason": "Adds credential purpose and parent authority plus audit metadata; existing human credentials retain interactive defaults. Old code rejects service authentication and its invalid password, so rollback fails closed for service verification."
     },
     "0032_archive_account.sql": {
-      "sha256": "96aca975ec8d77164813e6be8f50dc108fa722c2d372d75c6fb4a806d5df0ddf",
+      "sha256": "b0cc37bad47c94ec6c5504caf1f75985389a7874316764790283c993bb78684b",
       "backwards_compatible": true,
       "reason": "Adds an optional unique person-account link. Existing unlinked archives stay unchanged. Linked names are protected and synchronized through account history; old clients can maintain matching names but cannot diverge them."
     }
