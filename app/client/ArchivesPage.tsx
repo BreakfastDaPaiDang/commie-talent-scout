@@ -1,3 +1,4 @@
+import {ArchiveQuickAction} from './ArchiveQuickAction';
 import {ArchiveTasks} from './ArchiveTasks';
 import {ClosedHistoryFilter,closedHistoryLabel,type ClosedHistoryRange} from '../ui/Workspace';
 import {ArchiveDeletionConfirmation,ArchiveLifecycleNotice} from '../ui/ArchiveLifecycle';
@@ -121,7 +122,7 @@ function ArchiveDetail({onOpenTaskArchive,type,actor,onChanged,id,revision,onLoa
     {copy&&<p className="form-notice" role="status">{copy}</p>}{notice&&<p className="form-notice" role="status">{notice}</p>}
    </EntityHeader>
    <ArchiveLifecycleNotice deleted={archive.deleted} closed={archive.closed} onReopen={onState} onRestore={actor.role==='admin'?onDelete:undefined} onDelete={actor.role==='admin'?onDelete:undefined}/>
-   <TagsSection archive={archive} onChanged={onChanged}/><ObservationSection relatedTasks={<ArchiveTasks key={archive.id} archiveId={archive.id} archiveVersion={archive.version} actor={actor} onChanged={onChanged} onOpenArchive={onOpenTaskArchive}/>} openTaskCount={archive.open_task_count??0} workTaskId={workTaskId} focus={focus} actor={actor} archive={archive} onChanged={onChanged}/>
+   <TagsSection archive={archive} onChanged={onChanged}/><ArchiveQuickAction archive={archive} openTaskCount={archive.open_task_count??0} onChanged={onChanged}/><ArchiveTasks key={archive.id} archiveId={archive.id} archiveVersion={archive.version} openCount={archive.open_task_count??0} actor={actor} onChanged={onChanged} onOpenArchive={onOpenTaskArchive}/><ObservationSection workTaskId={workTaskId} focus={focus} actor={actor} archive={archive} onChanged={onChanged}/>
 
   </ArchiveReadingScope.Provider>}
  </DetailFrame>;

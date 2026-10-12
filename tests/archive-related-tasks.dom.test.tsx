@@ -25,7 +25,7 @@ test('related tasks page through all owners and ignore a late open-list response
  try{
   const {ArchiveTasks}=await import('../app/client/ArchiveTasks');await act(async()=>f.root.render(<ArchiveTasks archiveId={id} archiveVersion={1} actor={actor} onChanged={()=>{}} onOpenArchive={()=>{}}/>));
   assert.ok(requests[0].includes('scope=all'));assert.ok(requests[0].includes('archive_id='+id));
-  await act(async()=>[...f.w.document.querySelectorAll('button')].find(b=>b.textContent==='已关闭')!.click());
+  await act(async()=>[...f.w.document.querySelectorAll('button')].find(b=>b.textContent==='查看已关闭任务')!.click());
   await act(async()=>resolveOpen(Response.json({tasks:[task],next_offset:null})));
   assert.equal(f.w.document.querySelectorAll('.task-list-row').length,1);assert.ok(f.w.document.body.textContent!.includes('关闭的任务'));assert.ok(!f.w.document.body.textContent!.includes('核对任务'));
  }finally{await f.close();}
@@ -53,5 +53,21 @@ test('related tasks pagination can retry a failed next page without dropping the
   await act(async()=>{Object.getOwnPropertyDescriptor(f.w.HTMLTextAreaElement.prototype,'value')!.set!.call(result,'已完成核对');result.dispatchEvent(new f.w.Event('input',{bubbles:true}));});
   await act(async()=>{f.w.document.querySelector('dialog[aria-label="提交交付"] form')!.dispatchEvent(new f.w.Event('submit',{bubbles:true,cancelable:true}));});
   assert.equal(refreshes,1);assert.ok(f.w.document.querySelector('dialog[aria-label="任务详情"]'));assert.ok(f.w.document.querySelector('.task-scene.stage-closed'));assert.equal(f.w.document.querySelectorAll('.task-list-row').length,0);
+ }finally{await f.close();}
+});
+
+test('archive shortcut preserves target bindings, version and idempotency on retry; members and organizations have no action',async()=>{
+ const f=environment(),sent:Record<string,unknown>[]=[];
+ globalThis.fetch=async(url,init)=>{assert.equal(String(url),'/api/archives/state');sent.push(JSON.parse(String(init?.body)));return sent.length===1?Response.json({error:{message:'连接中断'}},{status:503}):Response.json({id,changed:true});};
+ try{
+  const {ArchiveQuickAction}=await import('../app/client/ArchiveQuickAction');let changed=0;
+  const data={...archive,closed:false,deleted:false,bindings:{'人事审核':[{id:'bound-to-audit',name:'审核关联人'}]}} as unknown as import('../app/server/archives').Archive;
+  await act(async()=>f.root.render(<ArchiveQuickAction archive={data} openTaskCount={2} onChanged={()=>changed++}/>));
+  await act(async()=>f.w.document.querySelector<HTMLButtonElement>('.archive-primary-action button')!.click());assert.ok(f.w.document.body.textContent!.includes('现有 2 项开启任务会保留'));
+  const submit=()=>f.w.document.querySelector<HTMLButtonElement>('dialog .modal-actions .primary')!.click();await act(async()=>submit());await act(async()=>submit());
+  assert.equal(changed,1);assert.deepEqual(sent[0],sent[1]);assert.equal(sent[0].expected_version,2);assert.equal(sent[0].status,'人事审核');assert.deepEqual(sent[0].member_ids,['bound-to-audit']);
+  for(const state of [{type:'org',status:'个人接触'},{type:'person',status:'已入伙'},{type:'person',status:'个人接触',closed:true},{type:'person',status:'个人接触',deleted:true}]){
+   await act(async()=>f.root.render(<ArchiveQuickAction archive={{...data,...state} as typeof data} openTaskCount={0} onChanged={()=>{}}/>));assert.equal(f.w.document.querySelector('.archive-primary-action'),null);
+  }
  }finally{await f.close();}
 });

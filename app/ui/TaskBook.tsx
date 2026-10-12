@@ -5,9 +5,10 @@ import './task-book.css';
 export type TaskStage = 'failed' | 'cancelled' | 'ready' | 'active' | 'waiting' | 'closed';
 export const taskStageLabels: Record<TaskStage,string> = {failed:'未完成关闭',cancelled:'已取消',ready:'待提交',active:'进行中',waiting:'待接取',closed:'已完成'};
 export const taskStagePriority: Record<TaskStage,number> = {failed:0,cancelled:0,ready:1,active:2,waiting:3,closed:4};
-export function RelatedTasksFrame({history,onHistory,onRefresh,children}:{history:boolean;onHistory:(value:boolean)=>void;onRefresh?:()=>void;children:ReactNode}){
- return <section className="related-tasks"><header><div className="scope-tabs" aria-label="关联任务范围"><button className={!history?'active':''} aria-pressed={!history} onClick={()=>onHistory(false)}>开启中</button><button className={history?'active':''} aria-pressed={history} onClick={()=>onHistory(true)}>已关闭</button></div>{onRefresh&&<button className="text-button" onClick={onRefresh}>刷新任务</button>}</header>{children}</section>;
+export function RelatedTasksFrame({history,onHistory,count,children}:{history:boolean;onHistory:(value:boolean)=>void;count?:number;children:ReactNode}){
+ return <section className="related-tasks" aria-label="关联任务"><header><h3>{history?'已关闭任务':'关联任务'}{!history&&count!==undefined&&<small>{count} 项开启</small>}</h3><button className="text-button" onClick={()=>onHistory(!history)}>{history?'返回开启任务':'查看已关闭任务'}</button></header>{children}</section>;
 }
+export function DetailActions({children}:{children:ReactNode}){return <div className="task-scene-actions">{children}</div>;}
 export function TaskMark({stage}: {stage:TaskStage}) {
  return <span className={`task-mark task-mark-${stage}`} aria-hidden="true">{stage==='closed'?'✓':stage==='ready'||stage==='active'?'?':'!'}</span>;
 }
@@ -22,7 +23,8 @@ export function TaskLabelsField({options,value,onChange}:{options:string[];value
  return <fieldset className="task-label-picker"><legend>任务标签</legend><div className="task-label-options">{options.map(label=><label key={label}><input type="checkbox" checked={selected.includes(label)} onChange={e=>onChange((e.target.checked?[...selected,label]:selected.filter(item=>item!==label)).join('、'))}/>{label}</label>)}</div><input aria-label="任务标签" value={value} maxLength={640} placeholder="可多选，也可输入标签，用顿号分隔" onChange={e=>onChange(e.target.value)}/></fieldset>;
 }
 
-export function TaskListRow({stage,title,kind,labels,priority,subject,owner,deadline,remaining,urgent,selected,onSelect,onDismiss}: {stage:TaskStage;title:string;kind:string;labels?:string[];priority?:string;subject:ReactNode;owner?:ReactNode;deadline:string;remaining?:string;urgent?:boolean;selected:boolean;onSelect:()=>void;onDismiss?:()=>void}) {
+export function TaskListRow({stage,title,kind,labels,priority,subject,owner,deadline,remaining,urgent,selected,onSelect,onDismiss,compact=false}: {compact?:boolean;stage:TaskStage;title:string;kind:string;labels?:string[];priority?:string;subject:ReactNode;owner?:ReactNode;deadline:string;remaining?:string;urgent?:boolean;selected:boolean;onSelect:()=>void;onDismiss?:()=>void}) {
+ if(compact)return <div className={`task-list-row compact ${selected?'selected':''} stage-${stage}`}><button type="button" className="task-index-item" onClick={onSelect} aria-pressed={selected}><TaskMark stage={stage}/><strong>{title}</strong><span className="task-compact-owner">{owner??'尚未领取'}</span><span className="task-index-status">{taskStageLabels[stage]}</span></button></div>;
  return <div className={`task-list-row ${selected?'selected':''} stage-${stage}`}><button type="button" className="task-index-item" onClick={onSelect} aria-pressed={selected}>
   <TaskMark stage={stage}/><span className="task-row-content"><span className="task-row-title"><strong>{title}</strong>{priority&&<span className={`task-priority priority-${priority.toLowerCase()}`} aria-label={`优先级 ${priority}`}>{priority}</span>}{(labels?.length?labels:[kind]).map(label=><span className="task-kind" key={label}>{label}</span>)}</span><span className="task-row-meta"><span>{subject}</span><time className={urgent?'urgent':''}><Icon name="history" size={14}/>{deadline}{remaining&&<em>（{remaining}）</em>}</time>{owner&&<span><Icon name="people" size={14}/>{owner}</span>}</span></span><span className="task-index-status">{taskStageLabels[stage]}</span>
  </button>{onDismiss&&<div className="task-row-closure"><span>这项任务已关闭。</span><button className="text-button" onClick={onDismiss}>收起任务 <Icon name="close" size={13}/></button></div>}</div>;
@@ -32,7 +34,7 @@ export function TaskDetailCard({stage,title,kind,code,edit,labels,priority,metad
  <dl className="task-scene-meta-grid">{metadata.map(item=><div key={item.label}><dt><Icon name={item.icon} size={17}/>{item.label}</dt><dd>{item.value}</dd></div>)}</dl>
  <section className="task-scene-section"><h3><Icon name="file" size={22}/>任务目的</h3><p>{purpose}</p></section>
  <section className="task-scene-section task-scene-delivery"><h3><Icon name="check" size={22}/>交付要求</h3><p>{delivery}</p></section>{result}
- {actions&&<div className="task-scene-actions">{actions}</div>}{children}
+ {actions&&<DetailActions>{actions}</DetailActions>}{children}
  </article>;
 }
 

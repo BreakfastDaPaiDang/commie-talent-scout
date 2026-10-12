@@ -80,4 +80,11 @@
  .task-workspace-head .archive-head .search-field{order:3;flex-basis:100%}
 }
 
-.related-tasks>header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:18px 0}.related-tasks .task-list-row{border:1px solid var(--line);border-bottom:0}.related-tasks .task-list-row:last-of-type{border-bottom:1px solid var(--line)}
+.related-tasks{margin:24px 0 30px;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.related-tasks>header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 0}
+.related-tasks h3{font-size:17px;margin:0;display:flex;align-items:center;gap:12px}.related-tasks h3 small{font-size:13px;font-weight:400;color:var(--muted)}
+.related-tasks>header>.text-button{font-size:13px;color:var(--muted);white-space:nowrap}.related-tasks .stream-status{padding:4px 0 18px;margin:0;text-align:left;font-size:14px}
+.task-list-row.compact{border:0;border-top:1px solid #eee}.task-list-row.compact .task-index-item{min-height:60px;padding:12px 0;grid-template-columns:30px minmax(0,1fr) minmax(70px,auto) auto;gap:12px}.task-list-row.compact .task-mark{width:28px;height:28px;font-size:21px}.task-list-row.compact strong{font-size:15px;overflow-wrap:anywhere}.task-compact-owner{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted)}.task-list-row.compact .task-index-status{grid-column:auto;align-self:center;margin:0;font-size:12px}
+.archive-primary-action{margin:24px 0 0}.archive-primary-action .task-scene-actions{margin:0}.archive-primary-action .button.primary{flex:0 1 auto;min-width:220px}
+.archive-state-change{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:20px 0}.archive-state-change span{color:var(--muted)}
+@media(max-width:600px){.task-list-row.compact .task-index-item{grid-template-columns:28px minmax(0,1fr) auto;gap:8px}.task-list-row.compact .task-mark{grid-row:1/3}.task-compact-owner{grid-column:2;grid-row:2}.task-list-row.compact .task-index-status{grid-column:3;grid-row:1/3}.archive-primary-action .button.primary{flex:1}.related-tasks h3{gap:8px}}

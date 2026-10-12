@@ -27,3 +27,12 @@ export type PersonIdentity={type?:string;status:string;person_role?:PersonRole|n
 export const isMemberArchive=(a:PersonIdentity)=>a.type!=='org'&&(a.person_role?a.person_role==='member':isMemberStatus(a.status));
 export const archiveDisplayStatus=(a:PersonIdentity)=>isMemberArchive(a)?a.member_status??'可接工作':a.status;
 export const archivePath=(a:PersonIdentity)=>a.type==='org'?'/organizations':isMemberArchive(a)?'/members':'/';
+
+// A UI shortcut is a projection of the existing state command, not another workflow.
+export function archivePrimaryAction(a:PersonIdentity&{closed?:boolean;deleted?:boolean}){
+ if(a.type!=='person'||a.closed||a.deleted||isMemberArchive(a))return null;
+ if(['视奸观察','个人接触','外部社友','引荐中（待人事组接触）'].includes(a.status))return {label:'提交人事审核',status:'人事审核',effect:'将创建待领取的人事审核任务。'};
+ if(a.status==='人事审核')return {label:'确认加入待对接',status:'已加入待对接',effect:'将创建待领取的入社对接任务。'};
+ if(a.status==='已加入待对接')return {label:'确认已入伙',status:'已入伙',effect:'将移入社员页面，保留同一份档案和历史。'};
+ return null;
+}
