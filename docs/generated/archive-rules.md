@@ -6,7 +6,7 @@
 
 ## 状态策略
 
-直接读取 [archiveStatePolicy](../../app/shared/archive-states.ts)：网页/MCP 可选状态、状态校验、关闭和负责成员要求均使用该定义。
+直接读取 [archiveStatePolicy](../../app/rules/archive-states.ts)：网页/MCP 可选状态、状态校验、关闭和负责成员要求均使用该定义。
 
 | 状态 | 档案类型 | 自动关闭 | 要求负责成员 |
 | --- | --- | --- | --- |
@@ -22,10 +22,10 @@
 
 ## 共同契约
 
-模块：`archive-lifecycle`；计划器：[planRules](../../app/server/rules/contract.ts#L29)。计划按规则顺序返回 steps 和 statements，不执行提交。
+模块：`archive-lifecycle`；计划器：[planRules](../../app/rules/contract.ts#L29)。计划按规则顺序返回 steps 和 statements，不执行提交。
 
-触发入口：[transition](../../app/server/archives.ts#L127)、[restoreCancelledAudit](../../app/server/work-tasks.ts#L315)。
-事务提交：[command](../../app/server/commands.ts#L21)；版本保护：[guard](../../app/server/archives.ts#L48)。
+触发入口：[transition](../../app/server/archives.ts#L122)、[restoreCancelledAudit](../../app/server/work-tasks.ts#L303)。
+事务提交：[command](../../app/server/commands.ts#L21)；版本保护：[guard](../../app/server/archives.ts#L49)。
 幂等边界：command 请求收据；transitionChanged 排除无变化操作；档案版本事务校验；任务取消仅匹配 open，消息沿用现有唯一约束。
 失败边界：预校验失败不提交；事务内权限或版本冲突、SQL 失败整体回滚。保留现有行为，不新增任务轮次语义。
 
@@ -40,14 +40,14 @@
 
 ## 触发与事务边界
 
-网页 HTTP 与 MCP 的状态修改、显式重开都进入 [transition](../../app/server/archives.ts#L127)。该入口调用下表定义产生 SQL，最后一起提交；规则不单独写库。
+网页 HTTP 与 MCP 的状态修改、显式重开都进入 [transition](../../app/server/archives.ts#L122)。该入口调用下表定义产生 SQL，最后一起提交；规则不单独写库。
 
-- 读取与预校验：[get](../../app/server/archives.ts#L38)（存在性、删除权限、关闭锁定、版本）。
-- 关联成员：[planBindings](../../app/server/archives.ts#L111)（存在、冻结及原归属保留；事务内再次校验）。
-- 档案事务条件：[guard](../../app/server/archives.ts#L48)。
+- 读取与预校验：[get](../../app/server/archives.ts#L39)（存在性、删除权限、关闭锁定、版本）。
+- 关联成员：[planBindings](../../app/server/archives.ts#L106)（存在、冻结及原归属保留；事务内再次校验）。
+- 档案事务条件：[guard](../../app/server/archives.ts#L49)。
 - 授权、原子提交与重试收据：[command](../../app/server/commands.ts#L21)。
 - 重开时词义差异、历史与权限：由上述 transition 调用 [TagState](../../app/server/tag-state.ts) 读取；不在生成器中解释 SQL 或任意函数。
-- 取消自动审核任务：[cancel](../../app/server/work-tasks.ts#L233) 通过 [restoreCancelledAudit](../../app/server/work-tasks.ts#L315) 调用 [auditCancellationTarget](../../app/server/rules/archive-lifecycle.ts#L35) 取得本次引荐前的外部关系，复用同一 planArchiveEffects 并在任务事务中提交。历史无法确认或档案已变更身份时不猜测退回状态。
+- 取消自动审核任务：[cancel](../../app/server/work-tasks.ts#L222) 通过 [restoreCancelledAudit](../../app/server/work-tasks.ts#L303) 调用 [auditCancellationTarget](../../app/rules/archive-lifecycle.ts#L35) 取得本次引荐前的外部关系，复用同一 planArchiveEffects 并在任务事务中提交。历史无法确认或档案已变更身份时不猜测退回状态。
 
 以下条件和结果来自实际参与执行的函数引用及函数体。源码链接供追溯，不把人工说明作为规则来源。
 
@@ -55,16 +55,16 @@
 
 | 标识 | 条件函数 | 结果函数 |
 | --- | --- | --- |
-| save-state | [transitionChanged](../../app/server/rules/archive-lifecycle.ts#L25) | [saveStateAndBindings](../../app/server/rules/archive-lifecycle.ts#L91) |
-| personnel-task | [createsPersonnelTask](../../app/server/rules/archive-lifecycle.ts#L127) | [personnelTaskStatements](../../app/server/rules/archive-lifecycle.ts#L118) |
-| member-status-history | [memberStatusChanged](../../app/server/rules/archive-lifecycle.ts#L128) | [recordMemberStatus](../../app/server/rules/archive-lifecycle.ts#L129) |
-| state-history | [stateChanged](../../app/server/rules/archive-lifecycle.ts#L28) | [recordStateChange](../../app/server/rules/archive-lifecycle.ts#L96) |
-| members-history | [onlyMembersChanged](../../app/server/rules/archive-lifecycle.ts#L29) | [recordMembersChange](../../app/server/rules/archive-lifecycle.ts#L99) |
-| withdraw-audit | [withdrawsAudit](../../app/server/rules/archive-lifecycle.ts#L32) | [cancelWithdrawnAudit](../../app/server/rules/archive-lifecycle.ts#L41) |
-| cancel-inapplicable-tasks | [cancelInapplicableTasksWhen](../../app/server/rules/archive-lifecycle.ts#L83) | [cancelsInapplicableTasks](../../app/server/rules/archive-lifecycle.ts#L53) |
-| notify-manual-tasks | [notifyManualTasksWhen](../../app/server/rules/archive-lifecycle.ts#L87) | [notifyManualTasks](../../app/server/rules/archive-lifecycle.ts#L68) |
-| close | [closesArchive](../../app/server/rules/archive-lifecycle.ts#L30) | [freezeTagsAndRecordClosure](../../app/server/rules/archive-lifecycle.ts#L102) |
-| reopen | [reopensArchive](../../app/server/rules/archive-lifecycle.ts#L31) | [recordReopening](../../app/server/rules/archive-lifecycle.ts#L106) |
+| save-state | [transitionChanged](../../app/rules/archive-lifecycle.ts#L25) | [saveStateAndBindings](../../app/rules/archive-lifecycle.ts#L91) |
+| personnel-task | [createsPersonnelTask](../../app/rules/archive-lifecycle.ts#L127) | [personnelTaskStatements](../../app/rules/archive-lifecycle.ts#L118) |
+| member-status-history | [memberStatusChanged](../../app/rules/archive-lifecycle.ts#L128) | [recordMemberStatus](../../app/rules/archive-lifecycle.ts#L129) |
+| state-history | [stateChanged](../../app/rules/archive-lifecycle.ts#L28) | [recordStateChange](../../app/rules/archive-lifecycle.ts#L96) |
+| members-history | [onlyMembersChanged](../../app/rules/archive-lifecycle.ts#L29) | [recordMembersChange](../../app/rules/archive-lifecycle.ts#L99) |
+| withdraw-audit | [withdrawsAudit](../../app/rules/archive-lifecycle.ts#L32) | [cancelWithdrawnAudit](../../app/rules/archive-lifecycle.ts#L41) |
+| cancel-inapplicable-tasks | [cancelInapplicableTasksWhen](../../app/rules/archive-lifecycle.ts#L83) | [cancelsInapplicableTasks](../../app/rules/archive-lifecycle.ts#L53) |
+| notify-manual-tasks | [notifyManualTasksWhen](../../app/rules/archive-lifecycle.ts#L87) | [notifyManualTasks](../../app/rules/archive-lifecycle.ts#L68) |
+| close | [closesArchive](../../app/rules/archive-lifecycle.ts#L30) | [freezeTagsAndRecordClosure](../../app/rules/archive-lifecycle.ts#L102) |
+| reopen | [reopensArchive](../../app/rules/archive-lifecycle.ts#L31) | [recordReopening](../../app/rules/archive-lifecycle.ts#L106) |
 
 ```mermaid
 flowchart TD
@@ -116,7 +116,7 @@ flowchart TD
 
 ### assertReopenAllowed
 
-[assertReopenAllowed](../../app/server/rules/archive-lifecycle.ts#L15)
+[assertReopenAllowed](../../app/rules/archive-lifecycle.ts#L15)
 
 ```javascript
 function assertReopenAllowed(c) {
@@ -129,7 +129,7 @@ function assertReopenAllowed(c) {
 
 ### assertStateAndResponsibility
 
-[assertStateAndResponsibility](../../app/server/rules/archive-lifecycle.ts#L21)
+[assertStateAndResponsibility](../../app/rules/archive-lifecycle.ts#L21)
 
 ```javascript
 function assertStateAndResponsibility(type, status, ids) {
@@ -140,7 +140,7 @@ function assertStateAndResponsibility(type, status, ids) {
 
 ### transitionChanged
 
-[transitionChanged](../../app/server/rules/archive-lifecycle.ts#L25)
+[transitionChanged](../../app/rules/archive-lifecycle.ts#L25)
 
 ```javascript
 function transitionChanged(c) {
@@ -150,7 +150,7 @@ function transitionChanged(c) {
 
 ### planArchiveEffects
 
-[planArchiveEffects](../../app/server/rules/archive-lifecycle.ts#L159)
+[planArchiveEffects](../../app/rules/archive-lifecycle.ts#L159)
 
 ```javascript
 function planArchiveEffects(context) {
@@ -160,7 +160,7 @@ function planArchiveEffects(context) {
 
 ### auditCancellationTarget
 
-[auditCancellationTarget](../../app/server/rules/archive-lifecycle.ts#L35)
+[auditCancellationTarget](../../app/rules/archive-lifecycle.ts#L35)
 
 ```javascript
 function auditCancellationTarget(task, old, change) {
@@ -176,7 +176,7 @@ function auditCancellationTarget(task, old, change) {
 
 ### preparePersonnelTask
 
-[preparePersonnelTask](../../app/server/rules/archive-lifecycle.ts#L112)
+[preparePersonnelTask](../../app/rules/archive-lifecycle.ts#L112)
 
 ```javascript
 async function preparePersonnelTask(stmt, archiveId, status, deadline) {
@@ -194,7 +194,7 @@ async function preparePersonnelTask(stmt, archiveId, status, deadline) {
 
 ### saveStateAndBindings
 
-[saveStateAndBindings](../../app/server/rules/archive-lifecycle.ts#L91)
+[saveStateAndBindings](../../app/rules/archive-lifecycle.ts#L91)
 
 ```javascript
 function saveStateAndBindings(c) {
@@ -209,7 +209,7 @@ function saveStateAndBindings(c) {
 
 ### createsPersonnelTask
 
-[createsPersonnelTask](../../app/server/rules/archive-lifecycle.ts#L127)
+[createsPersonnelTask](../../app/rules/archive-lifecycle.ts#L127)
 
 ```javascript
 function createsPersonnelTask(c) {
@@ -219,7 +219,7 @@ function createsPersonnelTask(c) {
 
 ### personnelTaskStatements
 
-[personnelTaskStatements](../../app/server/rules/archive-lifecycle.ts#L118)
+[personnelTaskStatements](../../app/rules/archive-lifecycle.ts#L118)
 
 ```javascript
 function personnelTaskStatements(c) {
@@ -252,7 +252,7 @@ function personnelTaskStatements(c) {
 
 ### memberStatusChanged
 
-[memberStatusChanged](../../app/server/rules/archive-lifecycle.ts#L128)
+[memberStatusChanged](../../app/rules/archive-lifecycle.ts#L128)
 
 ```javascript
 function memberStatusChanged(c) {
@@ -262,7 +262,7 @@ function memberStatusChanged(c) {
 
 ### recordMemberStatus
 
-[recordMemberStatus](../../app/server/rules/archive-lifecycle.ts#L129)
+[recordMemberStatus](../../app/rules/archive-lifecycle.ts#L129)
 
 ```javascript
 function recordMemberStatus(c) {
@@ -280,7 +280,7 @@ function recordMemberStatus(c) {
 
 ### stateChanged
 
-[stateChanged](../../app/server/rules/archive-lifecycle.ts#L28)
+[stateChanged](../../app/rules/archive-lifecycle.ts#L28)
 
 ```javascript
 function stateChanged(c) {
@@ -290,7 +290,7 @@ function stateChanged(c) {
 
 ### recordStateChange
 
-[recordStateChange](../../app/server/rules/archive-lifecycle.ts#L96)
+[recordStateChange](../../app/rules/archive-lifecycle.ts#L96)
 
 ```javascript
 function recordStateChange(c) {
@@ -315,7 +315,7 @@ function recordStateChange(c) {
 
 ### onlyMembersChanged
 
-[onlyMembersChanged](../../app/server/rules/archive-lifecycle.ts#L29)
+[onlyMembersChanged](../../app/rules/archive-lifecycle.ts#L29)
 
 ```javascript
 function onlyMembersChanged(c) {
@@ -325,7 +325,7 @@ function onlyMembersChanged(c) {
 
 ### recordMembersChange
 
-[recordMembersChange](../../app/server/rules/archive-lifecycle.ts#L99)
+[recordMembersChange](../../app/rules/archive-lifecycle.ts#L99)
 
 ```javascript
 function recordMembersChange(c) {
@@ -343,7 +343,7 @@ function recordMembersChange(c) {
 
 ### withdrawsAudit
 
-[withdrawsAudit](../../app/server/rules/archive-lifecycle.ts#L32)
+[withdrawsAudit](../../app/rules/archive-lifecycle.ts#L32)
 
 ```javascript
 function withdrawsAudit(c) {
@@ -361,7 +361,7 @@ function withdrawsAudit(c) {
 
 ### cancelWithdrawnAudit
 
-[cancelWithdrawnAudit](../../app/server/rules/archive-lifecycle.ts#L41)
+[cancelWithdrawnAudit](../../app/rules/archive-lifecycle.ts#L41)
 
 ```javascript
 function cancelWithdrawnAudit(c) {
@@ -379,7 +379,7 @@ function cancelWithdrawnAudit(c) {
 
 ### cancelInapplicableTasksWhen
 
-[cancelInapplicableTasksWhen](../../app/server/rules/archive-lifecycle.ts#L83)
+[cancelInapplicableTasksWhen](../../app/rules/archive-lifecycle.ts#L83)
 
 ```javascript
 function cancelInapplicableTasksWhen(c) {
@@ -389,7 +389,7 @@ function cancelInapplicableTasksWhen(c) {
 
 ### cancelsInapplicableTasks
 
-[cancelsInapplicableTasks](../../app/server/rules/archive-lifecycle.ts#L53)
+[cancelsInapplicableTasks](../../app/rules/archive-lifecycle.ts#L53)
 
 ```javascript
 function cancelsInapplicableTasks(c) {
@@ -410,7 +410,7 @@ function cancelsInapplicableTasks(c) {
 
 ### notifyManualTasksWhen
 
-[notifyManualTasksWhen](../../app/server/rules/archive-lifecycle.ts#L87)
+[notifyManualTasksWhen](../../app/rules/archive-lifecycle.ts#L87)
 
 ```javascript
 function notifyManualTasksWhen(c) {
@@ -420,7 +420,7 @@ function notifyManualTasksWhen(c) {
 
 ### notifyManualTasks
 
-[notifyManualTasks](../../app/server/rules/archive-lifecycle.ts#L68)
+[notifyManualTasks](../../app/rules/archive-lifecycle.ts#L68)
 
 ```javascript
 function notifyManualTasks(c) {
@@ -441,7 +441,7 @@ function notifyManualTasks(c) {
 
 ### closesArchive
 
-[closesArchive](../../app/server/rules/archive-lifecycle.ts#L30)
+[closesArchive](../../app/rules/archive-lifecycle.ts#L30)
 
 ```javascript
 function closesArchive(c) {
@@ -451,7 +451,7 @@ function closesArchive(c) {
 
 ### freezeTagsAndRecordClosure
 
-[freezeTagsAndRecordClosure](../../app/server/rules/archive-lifecycle.ts#L102)
+[freezeTagsAndRecordClosure](../../app/rules/archive-lifecycle.ts#L102)
 
 ```javascript
 function freezeTagsAndRecordClosure(c) {
@@ -470,7 +470,7 @@ function freezeTagsAndRecordClosure(c) {
 
 ### reopensArchive
 
-[reopensArchive](../../app/server/rules/archive-lifecycle.ts#L31)
+[reopensArchive](../../app/rules/archive-lifecycle.ts#L31)
 
 ```javascript
 function reopensArchive(c) {
@@ -480,7 +480,7 @@ function reopensArchive(c) {
 
 ### recordReopening
 
-[recordReopening](../../app/server/rules/archive-lifecycle.ts#L106)
+[recordReopening](../../app/rules/archive-lifecycle.ts#L106)
 
 ```javascript
 function recordReopening(c) {
@@ -501,12 +501,12 @@ function recordReopening(c) {
 档案 ID + automation_rule + 档案更新时间唯一；另以事务内 NOT EXISTS 阻止同类开启任务叠加。
 任务与创建事件一起提交；版本变化时跳过，后续扫描重新判断；规则不修改档案。
 
-条件复用 [archiveReminder](../../app/shared/archive-reminders.ts)；候选查询复用 [archiveOrderCte](../../app/server/archive-order.ts)，事务内复核档案版本与更新时间。
+条件复用 [archiveReminder](../../app/rules/archive-reminders.ts)；候选查询复用 [archiveOrderCte](../../app/server/archive-order.ts)，事务内复核档案版本与更新时间。
 
 - 验证：[tests/archive-follow-ups.test.mjs](../../tests/archive-follow-ups.test.mjs)
 ### needsArchiveFollowUp
 
-[needsArchiveFollowUp](../../app/server/rules/archive-follow-up.ts#L7)
+[needsArchiveFollowUp](../../app/rules/archive-follow-up.ts#L7)
 
 ```javascript
 function needsArchiveFollowUp(c) {
@@ -516,7 +516,7 @@ function needsArchiveFollowUp(c) {
 
 ### createArchiveFollowUp
 
-[createArchiveFollowUp](../../app/server/rules/archive-follow-up.ts#L8)
+[createArchiveFollowUp](../../app/rules/archive-follow-up.ts#L8)
 
 ```javascript
 function createArchiveFollowUp(c) {
@@ -540,7 +540,7 @@ function createArchiveFollowUp(c) {
 
 ### planArchiveFollowUp
 
-[planArchiveFollowUp](../../app/server/rules/archive-follow-up.ts#L27)
+[planArchiveFollowUp](../../app/rules/archive-follow-up.ts#L27)
 
 ```javascript
 function planArchiveFollowUp(context) {

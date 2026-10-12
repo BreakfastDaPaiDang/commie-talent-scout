@@ -3,7 +3,7 @@ import {McpServer} from '@modelcontextprotocol/server';
 import {z} from 'zod';
 import {Archives,archiveCreateInput,archiveUpdateInput,archiveListInput,archiveStateInput,archiveDeletionInput} from './archives.ts';
 import {Members} from './members.ts';
-import {personStates,orgStates} from '../shared/archive-states.ts';
+import {personStates,orgStates} from '../rules/archive-states.ts';
 import {registerJournalFields} from './mcp-journal.ts';
 import {type Actor,type Env} from './types.ts';
 import {type McpReply} from './mcp-members.ts';

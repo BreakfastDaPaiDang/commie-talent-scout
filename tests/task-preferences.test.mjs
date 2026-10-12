@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {matchesPreference,normalizePreference,pushCandidates,pushDue,pushStage,shouldEscalate} from '../app/shared/task-preferences.ts';
+import {matchesPreference,normalizePreference,pushCandidates,pushDue,pushStage,shouldEscalate} from '../app/rules/task-preferences.ts';
 
 const created='2026-10-01T00:00:00.000Z';
 const task=(kind='audit',patch={})=>({id:'task',kind,open:true,ownerId:null,createdAt:created,...patch});

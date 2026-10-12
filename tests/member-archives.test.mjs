@@ -1,3 +1,4 @@
+import {legacyMonthlyTask} from './legacy-monthly-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID as uuid} from 'node:crypto';
@@ -51,14 +52,14 @@ test('member archive follows personnel stages without completing tasks, with ind
  profile=await s.get(a.id);assert.equal(profile.person_role,'external');assert.equal(profile.member_status,null);assert.equal(profile.closed,false);
  assert.equal((await tasks.list({archive_id:a.id})).tasks.filter(t=>t.kind==='onboarding').length,0);
 });
-test('all member states keep monthly followup; default creation and legacy reads do not fabricate history',async t=>{
+test('all member states preserve historical followup; default creation and legacy reads do not fabricate history',async t=>{
  const f=fixture();t.after(f.close);f.sqlite.prepare("UPDATE members SET role='admin' WHERE id=?").run(f.actor.id);f.actor.role='admin';
  const s=new Archives(f.env,f.actor,'web'),tasks=new WorkTasks(f.env,f.actor,'system'),ids=[];
  for(const member_status of ['可接工作','请假','失联']){
   const a=await s.create({type:'person',name:'虚构'+member_status,status:'已入伙',member_status,request_id:uuid()});ids.push(a.id);
   assert.equal((await tasks.list({archive_id:a.id})).tasks.length,0);
  }
- await tasks.generateMonthly({month:'2098-12',request_id:uuid()});await tasks.generateMonthly({month:'2098-12',request_id:uuid()});
+ for(const id of ids)legacyMonthlyTask(f,id,'2098-12');
  for(const id of ids){const list=(await tasks.list({archive_id:id})).tasks;assert.equal(list.length,1);assert.match(list[0].title,/月度沟通/);}
  const unreachable=(await tasks.list({archive_id:ids[2]})).tasks[0];
  await new Observations(f.env,f.actor,'web').create({archive_id:ids[2],body:'本月暂时联系不到，保留后续关注。',request_id:uuid()});
@@ -67,7 +68,7 @@ test('all member states keep monthly followup; default creation and legacy reads
  assert.equal(completed.result_kind,'unable_to_contact');assert.equal((await s.get(ids[2])).member_status,'失联');
  let a=await s.get(ids[0]);await s.setState(change(a,'已入伙',{member_status:'请假'}));
  assert.equal((await tasks.list({archive_id:a.id})).tasks[0].status,'open');
- await tasks.generateMonthly({month:'2099-01',request_id:uuid()});assert.equal((await tasks.list({archive_id:a.id})).tasks.length,2);
+ assert.equal((await tasks.list({archive_id:a.id})).tasks.length,1);
  a=await s.get(ids[0]);await s.setState(change(a,'已弃用',{membership_action:'leave'}));assert.equal((await s.get(a.id)).person_role,'external');assert.equal((await s.get(a.id)).closed,true);
  f.sqlite.prepare('UPDATE archives SET person_role=NULL,member_status=NULL,closed=1 WHERE id=?').run(ids[1]);
  const before=f.sqlite.prepare('SELECT count(*) n FROM archive_events').get().n;

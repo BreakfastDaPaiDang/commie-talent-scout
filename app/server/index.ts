@@ -1,3 +1,4 @@
+import {runTaskNotifications} from './task-notifications.ts';
 import {generateArchiveFollowUps,generateScheduledArchiveFollowUps} from './archive-follow-ups.ts';
 import {TagDeletion} from './tag-deletion.ts';
 import {statistics} from './statistics.ts';
@@ -175,8 +176,6 @@ app.post('/api/work-tasks/complete',async c=>c.json(await new WorkTasks(c.env,aw
 app.post('/api/work-tasks/release',async c=>c.json(await new WorkTasks(c.env,await authenticate(c.req.raw,c.env),'web').release(await c.req.json())));
 app.post('/api/work-tasks/cancel',async c=>c.json(await new WorkTasks(c.env,await authenticate(c.req.raw,c.env),'web').cancel(await c.req.json())));
 app.post('/api/work-tasks/archive-follow-up/generate',async c=>c.json(await generateArchiveFollowUps(c.env,await authenticate(c.req.raw,c.env),await c.req.json())));
-app.post('/api/work-tasks/monthly/preview',async c=>c.json(await new WorkTasks(c.env,await authenticate(c.req.raw,c.env),'web').previewMonthly(await c.req.json())));
-app.post('/api/work-tasks/monthly/generate',async c=>c.json(await new WorkTasks(c.env,await authenticate(c.req.raw,c.env),'web').generateMonthly(await c.req.json())));
 app.post('/api/archives/refer',async c=>c.json(await new WorkTasks(c.env,await authenticate(c.req.raw,c.env),'web').refer(await c.req.json())));
 app.post('/api/archives/confirm-membership',async c=>c.json(await new WorkTasks(c.env,await authenticate(c.req.raw,c.env),'web').confirmMembership(await c.req.json())));
 app.all('/api/*',c=>c.json({error:{code:'NOT_FOUND',message:'接口不存在'}},404));
@@ -196,8 +195,8 @@ export default {
   async scheduled(_event:ScheduledController,env:Env) {
     await cleanupJournal(env);
     await generateScheduledArchiveFollowUps(env);
-    const pushActor=await env.DB.prepare("SELECT m.id,m.username,m.name,m.role,m.frozen,m.auth_epoch,m.must_change_password,m.version,m.qq,m.avatar_id,c.id credential_id,c.kind credential_kind FROM members m LEFT JOIN credentials c ON c.member_id=m.id AND c.kind='mcp' AND c.revoked_at IS NULL AND c.expires_at>? WHERE m.frozen=0 ORDER BY m.role='admin' DESC,c.created_at DESC,m.id LIMIT 1").bind(new Date().toISOString()).first();
-    if(pushActor) { const workTasks=new WorkTasks(env,pushActor as Actor,'mcp'); await workTasks.expire(); await workTasks.duePushes(); if((pushActor as Actor).role==='admin'&&pushActor.credential_id) await workTasks.generateScheduledMonthly(); }
+    await runTaskNotifications(env,'overdue');
+    await runTaskNotifications(env,'due');
     await env.DB.batch([
       env.DB.prepare('DELETE FROM observation_drafts WHERE updated_at<?').bind(new Date(Date.now()-30*86400000).toISOString()),
       env.DB.prepare('DELETE FROM reading_deliveries WHERE expires_at<?').bind(new Date().toISOString()),

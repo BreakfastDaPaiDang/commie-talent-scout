@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {randomUUID as uuid} from 'node:crypto';
 import {renderBusinessRules} from '../scripts/generate-business-rules.mjs';
-import {archiveStatePolicy} from '../app/shared/archive-states.ts';
-import {archiveTransitionRules} from '../app/server/rules/archive-lifecycle.ts';
+import {archiveStatePolicy} from '../app/rules/archive-states.ts';
+import {archiveTransitionRules} from '../app/rules/archive-lifecycle.ts';
 import {Archives} from '../app/server/archives.ts';
 import {fixture} from './d1-fixture.mjs';
 

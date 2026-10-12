@@ -37,6 +37,14 @@ export function matchesPreference(preference:WorkPreference|null,kind:TaskKind){
  return preference.all||preference.kinds.includes(kind);
 }
 
+// Query/commit counterpart of matchesPreference; both use the same supported kinds.
+// Arguments are trusted SQL expressions supplied by adapters, never user input.
+export function preferenceMatchesSql(memberExpression:string,taskAlias='t'){
+ const kinds=pushableTaskKinds.map(kind=>`'${kind}'`).join(',');
+ return `(${taskAlias}.kind IN (${kinds}) AND EXISTS(SELECT 1 FROM member_work_preferences p WHERE p.member_id=${memberExpression}
+  AND (p.all_work=1 OR EXISTS(SELECT 1 FROM json_each(p.kinds_json) WHERE value=${taskAlias}.kind))))`;
+}
+
 export function pushCandidates(task:PushableTask,members:readonly CandidateMember[]):CandidateMember[]{
  if(!task.open||task.ownerId)return [];
  return members.filter(member=>!member.frozen&&matchesPreference(member.preference,task.kind)).sort((a,b)=>a.name.localeCompare(b.name,'zh-Hans')||a.id.localeCompare(b.id));

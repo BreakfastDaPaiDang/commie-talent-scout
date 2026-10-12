@@ -1,5 +1,5 @@
 import React,{useState} from 'react';
-import {archivePrimaryAction} from '../shared/archive-states';
+import {archivePrimaryAction} from '../rules/archive-states';
 import {DetailActions} from '../ui/TaskBook';
 import {Icon} from '../ui/icons';
 import {Modal,ModalActions} from './Modal';

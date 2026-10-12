@@ -5,7 +5,7 @@ import {fixture} from './d1-fixture.mjs';
 import {Archives} from '../app/server/archives.ts';
 import {WorkTasks} from '../app/server/work-tasks.ts';
 import {generateArchiveFollowUps,generateScheduledArchiveFollowUps} from '../app/server/archive-follow-ups.ts';
-import {archiveReminder,DAY_MS} from '../app/shared/archive-reminders.ts';
+import {archiveReminder,DAY_MS} from '../app/rules/archive-reminders.ts';
 
 function setup(t){const f=fixture();t.after(f.close);f.sqlite.prepare("UPDATE members SET role='admin' WHERE id=?").run(f.actor.id);f.actor.role='admin';return f;}
 async function subject(f,{type='person',status='个人接触',days=31}={}){

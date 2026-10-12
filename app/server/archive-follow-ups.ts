@@ -2,7 +2,7 @@ import {z} from 'zod';
 import {assertAdmin} from './credentials.ts';
 import {command,requestId} from './commands.ts';
 import {archiveOrderCte} from './archive-order.ts';
-import {archiveFollowUpRule,planArchiveFollowUp,type FollowUpTarget} from './rules/archive-follow-up.ts';
+import {archiveFollowUpRule,planArchiveFollowUp,type FollowUpTarget} from '../rules/archive-follow-up.ts';
 import {now,uid,type Actor,type Env} from './types.ts';
 
 export const archiveFollowUpInput=z.object({archive_ids:z.array(z.uuid()).min(1).max(50).optional(),request_id:requestId}).strict();

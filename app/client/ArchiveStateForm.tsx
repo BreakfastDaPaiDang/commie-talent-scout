@@ -7,7 +7,7 @@ import React,{useEffect,useRef,useState,type FormEvent} from 'react';
 import {api} from './api';
 import {PageError} from './ConnectionPages';
 import type {Archive,BoundMember} from '../server/archives';
-import {statesFor,isClosedState,isWorkState,memberLabel,isMemberArchive,memberBasicStates,type MemberBasicState} from '../shared/archive-states';
+import {statesFor,isClosedState,isWorkState,memberLabel,isMemberArchive,memberBasicStates,type MemberBasicState} from '../rules/archive-states';
 
 
 

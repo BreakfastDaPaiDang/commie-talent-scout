@@ -1,4 +1,4 @@
-import {archiveReminder} from '../../../app/shared/archive-reminders.ts';
+import {archiveReminder} from '../../../app/rules/archive-reminders.ts';
 // Fictional prototype fixtures. No real account or archive data.
 export const personStates = [
   "视奸观察",

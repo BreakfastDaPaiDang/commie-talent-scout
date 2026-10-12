@@ -1,13 +1,13 @@
-import {archiveFollowUpModule,planArchiveFollowUp} from '../app/server/rules/archive-follow-up.ts';
+import {archiveFollowUpModule,planArchiveFollowUp} from '../app/rules/archive-follow-up.ts';
 import {readFileSync,writeFileSync,mkdirSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {resolve} from 'node:path';
-import {archiveStatePolicy} from '../app/shared/archive-states.ts';
-import {archiveLifecycleModule,archiveTransitionRules,assertReopenAllowed,assertStateAndResponsibility,transitionChanged,planArchiveEffects,auditCancellationTarget,preparePersonnelTask} from '../app/server/rules/archive-lifecycle.ts';
-import {planRules} from '../app/server/rules/contract.ts';
+import {archiveStatePolicy} from '../app/rules/archive-states.ts';
+import {archiveLifecycleModule,archiveTransitionRules,assertReopenAllowed,assertStateAndResponsibility,transitionChanged,planArchiveEffects,auditCancellationTarget,preparePersonnelTask} from '../app/rules/archive-lifecycle.ts';
+import {planRules} from '../app/rules/contract.ts';
 
 const root=new URL('../',import.meta.url),output=new URL('docs/generated/archive-rules.md',root);
-const lifecycle='app/server/rules/archive-lifecycle.ts';
+const lifecycle='app/rules/archive-lifecycle.ts';
 function link(file,name){
  const lines=readFileSync(new URL(file,root),'utf8').split(/\r?\n/);
  const line=lines.findIndex(s=>new RegExp(`function ${name}[<(]|^ *(?:private )?(?:async )?${name}\\(`).test(s));
@@ -19,11 +19,11 @@ const source=fn=>fn.toString().replace(/\r\n/g,'\n').split('\n').map(l=>l.trimEn
 export function renderBusinessRules(){
  const lines=['# 档案生命周期规则（自动生成）','','运行 `npm run rules:generate` 更新；`npm run rules:check` 检查。不要手工修改本文件。',
   '','这是当前分支可执行的档案生命周期行为。1.0.0 将入社身份变化与工作任务推进分开：已入伙保持开启，任务联动由各自的事务入口执行。',
-  '','## 状态策略','','直接读取 [archiveStatePolicy](../../app/shared/archive-states.ts)：网页/MCP 可选状态、状态校验、关闭和负责成员要求均使用该定义。',
+  '','## 状态策略','','直接读取 [archiveStatePolicy](../../app/rules/archive-states.ts)：网页/MCP 可选状态、状态校验、关闭和负责成员要求均使用该定义。',
   '','| 状态 | 档案类型 | 自动关闭 | 要求负责成员 |','| --- | --- | --- | --- |'];
  for(const p of archiveStatePolicy)lines.push(`| ${p.status} | ${p.types.map(t=>t==='person'?'人物':'组织').join('、')} | ${p.closed?'是':'否'} | ${p.requiresMembers?'是':'否'} |`);
  const module=archiveLifecycleModule,v=module.verification;
- lines.push('','## 共同契约', '',`模块：\`${module.id}\`；计划器：${link('app/server/rules/contract.ts',planRules.name)}。计划按规则顺序返回 steps 和 statements，不执行提交。`,
+ lines.push('','## 共同契约', '',`模块：\`${module.id}\`；计划器：${link('app/rules/contract.ts',planRules.name)}。计划按规则顺序返回 steps 和 statements，不执行提交。`,
   '',`触发入口：${module.triggers.map(t=>link(t.file,t.entry)).join('、')}。`,
   `事务提交：${link(v.transaction.file,v.transaction.entry)}；版本保护：${link(v.guard.file,v.guard.entry)}。`,
   `幂等边界：${v.idempotency}`,`失败边界：${v.failure}`,
@@ -51,7 +51,7 @@ export function renderBusinessRules(){
  const follow=archiveFollowUpModule;
  lines.push('','## 超期档案跟进任务','',`模块：\`${follow.id}\`；触发入口：${follow.triggers.map(t=>link(t.file,t.entry)).join('、')}。`,
   follow.verification.idempotency,follow.verification.failure,
-  '',`条件复用 [archiveReminder](../../app/shared/archive-reminders.ts)；候选查询复用 [archiveOrderCte](../../app/server/archive-order.ts)，事务内复核档案版本与更新时间。`,
+  '',`条件复用 [archiveReminder](../../app/rules/archive-reminders.ts)；候选查询复用 [archiveOrderCte](../../app/server/archive-order.ts)，事务内复核档案版本与更新时间。`,
   '',...follow.verification.tests.map(file=>`- 验证：[${file}](../../${file})`));
  for(const fn of new Set([...follow.rules.flatMap(r=>[r.when,r.apply]),planArchiveFollowUp]))lines.push(`### ${fn.name}`,'',link(follow.source,fn.name),'','```javascript',source(fn),'```','');
  return lines.join('\n');

@@ -4,7 +4,7 @@ import {randomUUID as uuid} from 'node:crypto';
 import {fixture} from './d1-fixture.mjs';
 import {Archives} from '../app/server/archives.ts';
 import {Observations} from '../app/server/observations.ts';
-import {personStates,memberStatuses} from '../app/shared/archive-states.ts';
+import {personStates,memberStatuses} from '../app/rules/archive-states.ts';
 
 test('person ranges partition joined and external archives before counts, filters and pagination',async t=>{
  const f=fixture();t.after(f.close);const service=new Archives(f.env,f.actor,'web'),rows=[];

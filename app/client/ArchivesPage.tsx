@@ -9,7 +9,7 @@ import {ArchiveHead,ArchiveRow,DetailFrame,EntityHeader,IconButton,ScopeToolbar,
 import {Icon} from '../ui/icons';
 import {ArchiveRead,ArchiveReadingScope,Highlight} from './Reading';
 import type {ArchiveReadDelivery} from '../server/archive-reading';
-import {statesFor,memberBasicStates,isMemberArchive,archiveDisplayStatus,archivePath,type PersonScope} from '../shared/archive-states';
+import {statesFor,memberBasicStates,isMemberArchive,archiveDisplayStatus,archivePath,type PersonScope} from '../rules/archive-states';
 import type {ObservationFocus} from './ObservationSection';
 import {AvatarEditor,avatarUrl} from './AvatarEditor';
 import React,{useEffect,useLayoutEffect,useRef,useState,type FormEvent} from 'react';
@@ -19,8 +19,8 @@ import {Modal,ModalActions} from './Modal';
 import {PageError} from './ConnectionPages';
 import type {Archive,BoundMember} from '../server/archives';
 import {ArchiveStateForm,StateFields} from './ArchiveStateForm';
-import {isWorkState} from '../shared/archive-states';
-import {contactReminder} from '../shared/contact-reminders';
+import {isWorkState} from '../rules/archive-states';
+import {contactReminder} from '../rules/contact-reminders';
 import './archives.css';
 import {TagsSection,TagSummary} from './TagsSection';
 import {ObservationSection} from './ObservationSection';
@@ -35,7 +35,7 @@ function preferences(key:string):Preference{try{return {...defaults,...JSON.pars
 const date=(value:string)=>new Date(value).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
 export function ArchiveTrashPage({actor}:{actor:Member}){const [type,setType]=useState<Kind>('person');return <ArchivesPage key={type} actor={actor} type={type} trash onTypeChange={next=>{history.replaceState(null,'',location.pathname);setType(next);}}/>;}
 export function ArchivesPage({actor,type,personScope='all',linked,detailOnly=false,onNextUnread,onClose,trash=false,onTypeChange,pageLabel,initialStatus='',createStatus}:{personScope?:PersonScope;trash?:boolean;onTypeChange?:(type:Kind)=>void;actor:Member;type:Kind;linked?:{archiveId:string;focus:ObservationFocus};detailOnly?:boolean;onNextUnread?:()=>void;onClose?:()=>void;pageLabel?:string;initialStatus?:string;createStatus?:string}){
- const prefKey=`cts:${actor.id}:${type}:${trash?'trash':pageLabel??'archives'}`,[pref,setPref]=useState(()=>{const saved=preferences(prefKey),linked=new URLSearchParams(location.search).get('archive'),next={...saved,status:initialStatus||(personScope==='members'&&!memberBasicStates.includes(saved.status as typeof memberBasicStates[number])?'':saved.status)};return linked&&/^[0-9a-f-]{36}$/i.test(linked)?{...next,selected:linked}:next;}),workTaskId=new URLSearchParams(location.search).get('task')??undefined;
+ const prefKey=`cts:${actor.id}:${type}:${trash?'trash':pageLabel??'archives'}`,[pref,setPref]=useState(()=>{const saved=preferences(prefKey),linked=new URLSearchParams(location.search).get('archive'),next={...saved,status:initialStatus||(personScope==='members'&&!memberBasicStates.includes(saved.status as typeof memberBasicStates[number])?'':saved.status)};return linked&&/^[0-9a-f-]{36}$/i.test(linked)?{...next,selected:linked}:next;});
  const[query,setQuery]=useState(pref.query),[items,setItems]=useState<ListArchive[]>([]),[cursor,setCursor]=useState<string|null>(null),[loading,setLoading]=useState(true),[error,setError]=useState(''),[notice,setNotice]=useState(''),[revision,setRevision]=useState(0);
  const[dialog,setDialog]=useState<'create'|Archive|null>(null),[stateDialog,setStateDialog]=useState<Archive|null>(null),[busy,setBusy]=useState(false),[selected,setSelected]=useState<Archive|null>(null),[draftIds,setDraftIds]=useState<string[]>([]);
  const[deletion,setDeletion]=useState<Archive|null>(null);
@@ -87,7 +87,7 @@ export function ArchivesPage({actor,type,personScope='all',linked,detailOnly=fal
   <PageError error={error} retry={()=>void load()}/>{notice&&!pref.selected&&<p className="form-notice archive-list-message" role="status">{notice}</p>}
   <div className="entity-list">{items.map(a=><ArchiveRow key={a.id} selected={pref.selected===a.id} onClick={()=>choose(a.id,a.search_match)} label={`查看${a.name}`} avatar={<Avatar name={a.name} type={a.type} src={avatarUrl('archive',a.id,a.version)}/>} name={<Highlight text={a.name} query={pref.query}/>} unread={!!a.unread_count} updateReminder={a.update_reminder} state={<span className={'state-badge small '+(isWorkState(a.type,a.status)?'work ':'')+(a.closed?'closed':'')}>{archiveDisplayStatus(a)}</span>} status={archiveDisplayStatus(a)} binding={a.members.length?a.members.map(m=><span className="member-chip" key={m.id}><Avatar name={m.name} src={avatarUrl('member',m.id,0)} size="micro"/>{m.name}{m.frozen&&<small>已冻结</small>}</span>):null} tags={<TagSummary tags={a.tag_summary?.tags??[]} total={a.tag_summary?.total??0}/>} draft={draftIds.includes(a.id)} excerpt={a.search_match?<><small>观察命中 · </small><Highlight text={a.search_match.excerpt} query={pref.query}/></>:a.latest_observation??'还没有观察记录'} footer={<><span>{a.observation_count} 条观察</span><time>{date(a.updated_at)}</time></>}/>)}</div>
   {loading?<p className="archive-list-message" role="status">正在读取档案…</p>:error?null:!items.length?<div className="archive-list-message"><h2>{query||activeFilters||pref.scope!=='all'?'没有符合条件的档案':trash?'没有已删除档案':'从第一个档案开始'}</h2><p>{query?'试试其他关键词，或清除筛选。':trash?'删除的档案会出现在这里。':`把值得关注的${label}留在这里，慢慢积累观察。`}</p></div>:cursor&&<button className="button archive-load" onClick={()=>void load(cursor)}>加载更多档案</button>}
- </>} detail={pref.selected?<ArchiveDetail onOpenTaskArchive={openTaskArchive} workTaskId={workTaskId} onDelete={()=>selected&&setDeletion(selected)} type={type} onNextUnread={onNextUnread} expanded={expanded} onExpand={detailOnly?undefined:()=>setExpanded(v=>!v)} focus={focus} actor={actor} onChanged={()=>setRevision(n=>n+1)} key={pref.selected} id={pref.selected} revision={revision} onLoaded={setSelected} onBack={onClose??(detailOnly?undefined:()=>choose(null))} onEdit={()=>{if(selected){setEditTab('profile');setDialog(selected);}}} onState={()=>selected&&setStateDialog(selected)} notice={notice}/>:<aside className="selection-rest" aria-hidden="true"><div className="rest-characters"><Avatar type={type} size="large"/></div><span>打开一个档案，继续观察。</span></aside>}/>
+ </>} detail={pref.selected?<ArchiveDetail onOpenTaskArchive={openTaskArchive} onDelete={()=>selected&&setDeletion(selected)} type={type} onNextUnread={onNextUnread} expanded={expanded} onExpand={detailOnly?undefined:()=>setExpanded(v=>!v)} focus={focus} actor={actor} onChanged={()=>setRevision(n=>n+1)} key={pref.selected} id={pref.selected} revision={revision} onLoaded={setSelected} onBack={onClose??(detailOnly?undefined:()=>choose(null))} onEdit={()=>{if(selected){setEditTab('profile');setDialog(selected);}}} onState={()=>selected&&setStateDialog(selected)} notice={notice}/>:<aside className="selection-rest" aria-hidden="true"><div className="rest-characters"><Avatar type={type} size="large"/></div><span>打开一个档案，继续观察。</span></aside>}/>
 
   {dialog&&<Modal title={dialog==='create'?`新建${label}档案`:'编辑档案'} busy={busy} onClose={()=>setDialog(null)}>
    {dialog!=='create'&&<TabList id="archive-editor" value={editTab} onChange={value=>{if(!busy)setEditTab(value);}} label="编辑内容" items={[{key:'profile',label:'资料'},{key:'state',label:'状态与成员'},{key:'tags',label:'标签'},{key:'avatar',label:'头像'}]}/>}
@@ -103,7 +103,7 @@ export function ArchivesPage({actor,type,personScope='all',linked,detailOnly=fal
   {stateDialog&&<Modal title={stateDialog.closed?'重新开启档案':'状态与成员'} busy={busy} onClose={()=>setStateDialog(null)}><ArchiveStateForm key={stateDialog.id+stateDialog.version} archive={stateDialog} busy={busy} setBusy={setBusy} onSaved={saved} onReload={async()=>{const r=await api<{archive:Archive}>('/archives/'+stateDialog.id);setStateDialog(current=>current?.id===r.archive.id&&current.version<=r.archive.version?r.archive:current);setRevision(n=>n+1);}}/></Modal>}
  </>;
 }
-function ArchiveDetail({onOpenTaskArchive,type,actor,onChanged,id,revision,onLoaded,onBack,onEdit,onState,notice,focus,expanded,onExpand,onNextUnread,onDelete,workTaskId}:{onOpenTaskArchive:React.ComponentProps<typeof ArchiveTasks>['onOpenArchive'];onDelete:()=>void;workTaskId?:string;type:Kind;focus?:ObservationFocus;actor:Member;onChanged:()=>void;id:string;revision:number;onLoaded:(a:Archive)=>void;onBack?:()=>void;onEdit:()=>void;onState:()=>void;notice:string;expanded:boolean;onExpand?:()=>void;onNextUnread?:()=>void}){
+function ArchiveDetail({onOpenTaskArchive,type,actor,onChanged,id,revision,onLoaded,onBack,onEdit,onState,notice,focus,expanded,onExpand,onNextUnread,onDelete}:{onOpenTaskArchive:React.ComponentProps<typeof ArchiveTasks>['onOpenArchive'];onDelete:()=>void;type:Kind;focus?:ObservationFocus;actor:Member;onChanged:()=>void;id:string;revision:number;onLoaded:(a:Archive)=>void;onBack?:()=>void;onEdit:()=>void;onState:()=>void;notice:string;expanded:boolean;onExpand?:()=>void;onNextUnread?:()=>void}){
  const[archive,setArchive]=useState<ArchiveWithTasks|null>(null),[error,setError]=useState(''),[retry,setRetry]=useState(0),[copy,setCopy]=useState(''),scroll=useRef<HTMLDivElement>(null);
  const[opening,setOpening]=useState<ArchiveReadDelivery|null>();
  const positionKey=`cts:${actor.id}:${id}:reading-position`;
@@ -122,7 +122,7 @@ function ArchiveDetail({onOpenTaskArchive,type,actor,onChanged,id,revision,onLoa
     {copy&&<p className="form-notice" role="status">{copy}</p>}{notice&&<p className="form-notice" role="status">{notice}</p>}
    </EntityHeader>
    <ArchiveLifecycleNotice deleted={archive.deleted} closed={archive.closed} onReopen={onState} onRestore={actor.role==='admin'?onDelete:undefined} onDelete={actor.role==='admin'?onDelete:undefined}/>
-   <TagsSection archive={archive} onChanged={onChanged}/><ArchiveQuickAction archive={archive} openTaskCount={archive.open_task_count??0} onChanged={onChanged}/><ArchiveTasks key={archive.id} archiveId={archive.id} archiveVersion={archive.version} openCount={archive.open_task_count??0} actor={actor} onChanged={onChanged} onOpenArchive={onOpenTaskArchive}/><ObservationSection workTaskId={workTaskId} focus={focus} actor={actor} archive={archive} onChanged={onChanged}/>
+   <TagsSection archive={archive} onChanged={onChanged}/><ArchiveQuickAction archive={archive} openTaskCount={archive.open_task_count??0} onChanged={onChanged}/><ArchiveTasks key={archive.id} archiveId={archive.id} archiveVersion={archive.version} openCount={archive.open_task_count??0} actor={actor} onChanged={onChanged} onOpenArchive={onOpenTaskArchive}/><ObservationSection focus={focus} actor={actor} archive={archive} onChanged={onChanged}/>
 
   </ArchiveReadingScope.Provider>}
  </DetailFrame>;

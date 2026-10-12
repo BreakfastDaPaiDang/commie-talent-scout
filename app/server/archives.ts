@@ -1,15 +1,16 @@
+import {planArchiveTaskCleanup} from '../rules/archive-task-cleanup.ts';
 import {archiveOrderCte,archiveCursor,nextArchiveCursor} from './archive-order.ts';
-import {archiveReminder,type ArchiveReminder} from '../shared/archive-reminders.ts';
+import {archiveReminder,type ArchiveReminder} from '../rules/archive-reminders.ts';
 import {z} from 'zod';
 import {assertAdmin} from './credentials.ts';
 import {command,requestId,expectedVersion,type Source} from './commands.ts';
 import {Failure,now,uid,type Actor,type Env} from './types.ts';
-import {isClosedState,personStates,orgStates,memberBasicStates,isMemberArchive,archivePath,type PersonRole,type MemberBasicState} from '../shared/archive-states.ts';
-import {assertReopenAllowed,assertStateAndResponsibility,planArchiveEffects,transitionChanged,preparePersonnelTask,personnelTaskStatements} from './rules/archive-lifecycle.ts';
-import {memberArchiveSql} from './person-identity.ts';
+import {isClosedState,personStates,orgStates,memberBasicStates,isMemberArchive,archivePath,type PersonRole,type MemberBasicState} from '../rules/archive-states.ts';
+import {assertReopenAllowed,assertStateAndResponsibility,planArchiveEffects,transitionChanged,preparePersonnelTask,personnelTaskStatements} from '../rules/archive-lifecycle.ts';
+import {memberArchiveSql} from '../rules/person-identity.ts';
 import {TagState,evidenceVisibilitySql,type TagBinding,type TagLabel} from './tag-state.ts';
 import {Reading,eventVisibility,unreadPredicate} from './reading.ts';
-import {contactReminder,type ContactReminder} from '../shared/contact-reminders.ts';
+import {contactReminder,type ContactReminder} from '../rules/contact-reminders.ts';
 
 export const archiveType=z.enum(['person','org']);
 const contact=z.object({type:z.string().trim().min(1).max(40),value:z.string().trim().min(1).max(500),note:z.string().trim().max(500).default('')}).strict().refine(c=>c.type.toUpperCase()!=='QQ'||/^\d{5,20}$/.test(c.value),{message:'QQ 使用 5–20 位数字字符串',path:['value']});
@@ -89,13 +90,7 @@ export class Archives{
    const changed=old.deleted!==deleted,key=uid(),at=now(),statements=[this.stmt('INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(SELECT 1 FROM archives WHERE id=? AND version=? AND deleted=?) THEN 1 ELSE 0 END)',key,a.id,a.expected_version,old.deleted?1:0)];
     if(changed){
      if(deleted&&!old.closed)statements.push(new TagState(this.env,this.actor).snapshot(a.id,old.version+1));
-     if(deleted){
-      const reason='档案已删除，关联自动任务不再适用';
-      statements.push(this.stmt(`INSERT INTO work_task_events(id,task_id,actor_id,source,kind,before_json,after_json,reason,created_at)
-       SELECT lower(hex(randomblob(16))),id,?,?,'task.cancelled',json_object('status',status,'owner_id',owner_id,'version',version),json_object('status','cancelled','owner_id',owner_id,'version',version+1),?,?
-       FROM work_tasks WHERE archive_id=? AND source='rule' AND status='open'`,this.actor.id,this.source,reason,at,a.id),
-       this.stmt("UPDATE work_tasks SET status='cancelled',closed_reason=?,updated_at=?,version=version+1 WHERE archive_id=? AND source='rule' AND status='open'",reason,at,a.id));
-     }
+     statements.push(...planArchiveTaskCleanup({archiveId:a.id,deleted,changed,actorId:this.actor.id,source:this.source,at,stmt:this.stmt.bind(this)}));
      statements.push(this.stmt('UPDATE archives SET deleted=?,deleted_at=?,deleted_by=?,deleted_snapshot_version=?,version=version+1,updated_at=? WHERE id=?',deleted?1:0,deleted?at:null,deleted?this.actor.id:null,deleted?(old.closed?old.tag_snapshot_version:old.version+1):null,at,a.id),this.event(a.id,deleted?'archive.deleted':'archive.restored',{deleted:old.deleted},{deleted},at));
    }
    statements.push(this.stmt('DELETE FROM mutation_guards WHERE id=?',key));return {result:{id:a.id,version:old.version+(changed?1:0),deleted,changed,archive_url:this.url(old)},statements};

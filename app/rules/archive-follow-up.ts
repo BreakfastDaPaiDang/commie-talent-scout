@@ -1,4 +1,4 @@
-import {archiveReminder,DAY_MS} from '../../shared/archive-reminders.ts';
+import {archiveReminder,DAY_MS} from './archive-reminders.ts';
 import {planRules,type RuleModule} from './contract.ts';
 
 export const archiveFollowUpRule='archive.follow_up';
@@ -19,9 +19,9 @@ export function createArchiveFollowUp(c:Context){
  ];
 }
 export const archiveFollowUpModule:RuleModule<Context,D1PreparedStatement>={
- id:'archive-follow-up',source:'app/server/rules/archive-follow-up.ts',
+ id:'archive-follow-up',source:'app/rules/archive-follow-up.ts',
  triggers:[{file:'app/server/archive-follow-ups.ts',entry:'generateArchiveFollowUps'},{file:'app/server/archive-follow-ups.ts',entry:'generateScheduledArchiveFollowUps'}],
  rules:[{id:archiveFollowUpRule,when:needsArchiveFollowUp,apply:createArchiveFollowUp}],
- verification:{transaction:{file:'app/server/archive-follow-ups.ts',entry:'generateScheduledArchiveFollowUps'},guard:{file:'app/server/rules/archive-follow-up.ts',entry:'createArchiveFollowUp'},tests:['tests/archive-follow-ups.test.mjs'],idempotency:'档案 ID + automation_rule + 档案更新时间唯一；另以事务内 NOT EXISTS 阻止同类开启任务叠加。',failure:'任务与创建事件一起提交；版本变化时跳过，后续扫描重新判断；规则不修改档案。'},
+ verification:{transaction:{file:'app/server/archive-follow-ups.ts',entry:'generateScheduledArchiveFollowUps'},guard:{file:'app/rules/archive-follow-up.ts',entry:'createArchiveFollowUp'},tests:['tests/archive-follow-ups.test.mjs'],idempotency:'档案 ID + automation_rule + 档案更新时间唯一；另以事务内 NOT EXISTS 阻止同类开启任务叠加。',failure:'任务与创建事件一起提交；版本变化时跳过，后续扫描重新判断；规则不修改档案。'},
 };
 export function planArchiveFollowUp(context:Context){return planRules(archiveFollowUpModule,context);}

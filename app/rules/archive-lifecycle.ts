@@ -1,8 +1,8 @@
-import {isClosedState,isWorkState,statesFor,isMemberArchive,type MemberBasicState} from '../../shared/archive-states.ts';
-import {Failure,uid} from '../types.ts';
-import type {Archive,BoundMember} from '../archives.ts';
-import type {TagState} from '../tag-state.ts';
-import type {Source} from '../commands.ts';
+import {isClosedState,isWorkState,statesFor,isMemberArchive,type MemberBasicState} from './archive-states.ts';
+import {Failure,uid} from '../server/types.ts';
+import type {Archive,BoundMember} from '../server/archives.ts';
+import type {TagState} from '../server/tag-state.ts';
+import type {Source} from '../server/commands.ts';
 import {planRules,type RuleModule} from './contract.ts';
 
 export type Transition={old:Archive;status:string;memberIds:string[];reopen:boolean;memberStatus?:MemberBasicState|null;membershipAction?:'leave'|'to_friend'};
@@ -144,7 +144,7 @@ export const archiveTransitionRules=[
 ] as const;
 
 export const archiveLifecycleModule:RuleModule<Effects,D1PreparedStatement>={
- id:'archive-lifecycle',source:'app/server/rules/archive-lifecycle.ts',
+ id:'archive-lifecycle',source:'app/rules/archive-lifecycle.ts',
  triggers:[{file:'app/server/archives.ts',entry:'transition'},{file:'app/server/work-tasks.ts',entry:'restoreCancelledAudit'}],
  rules:archiveTransitionRules,
  verification:{

@@ -1,4 +1,4 @@
-import type {ArchiveReminder} from '../shared/archive-reminders';
+import type {ArchiveReminder} from '../rules/archive-reminders';
 import React,{useEffect,useRef,type ReactNode,type RefObject} from 'react';
 import {Icon,Mark} from './icons';
 

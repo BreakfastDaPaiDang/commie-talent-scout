@@ -4,7 +4,7 @@ import {Avatar} from './Avatar';
 import {Modal,ModalActions} from './Modal';
 import {pasteImages,ImagePicker,type AttachmentInfo} from './Images';
 import {PageError} from './ConnectionPages';
-import {pushableTaskKinds,type PushableTaskKind} from '../shared/task-preferences';
+import {pushableTaskKinds,type PushableTaskKind} from '../rules/task-preferences';
 export function avatarUrl(type:'archive'|'member',id:string,version:number){return `/avatars/${type==='archive'?'archives':'members'}/${id}?v=${version}`;}
 export function AvatarEditor({actorId,subjectType,id,version,name,kind='person',avatarId,onSaved}:{actorId:string;subjectType:'archive'|'member';id:string;version:number;name:string;kind?:'person'|'org';avatarId:string|null;onSaved:()=>Promise<unknown>|void}){
  const[open,setOpen]=useState(false),[images,setImages]=useState<AttachmentInfo[]>([]),[pending,setPending]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState(''),[request,setRequest]=useState<{id:string;attachment:string|null}|null>(null);

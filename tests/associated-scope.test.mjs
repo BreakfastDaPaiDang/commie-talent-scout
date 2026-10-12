@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {randomUUID as uuid} from 'node:crypto';
 import {fixture} from './d1-fixture.mjs';
 import {Archives} from '../app/server/archives.ts';
-import {personStates,orgStates} from '../app/shared/archive-states.ts';
+import {personStates,orgStates} from '../app/rules/archive-states.ts';
 
 test('associated scope includes current members in every person and organization state, with matching counts and pagination',async t=>{
  const f=fixture();t.after(f.close);const s=new Archives(f.env,f.actor,'web');

@@ -4,7 +4,7 @@ import {hashPassword} from './password.ts';
 import {assertAdmin} from './credentials.ts';
 import {command,requestId,expectedVersion,type Source} from './commands.ts';
 import {Failure,now,uid,type Actor,type Env} from './types.ts';
-import {normalizePreference,pushableTaskKinds,type PushableTaskKind} from '../shared/task-preferences.ts';
+import {normalizePreference,pushableTaskKinds,type PushableTaskKind} from '../rules/task-preferences.ts';
 
 export const memberCreateInput=z.object({
   username:z.string().trim().regex(/^[a-zA-Z0-9_.-]{3,40}$/,'账号使用 3–40 位字母、数字、点、下划线或连字符'),

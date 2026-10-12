@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {planRules,type RuleModule} from '../app/server/rules/contract.ts';
+import {planRules,type RuleModule} from '../app/rules/contract.ts';
 
 test('planning preserves condition/effect order, skips unmatched effects and propagates failure before commit',()=>{
  const calls:string[]=[];

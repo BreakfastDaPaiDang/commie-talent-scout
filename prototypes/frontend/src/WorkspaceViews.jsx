@@ -1,4 +1,4 @@
-import {archivePrimaryAction} from '../../../app/shared/archive-states';
+import {archivePrimaryAction} from '../../../app/rules/archive-states';
 import {RelatedTasksFrame,DetailActions} from '../../../app/ui/TaskBook';
 import {prototypeReminder} from './model.js';
 import {MaterialsPreview} from './MaterialsPreview.jsx';
