@@ -272,3 +272,26 @@ test('task search filters before the limit and treats wildcard characters litera
  const linked=await service.create({...taskInput(),archive_id:archive.id});
  assert.deepEqual((await service.list({query:'搜索关联对象'})).tasks.map(task=>task.id),[linked.id]);
 });
+
+
+test('closed_at follows closing events, not later edits, and list pages keep all history reachable',async t=>{
+ const f=fixture();t.after(f.close);const service=new WorkTasks(f.env,f.actor,'web');
+ f.sqlite.prepare("UPDATE members SET role='admin' WHERE id=?").run(f.actor.id);f.actor.role='admin';
+ const old=await service.create({...taskInput(),title:'旧关闭任务'});
+ await service.cancel({id:old.id,expected_version:1,reason:'结束',request_id:uuid()});
+ const closed='2025-01-01T00:00:00.000Z';
+ f.sqlite.prepare("UPDATE work_task_events SET created_at=? WHERE task_id=? AND kind='task.cancelled'").run(closed,old.id);
+ f.sqlite.prepare("UPDATE work_tasks SET updated_at=? WHERE id=?").run(new Date().toISOString(),old.id);
+ assert.equal((await service.list({})).tasks.length,0);
+ assert.equal((await service.list({state:'all'})).tasks[0].closed_at,closed);
+ const reopened=await service.reopen({id:old.id,expected_version:2,owner_mode:'unassigned',deadline_at:'2099-01-01T00:00:00.000Z',request_id:uuid()});
+ assert.equal((await service.list({})).tasks[0].closed_at,null);
+ await service.cancel({id:old.id,expected_version:reopened.version,reason:'再次结束',request_id:uuid()});
+ assert.ok((await service.list({state:'closed'})).tasks[0].closed_at>closed);
+ const second=await service.create({...taskInput(),title:'第二项'});
+ const firstPage=await service.list({state:'all',limit:1});
+ assert.equal(firstPage.next_offset,1);
+ const next=await service.list({state:'all',limit:1,offset:firstPage.next_offset});
+ assert.equal(next.next_offset,null);
+ assert.deepEqual(new Set([...firstPage.tasks,...next.tasks].map(x=>x.id)),new Set([old.id,second.id]));
+});

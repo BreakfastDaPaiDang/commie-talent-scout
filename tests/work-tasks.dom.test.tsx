@@ -36,3 +36,31 @@ test('task book keeps the personal action list separate from other members work'
   assert.ok(text.includes('任务簿'));assert.ok(text.includes('看板大厅'));assert.ok(text.includes('我的进行中'));assert.ok(text.includes('待领取工作'));assert.ok(f.w.document.querySelector('.task-mark-waiting'));assert.equal(text.includes('其他人的工作'),false);assert.equal(f.w.document.querySelector('.task-scene'),null);
  }finally{await f.close();}
 });
+
+
+test('hall defaults to 30 days of closures, can show 90 or all, and resets without hiding old open work',async()=>{
+ const f=environment();f.w.history.replaceState(null,'','http://localhost/tasks');
+ const ago=(days:number)=>new Date(Date.now()-days*86400000).toISOString();
+ const rows=[
+ {...task,id:'open',title:'长期开放',created_at:ago(180),updated_at:ago(180)},
+ ...[10,60,120].map(days=>({...task,id:'closed-'+days,title:'关闭'+days,status:'cancelled',closed_at:ago(days),updated_at:ago(0)}))
+ ];
+ globalThis.fetch=async url=>Response.json(String(url).includes('/work-tasks?')?{tasks:rows,next_offset:null}:{events:[],comments:[]});
+ try{
+  const {WorkTasksPage}=await import('../app/client/WorkTasksPage');
+  await act(async()=>{f.root.render(<WorkTasksPage actor={actor} onOpenArchive={()=>{}}/>);});
+  await act(async()=>{[...f.w.document.querySelectorAll('button')].find(b=>b.textContent==='看板大厅')!.click();});
+  const titles=()=>[...f.w.document.querySelectorAll('.task-board-card h3')].map(x=>x.textContent);
+  assert.deepEqual(titles(),['长期开放','关闭10']);
+  assert.ok(f.w.document.body.textContent!.includes('最近 30 天内关闭的任务'));
+  await act(async()=>{f.w.document.querySelector<HTMLButtonElement>('.filter-toggle')!.click();});
+  const select=f.w.document.querySelector('[aria-label="已关闭任务范围"]') as unknown as HTMLSelectElement;
+  assert.equal(select.value,'30');
+  await act(async()=>{select.value='90';select.dispatchEvent(new f.w.Event('change',{bubbles:true}));});
+  assert.deepEqual(titles(),['长期开放','关闭10','关闭60']);
+  await act(async()=>{select.value='all';select.dispatchEvent(new f.w.Event('change',{bubbles:true}));});
+  assert.equal(titles().length,4);
+  await act(async()=>{[...f.w.document.querySelectorAll('button')].find(b=>b.textContent==='重置筛选')!.click();});
+  assert.equal(select.value,'30');assert.deepEqual(titles(),['长期开放','关闭10']);
+ }finally{await f.close();}
+});

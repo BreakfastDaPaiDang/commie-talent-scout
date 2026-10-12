@@ -9,7 +9,7 @@ import {ArchiveHead,RecordBody,ScopeToolbar} from '../ui/Workspace';
 import {TaskLabelsField,TaskBookLayout,TaskRecommendationCard,TaskDetailCard,TaskListRow,TaskBoardColumn,TaskBoardCard,taskStagePriority,type TaskStage} from '../ui/TaskBook';
 
 export type ArchivePreview={id:string;type:'person'|'org';name:string;status:string;version:number;updated_at:string;observation_count:number;latest_observation:string|null;members:{id:string;name:string;frozen:boolean}[];tag_summary:{tags:{tag_id:string;category_name:string;name:string;color:string;focus:number}[];total:number}};
-type Task={id:string;archive_id:string|null;archive_preview?:ArchivePreview;kind:'audit'|'onboarding'|'monthly'|'cooperation'|'custom';labels?:string[];label_keys?:string[];priority?:'P0'|'P1'|'P2';title:string;purpose:string;delivery:string;status:'open'|'completed'|'expired'|'cancelled';owner_id:string|null;owner_name?:string|null;owner_version?:number|null;initiator_kind?:'member'|'system';initiator_id?:string|null;initiator_name?:string|null;initiator_version?:number|null;initiator_avatar_key?:string|null;created_by:string;deadline_at:string;created_at:string;updated_at?:string;version:number;overdue?:boolean;result_kind?:string|null;result_text?:string|null;result_references?:{observation_id:string;archive_id:string;content_version:number}[];result_references_restricted?:boolean;completed_at?:string|null;closed_reason?:string|null;period_key?:string|null;candidate_count?:number;push_stage?:string};
+type Task={id:string;archive_id:string|null;archive_preview?:ArchivePreview;kind:'audit'|'onboarding'|'monthly'|'cooperation'|'custom';labels?:string[];label_keys?:string[];priority?:'P0'|'P1'|'P2';title:string;purpose:string;delivery:string;status:'open'|'completed'|'expired'|'cancelled';owner_id:string|null;owner_name?:string|null;owner_version?:number|null;initiator_kind?:'member'|'system';initiator_id?:string|null;initiator_name?:string|null;initiator_version?:number|null;initiator_avatar_key?:string|null;created_by:string;deadline_at:string;created_at:string;updated_at?:string;version:number;overdue?:boolean;result_kind?:string|null;result_text?:string|null;result_references?:{observation_id:string;archive_id:string;content_version:number}[];result_references_restricted?:boolean;completed_at?:string|null;closed_at?:string|null;closed_reason?:string|null;period_key?:string|null;candidate_count?:number;push_stage?:string};
 type ObservationOption={id:string;content_version:number;author_name:string;created_at:string;body:string;deleted:boolean};
 const labels:Record<Task['kind'],string>={audit:'人事审核',onboarding:'入社对接',monthly:'月度沟通',cooperation:'组织合作',custom:'临时工作'};
 const taskLabelKeys=(value:string)=>[...new Set(value.split(/[、,，]/).map(value=>value.trim()).filter(Boolean).map(value=>Object.entries(labels).find(([,label])=>label===value)?.[0]??value))];
@@ -20,6 +20,14 @@ const displayDate=(value:string)=>new Date(value).toLocaleString('zh-CN',{timeZo
 const purposeDefault='说明本次要处理的对象、判断或行动。';
 const deliveryDefault='结果写回关联档案；没有关联档案时，在任务结果中交代。';
 const taskStage=(task:Task):TaskStage=>task.status==='expired'?'failed':task.status==='cancelled'?'cancelled':task.status!=='open'?'closed':task.owner_id===null?'waiting':(task as Task&{ready_to_submit?:boolean}).ready_to_submit?'ready':'active';
+async function fetchTaskList(query=''){
+ const tasks:Task[]=[];let offset:number|null=0;
+ while(offset!==null){
+  const page:{tasks:Task[];next_offset?:number|null}=await api('/work-tasks?'+new URLSearchParams({scope:'all',state:'all',limit:'100',offset:String(offset),...(query?{query}:{})}));
+  tasks.push(...page.tasks);offset=page.next_offset??null;
+ }
+ return tasks;
+}
 function remainingTime(task:Task,at=Date.now()){
  if(task.status!=='open')return undefined;
  const ms=Date.parse(task.deadline_at)-at;
@@ -146,11 +154,12 @@ function closedResult(task:Task){
  return undefined;
 }
 function BoardHall({tasks,searchTasks,actor,selectedTask,onSelect,onChanged,onOpenArchive}:{tasks:Task[];searchTasks:Task[]|null;actor:Member;selectedTask:Task|null;onSelect:(id:string|null)=>void;onChanged:()=>void;onOpenArchive:(archive:ArchivePreview,taskId?:string,observationId?:string,contentVersion?:number)=>void}){
+ const[closedRange,setClosedRange]=useState<'30'|'90'|'all'>('30');
  const[labelFilter,setLabelFilter]=useState('all'),[priorityFilter,setPriorityFilter]=useState('all'),[sort,setSort]=useState<'updated'|'deadline'>('updated'),[filtersOpen,setFiltersOpen]=useState(false);
- const start=monthStartInBeijing(),closedCutoff=Date.now()-30*86400000,monthTasks=tasks.filter(task=>Date.parse(task.updated_at??task.created_at)>=start);
+ const start=monthStartInBeijing(),closedCutoff=Date.now()-Number(closedRange)*86400000,monthTasks=tasks.filter(task=>Date.parse(task.updated_at??task.created_at)>=start);
  // The hall is an operational view: all open work remains visible, while
  // closed history is intentionally bounded to keep the default view useful.
- const source=(searchTasks??tasks).filter(task=>task.status==='open'||Date.parse(task.updated_at??task.created_at)>=closedCutoff);
+ const source=(searchTasks??tasks).filter(task=>task.status==='open'||closedRange==='all'||(!!task.closed_at&&Date.parse(task.closed_at)>=closedCutoff));
  const filtered=source.filter(task=>(labelFilter==='all'||(task.label_keys??[task.kind]).includes(labelFilter))&&(priorityFilter==='all'||task.priority===priorityFilter)).sort((a,b)=>sort==='updated'?Date.parse(b.updated_at??b.created_at)-Date.parse(a.updated_at??a.created_at):Date.parse(a.deadline_at)-Date.parse(b.deadline_at));
  const waiting=filtered.filter(task=>task.status==='open'&&!task.owner_id),active=filtered.filter(task=>task.status==='open'&&!!task.owner_id),closed=filtered.filter(task=>task.status!=='open');
  const monthCompleted=monthTasks.filter(task=>task.status==='completed'&&task.completed_at&&Date.parse(task.completed_at)>=start).length;
@@ -160,8 +169,8 @@ function BoardHall({tasks,searchTasks,actor,selectedTask,onSelect,onChanged,onOp
  return <div className="task-hall">
   <section className="task-hall-board">
   <div className="task-hall-metrics"><div><strong>{monthTasks.length}</strong><span>本月更新</span></div><div><strong>{monthCompleted}</strong><span>本月完成</span></div><div><strong>{tasks.filter(task=>task.status==='open'&&!task.owner_id).length}</strong><span>当前待领取</span></div><div className={overdue?'urgent':''}><strong>{overdue}</strong><span>当前逾期</span></div></div>
-  <div className="task-board-toolbar"><ScopeToolbar heading={<strong>全组看板</strong>} scopeItems={[]} scope="all" onScope={()=>{}} filtersOpen={filtersOpen} onFilters={()=>setFiltersOpen(value=>!value)} activeFilters={labelFilter!=='all'||priorityFilter!=='all'||sort!=='updated'} onReset={()=>{setLabelFilter('all');setPriorityFilter('all');setSort('updated');}} filters={<><label>标签<select aria-label="任务标签" value={labelFilter} onChange={e=>setLabelFilter(e.target.value)}><option value="all">全部标签</option>{uniqueLabels.map(key=><option value={key} key={key}>{taskLabelName(key)}</option>)}</select></label><label>优先级<select aria-label="任务优先级" value={priorityFilter} onChange={e=>setPriorityFilter(e.target.value)}><option value="all">全部优先级</option><option value="P0">P0</option><option value="P1">P1</option><option value="P2">P2</option></select></label><label>排序<select aria-label="任务排序" value={sort} onChange={e=>setSort(e.target.value as 'updated'|'deadline')}><option value="updated">最近更新</option><option value="deadline">截止时间</option></select></label></>}/></div>
-  <div className="task-board-columns">{column('waiting','待领取','还没有负责人，等待成员接取',waiting)}{column('active','进行中','已有负责人正在推进',active)}{column('closed','已关闭','结果与历史保留在任务中',closed)}</div>
+  <div className="task-board-toolbar"><ScopeToolbar heading={<strong>全组看板</strong>} scopeItems={[]} scope="all" onScope={()=>{}} filtersOpen={filtersOpen} onFilters={()=>setFiltersOpen(value=>!value)} activeFilters={closedRange!=='all'||labelFilter!=='all'||priorityFilter!=='all'||sort!=='updated'} resetLabel="重置筛选" onReset={()=>{setLabelFilter('all');setPriorityFilter('all');setSort('updated');setClosedRange('30');}} filters={<><label>已关闭任务<select aria-label="已关闭任务范围" value={closedRange} onChange={e=>setClosedRange(e.target.value as typeof closedRange)}><option value="30">最近 30 天</option><option value="90">最近 90 天</option><option value="all">全部</option></select></label><label>标签<select aria-label="任务标签" value={labelFilter} onChange={e=>setLabelFilter(e.target.value)}><option value="all">全部标签</option>{uniqueLabels.map(key=><option value={key} key={key}>{taskLabelName(key)}</option>)}</select></label><label>优先级<select aria-label="任务优先级" value={priorityFilter} onChange={e=>setPriorityFilter(e.target.value)}><option value="all">全部优先级</option><option value="P0">P0</option><option value="P1">P1</option><option value="P2">P2</option></select></label><label>排序<select aria-label="任务排序" value={sort} onChange={e=>setSort(e.target.value as 'updated'|'deadline')}><option value="updated">最近更新</option><option value="deadline">截止时间</option></select></label></>}/></div>
+  <div className="task-board-columns">{column('waiting','待领取','还没有负责人，等待成员接取',waiting)}{column('active','进行中','已有负责人正在推进',active)}{column('closed','已关闭',closedRange==='all'?'全部已关闭任务':'最近 '+closedRange+' 天内关闭的任务',closed)}</div>
   <footer className="task-hall-footer"><span>点击任务卡查看目的、交付要求和评论历史。</span></footer>
   </section>
   {selectedTask&&<Modal title="任务详情" wide onClose={()=>onSelect(null)}><TaskScene key={selectedTask.id} task={selectedTask} actor={actor} onChanged={onChanged} onOpenArchive={onOpenArchive}/></Modal>}
@@ -174,7 +183,7 @@ export function WorkTasksPage({actor,onOpenArchive}:{actor:Member;onOpenArchive:
  const[query,setQuery]=useState(''),[searchTasks,setSearchTasks]=useState<Task[]|null>(null),[searching,setSearching]=useState(false),[searchError,setSearchError]=useState('');
  const[selectedId,setSelectedId]=useState<string|null>(()=>new URLSearchParams(location.search).get('task'));
  const loadSequence=React.useRef(0);
- async function load(){const sequence=++loadSequence.current;setLoading(true);setError('');try{const r=await api<{tasks:Task[]}>('/work-tasks?'+new URLSearchParams({scope:'all',state:'all',limit:'100'}));if(sequence===loadSequence.current)setTasks(r.tasks);}catch(e){if(sequence===loadSequence.current)setError((e as Error).message);}finally{if(sequence===loadSequence.current)setLoading(false);}}
+ async function load(){const sequence=++loadSequence.current;setLoading(true);setError('');try{const rows=await fetchTaskList();if(sequence===loadSequence.current)setTasks(rows);}catch(e){if(sequence===loadSequence.current)setError((e as Error).message);}finally{if(sequence===loadSequence.current)setLoading(false);}}
  useEffect(()=>{void load();return()=>{loadSequence.current++;};},[revision]);
  useEffect(()=>{const timer=window.setInterval(()=>setClock(Date.now()),60000);return()=>window.clearInterval(timer);},[]);
  const[,setClock]=useState(Date.now());
@@ -183,7 +192,7 @@ export function WorkTasksPage({actor,onOpenArchive}:{actor:Member;onOpenArchive:
   setSearchError('');setSearchTasks(query.trim()?[]:null);setSearching(!!query.trim());
   if(!query.trim())return;
   const timer=window.setTimeout(async()=>{
-   try{const result=await api<{tasks:Task[]}>('/work-tasks?'+new URLSearchParams({scope:'all',state:'all',limit:'100',query:query.trim()}));if(!cancelled)setSearchTasks(result.tasks);}
+   try{const rows=await fetchTaskList(query.trim());if(!cancelled)setSearchTasks(rows);}
    catch(e){if(!cancelled)setSearchError((e as Error).message);}
    finally{if(!cancelled)setSearching(false);}
   },200);

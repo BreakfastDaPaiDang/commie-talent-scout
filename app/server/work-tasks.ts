@@ -105,7 +105,7 @@ export class WorkTasks {
     });
   }
   async list(input:unknown={}){
-    const a=z.object({scope:z.enum(['all','recommended','mine','admin']).default('all'),state:z.enum(['open','closed','all']).default('open'),archive_id:z.uuid().optional(),query:z.string().trim().max(200).default(''),limit:z.coerce.number().int().min(1).max(100).default(50)}).parse(input);
+    const a=z.object({scope:z.enum(['all','recommended','mine','admin']).default('all'),state:z.enum(['open','closed','all']).default('open'),archive_id:z.uuid().optional(),query:z.string().trim().max(200).default(''),offset:z.coerce.number().int().min(0).default(0),limit:z.coerce.number().int().min(1).max(100).default(50)}).parse(input);
     if(a.scope==='admin')assertAdmin(this.actor);
     const where=a.state==='open'?["t.status='open'"]:a.state==='closed'?["t.status<>'open'"]:[],args:unknown[]=[];where.push('(t.archive_id IS NULL OR ar.id IS NOT NULL)');
     if(a.archive_id){where.push('t.archive_id=?');args.push(a.archive_id);}
@@ -117,6 +117,10 @@ export class WorkTasks {
     if(a.scope==='mine') {where.push('t.owner_id=?');args.push(this.actor.id);}
     if(a.scope==='recommended') {where.push('(t.kind IN (\'audit\',\'onboarding\',\'monthly\',\'cooperation\') AND EXISTS (SELECT 1 FROM member_work_preferences p WHERE p.member_id=? AND (p.all_work=1 OR instr(p.kinds_json,\'"\'||t.kind||\'"\')>0)) AND t.owner_id IS NULL)');args.push(this.actor.id);}
     const rows=await this.stmt(`SELECT t.*,
+      CASE WHEN t.status='open' THEN NULL ELSE COALESCE(
+        (SELECT max(e.created_at) FROM work_task_events e WHERE e.task_id=t.id AND e.kind IN ('task.completed','task.cancelled','task.expired','completed','cancelled','expired')),
+        t.completed_at
+      ) END closed_at,
       (SELECT name FROM members WHERE id=t.owner_id) owner_name,
       (SELECT version FROM members WHERE id=t.owner_id) owner_version,
       (SELECT name FROM members WHERE id=t.initiator_id) initiator_name,
@@ -131,8 +135,9 @@ export class WorkTasks {
       (SELECT json_group_array(json_object('id',m.id,'name',m.name,'frozen',m.frozen)) FROM archive_bindings b JOIN members m ON m.id=b.member_id WHERE b.archive_id=ar.id AND b.status=ar.status) archive_members_json
       FROM work_tasks t
       LEFT JOIN archives ar ON ar.id=t.archive_id AND (ar.deleted=0 OR ?='admin')
-      WHERE ${where.join(' AND ')} ORDER BY t.deadline_at,t.created_at,t.id LIMIT ?`,this.actor.role,...args,a.limit).all();
-    const tasks=rows.results as (Record<string,unknown>&{archive_id:string|null;archive_members_json?:string|null})[];
+      WHERE ${where.join(' AND ')} ORDER BY t.deadline_at,t.created_at,t.id LIMIT ? OFFSET ?`,this.actor.role,...args,a.limit+1,a.offset).all();
+    const next_offset=rows.results.length>a.limit?a.offset+a.limit:null;
+    const tasks=rows.results.slice(0,a.limit) as (Record<string,unknown>&{archive_id:string|null;archive_members_json?:string|null})[];
     const archiveIds=[...new Set(tasks.map(task=>task.archive_id).filter((id):id is string=>!!id))];
     const tagSummaries=archiveIds.length?await new TagState(this.env,this.actor).summaries(archiveIds):new Map<string,{tags:TagLabel[];total:number}>();
     for(const task of tasks){
@@ -169,7 +174,7 @@ export class WorkTasks {
       delete task.initiator_version;
     }
     if(a.scope==='admin') for(const task of tasks){const candidates=await this.candidates(task as unknown as Row);task.candidate_count=candidates.length;task.push_stage=pushStage(this.pushable(task as unknown as Row),now());}
-    return {tasks};
+    return {tasks,next_offset};
   }
   private async candidates(task:Row){
     const rows=await this.stmt(`SELECT m.id,m.name,m.frozen,p.all_work,p.kinds_json FROM members m LEFT JOIN member_work_preferences p ON p.member_id=m.id WHERE m.frozen=0 ORDER BY m.name,m.id`).all<{id:string;name:string;frozen:number;all_work:number|null;kinds_json:string|null}>();
