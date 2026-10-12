@@ -88,3 +88,9 @@
 .archive-primary-action{margin:24px 0 0}.archive-primary-action .task-scene-actions{margin:0}.archive-primary-action .button.primary{flex:0 1 auto;min-width:220px}
 .archive-state-change{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:20px 0}.archive-state-change span{color:var(--muted)}
 @media(max-width:600px){.task-list-row.compact .task-index-item{grid-template-columns:28px minmax(0,1fr) auto;gap:8px}.task-list-row.compact .task-mark{grid-row:1/3}.task-compact-owner{grid-column:2;grid-row:2}.task-list-row.compact .task-index-status{grid-column:3;grid-row:1/3}.archive-primary-action .button.primary{flex:1}.related-tasks h3{gap:8px}}
+
+.task-completion-record{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:18px;padding:18px 20px;background:#fff;border:1px solid #dcdedb;border-radius:6px}
+.task-completion-record>div{display:grid;gap:6px;min-width:0}.task-completion-record>div>span{font-size:14px;color:#687173}.task-completion-record>div>div{display:flex;align-items:baseline;gap:6px}.task-completion-record strong{font-size:28px;line-height:1.2;font-variant-numeric:tabular-nums}.task-completion-record small{font-size:13px;color:#687173;line-height:1.5}.task-progress-total{border-left:1px solid #e5e6e2;padding-left:20px}
+@media(max-width:420px){.task-completion-record{gap:12px;padding:15px}.task-progress-total{padding-left:12px}}
+
+.task-recommendation-labels{display:flex;flex-wrap:wrap;gap:5px}

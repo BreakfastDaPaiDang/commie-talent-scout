@@ -104,3 +104,46 @@ test('task history loads older comments and events and removes exhausted continu
   assert.ok(f.w.document.body.textContent!.includes('较早的评论'));assert.ok(f.w.document.body.textContent!.includes('历史创建人'));assert.ok(requests.some(path=>path.includes('cursor=comments-cursor')));assert.ok(requests.some(path=>path.includes('cursor=events-cursor')));assert.equal([...f.w.document.querySelectorAll('button')].some(b=>b.textContent==='加载更早记录'),false);
  }finally{await f.close();}
 });
+
+test('task book filters every actual label independently of legacy kind and preserves status filters',async()=>{
+ const f=environment();f.w.history.replaceState(null,'','http://localhost/tasks');
+ const rows=[
+  {...task,id:'monthly-active',title:'月度进行中',kind:'custom',label_keys:['monthly','接触跟进'],labels:['月度沟通','接触跟进']},
+  {...task,id:'monthly-waiting',title:'月度待接取',kind:'custom',owner_id:null,label_keys:['monthly'],labels:['月度沟通']},
+  {...task,id:'audit-active',title:'审核进行中',kind:'audit',label_keys:['audit'],labels:['人事审核']},
+  {...task,id:'completed',title:'本人已完成',status:'completed',priority:'P1',completed_at:new Date(Date.now()-1000).toISOString()},
+  {...task,id:'other-completed',title:'他人已完成',status:'completed',owner_id:'other',completed_at:new Date(Date.now()-1000).toISOString()},
+ ];
+ globalThis.fetch=async()=>Response.json({tasks:rows,next_offset:null});
+ try{
+  const {WorkTasksPage}=await import('../app/client/WorkTasksPage');await act(async()=>f.root.render(<WorkTasksPage actor={actor} onOpenArchive={()=>{}}/>));
+  await act(async()=>f.w.document.querySelector<HTMLButtonElement>('.task-book-controls button')!.click());
+  assert.equal(f.w.document.querySelector('.task-progress-total strong')?.textContent,'1');
+  assert.ok(f.w.document.querySelector('.task-recommendation-copy')?.textContent?.includes('月度沟通'));
+  assert.equal(f.w.document.querySelector('.task-recommendation-copy')?.textContent?.includes('临时工作'),false);
+  const select=f.w.document.querySelector('[aria-label="任务标签筛选"]') as unknown as HTMLSelectElement|null;assert.ok(select,'task book must offer actual labels instead of obsolete task kind');
+  const titles=()=>[...f.w.document.querySelectorAll('.task-row-title strong')].map(e=>e.textContent);
+  const choose=async(selector:HTMLSelectElement,value:string)=>act(async()=>{selector.value=value;selector.dispatchEvent(new f.w.Event('change',{bubbles:true}));});
+  await choose(select,'monthly');assert.deepEqual(new Set(titles()),new Set(['月度进行中','月度待接取']));
+  await choose(f.w.document.querySelector('[aria-label="任务状态"]') as unknown as HTMLSelectElement,'active');assert.deepEqual(titles(),['月度进行中']);
+  await choose(select,'接触跟进');assert.deepEqual(titles(),['月度进行中']);assert.equal(f.w.document.querySelector('.task-progress-total strong')?.textContent,'1');
+  await act(async()=>[...f.w.document.querySelectorAll<HTMLButtonElement>('.task-book-filters button')].find(e=>e.textContent==='清除')!.click());assert.equal(titles().length,3);
+ }finally{await f.close();}
+});
+
+test('task book groups processing states before priority and never groups by legacy kind',async()=>{
+ const f=environment();f.w.history.replaceState(null,'','http://localhost/tasks');
+ const rows=[
+  {...task,id:'waiting-urgent',title:'等待 P0',owner_id:null,priority:'P0',kind:'audit'},
+  {...task,id:'active-normal',title:'进行 P2',priority:'P2',kind:'monthly'},
+  {...task,id:'ready-normal',title:'提交 P2',priority:'P2',ready_to_submit:true},
+  {...task,id:'failed-normal',title:'关闭 P2',status:'expired',priority:'P2'},
+  {...task,id:'active-urgent',title:'进行 P0',priority:'P0',kind:'cooperation'},
+  {...task,id:'cancelled-normal',title:'取消 P2',status:'cancelled',priority:'P2'},
+ ];
+ globalThis.fetch=async()=>Response.json({tasks:rows,next_offset:null});
+ try{
+  const {WorkTasksPage}=await import('../app/client/WorkTasksPage');await act(async()=>f.root.render(<WorkTasksPage actor={actor} onOpenArchive={()=>{}}/>));
+  assert.deepEqual([...f.w.document.querySelectorAll('.task-row-title strong')].map(e=>e.textContent),['关闭 P2','取消 P2','提交 P2','进行 P0','进行 P2','等待 P0']);
+ }finally{await f.close();}
+});

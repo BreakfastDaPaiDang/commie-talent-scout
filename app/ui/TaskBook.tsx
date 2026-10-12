@@ -1,8 +1,9 @@
 import React, {type ReactNode} from 'react';
 import {Icon} from './icons';
+import type {TaskProcessingState} from '../rules/task-book';
 import './task-book.css';
 
-export type TaskStage = 'failed' | 'cancelled' | 'ready' | 'active' | 'waiting' | 'closed';
+export type TaskStage = TaskProcessingState;
 export const taskStageLabels: Record<TaskStage,string> = {failed:'未完成关闭',cancelled:'已取消',ready:'待提交',active:'进行中',waiting:'待接取',closed:'已完成'};
 export function RelatedTasksFrame({history,onHistory,count,children}:{history:boolean;onHistory:(value:boolean)=>void;count?:number;children:ReactNode}){
  return <section className="related-tasks" aria-label="关联任务"><header><h3>{history?'已关闭任务':'关联任务'}{!history&&count!==undefined&&<small>{count} 项开启</small>}</h3><button className="text-button" onClick={()=>onHistory(!history)}>{history?'返回开启任务':'查看已关闭任务'}</button></header>{children}</section>;
@@ -14,8 +15,11 @@ export function TaskMark({stage}: {stage:TaskStage}) {
 export function TaskBookLayout({left,detail,selected}: {left:ReactNode;detail:ReactNode;selected:boolean}) {
  return <div className={`task-workspace-grid ${selected?'has-selection':''}`}><div className="task-book-left">{left}</div>{detail}</div>;
 }
-export function TaskRecommendationCard({title,kind,subject,deadline,purpose,portrait,onSelect,onRefresh}: {title?:string;kind?:string;subject?:string;deadline?:string;purpose?:string;portrait?:ReactNode;onSelect?:()=>void;onRefresh?:()=>void}) {
- return <section className="task-recommendation"><header><span className="task-star" aria-hidden="true">★</span><h2>推荐任务 <small>（测试版）</small></h2>{onRefresh&&<button className="text-button" onClick={onRefresh}>换一换 <Icon name="history" size={15}/></button>}</header>{title?<div className="task-recommendation-body"><div className="task-recommendation-portrait">{portrait??<TaskMark stage="waiting"/>}</div><div className="task-recommendation-copy"><span className="task-kind">{kind}</span><h3>{title}</h3><small>{subject}</small><time>{deadline}</time></div><div className="task-recommendation-note"><p>{purpose}</p><button className="button primary" onClick={onSelect}>查看详情</button></div></div>:<p className="task-recommendation-empty">暂时没有待接取的任务，先照顾好手上的工作。</p>}</section>;
+export function TaskCompletionRecord({month,total,p0,p1}:{month:number;total:number;p0:number;p1:number}){
+ return <section className="task-completion-record" aria-label="我的完成记录"><div className="task-progress-month"><span>本月完成</span><div><strong>{month}</strong><span>项</span></div><small>其中 P0 {p0} 项 · P1 {p1} 项</small></div><div className="task-progress-total"><span>累计完成</span><div><strong>{total}</strong><span>项</span></div><small>我的完成记录</small></div></section>;
+}
+export function TaskRecommendationCard({title,kind,labels,subject,deadline,purpose,portrait,onSelect,onRefresh}: {title?:string;kind?:string;labels?:string[];subject?:string;deadline?:string;purpose?:string;portrait?:ReactNode;onSelect?:()=>void;onRefresh?:()=>void}) {
+ return <section className="task-recommendation"><header><span className="task-star" aria-hidden="true">★</span><h2>推荐任务 <small>（测试版）</small></h2>{onRefresh&&<button className="text-button" onClick={onRefresh}>换一换 <Icon name="history" size={15}/></button>}</header>{title?<div className="task-recommendation-body"><div className="task-recommendation-portrait">{portrait??<TaskMark stage="waiting"/>}</div><div className="task-recommendation-copy"><div className="task-recommendation-labels">{(labels??(kind?[kind]:[])).map(label=><span className="task-kind" key={label}>{label}</span>)}</div><h3>{title}</h3><small>{subject}</small><time>{deadline}</time></div><div className="task-recommendation-note"><p>{purpose}</p><button className="button primary" onClick={onSelect}>查看详情</button></div></div>:<p className="task-recommendation-empty">暂时没有待接取的任务，先照顾好手上的工作。</p>}</section>;
 }
 export function TaskLabelsField({options,value,onChange}:{options:string[];value:string;onChange:(value:string)=>void}){
  const selected=value.split(/[、,，]/).map(value=>value.trim()).filter(Boolean);
