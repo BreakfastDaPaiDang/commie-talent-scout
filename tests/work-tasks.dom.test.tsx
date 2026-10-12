@@ -11,6 +11,8 @@ const task={id,archive_id:archive.id,archive_preview:archive,kind:'custom' as co
 function environment(){
  const dom=new JSDOM('<!doctype html><div id="root"></div>',{url:'http://localhost/tasks?task='+id,pretendToBeVisual:true}),w=dom.window;
  for(const key of ['window','document','HTMLElement','Event','CustomEvent','location','history','localStorage','sessionStorage'])Object.defineProperty(globalThis,key,{value:key==='window'?w:(w as unknown as Record<string,unknown>)[key],configurable:true,writable:true});
+ // React was imported before JSDOM; emulate its legacy focus-tracking hooks.
+ Object.assign(w.HTMLElement.prototype,{attachEvent(){},detachEvent(){}});
  w.HTMLDialogElement.prototype.showModal=function(){this.open=true;};w.HTMLDialogElement.prototype.close=function(){this.open=false;};
  Object.assign(globalThis,{IS_REACT_ACT_ENVIRONMENT:true,requestAnimationFrame:(f:()=>void)=>setTimeout(f,0)});
  const root=createRoot(w.document.getElementById('root')!);
@@ -69,8 +71,6 @@ test('hall defaults to 30 days of closures, can show 90 or all, and resets witho
 test('initiator avatar is present in the task book, hall card and hall detail',async()=>{
  const f=environment(),initiator={...task,initiator_kind:'member',initiator_id:'30000000-0000-4000-8000-000000000001',initiator_name:'虚构发起人',initiator_version:7};
  globalThis.fetch=async url=>String(url).includes('/work-tasks?')?Response.json({tasks:[initiator]}):Response.json({events:[],comments:[]});
- // React was imported before JSDOM; emulate its legacy focus-tracking hooks.
- Object.assign(f.w.HTMLElement.prototype,{attachEvent(){},detachEvent(){}});
  const assertAvatar=(selector:string)=>{const img=f.w.document.querySelector(selector+' img[alt="虚构发起人的头像"]');assert.ok(img);assert.equal(img.getAttribute('src'),'/avatars/members/'+initiator.initiator_id+'?v=7');};
  try{
   const {WorkTasksPage}=await import('../app/client/WorkTasksPage');await act(async()=>f.root.render(<WorkTasksPage actor={actor} onOpenArchive={()=>{}}/>));assertAvatar('.task-scene-meta-grid');
