@@ -257,3 +257,18 @@ test('expiry is a derived reminder and never blocks the owner from completing',a
  const completed=await service.complete({id:task.id,expected_version:claimed.version,result_kind:'completed',result_text:'逾期后仍完成',request_id:uuid()});assert.equal(completed.status,'completed');
  const detail=await service.detail(task.id);assert.deepEqual(detail.events.map(event=>event.kind),['task.completed','task.claimed','task.created']);
 });
+
+
+test('task search filters before the limit and treats wildcard characters literally',async t=>{
+ const f=fixture();t.after(f.close);const service=new WorkTasks(f.env,f.actor,'web');
+ await service.create({...taskInput(),title:'先到期的其他任务',deadline_at:'2098-01-01T00:00:00.000Z'});
+ const wanted=await service.create({...taskInput(),title:'Review 100%_材料',purpose:'寻找独有的目的',delivery:'独有的交付要求'});
+ for(const query of ['review','100%_','独有的目的','独有的交付要求']){
+  assert.deepEqual((await service.list({query,limit:1})).tasks.map(task=>task.id),[wanted.id]);
+ }
+ assert.equal((await service.list({query:'不存在的任务'})).tasks.length,0);
+ assert.equal((await service.list({query:'%'})).tasks.length,1);
+ const archive=await new Archives(f.env,f.actor,'web').create({type:'person',name:'搜索关联对象',request_id:uuid()});
+ const linked=await service.create({...taskInput(),archive_id:archive.id});
+ assert.deepEqual((await service.list({query:'搜索关联对象'})).tasks.map(task=>task.id),[linked.id]);
+});

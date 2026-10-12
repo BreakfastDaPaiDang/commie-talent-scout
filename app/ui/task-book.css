@@ -69,3 +69,13 @@
  .task-board-toolbar .filter-row select{width:100%;min-width:0}
  .task-board-toolbar .filter-row>.text-button{justify-self:end}
 }
+
+.task-workspace-head .archive-head{display:flex;align-items:center;gap:20px;max-width:760px;padding:0;margin:0 0 10px}
+.task-workspace-head .archive-head h1{margin:0;white-space:nowrap}
+.task-workspace-head .archive-head .search-field{flex:1;min-width:120px}
+.task-workspace-head .archive-head>.button{flex-shrink:0;display:flex;align-items:center;gap:8px}
+@media(max-width:700px){
+ .task-workspace-head .archive-head{flex-wrap:wrap;gap:12px}
+ .task-workspace-head .archive-head>div:first-child{flex:1}
+ .task-workspace-head .archive-head .search-field{order:3;flex-basis:100%}
+}

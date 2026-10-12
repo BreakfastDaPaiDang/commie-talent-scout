@@ -105,10 +105,15 @@ export class WorkTasks {
     });
   }
   async list(input:unknown={}){
-    const a=z.object({scope:z.enum(['all','recommended','mine','admin']).default('all'),state:z.enum(['open','closed','all']).default('open'),archive_id:z.uuid().optional(),limit:z.coerce.number().int().min(1).max(100).default(50)}).parse(input);
+    const a=z.object({scope:z.enum(['all','recommended','mine','admin']).default('all'),state:z.enum(['open','closed','all']).default('open'),archive_id:z.uuid().optional(),query:z.string().trim().max(200).default(''),limit:z.coerce.number().int().min(1).max(100).default(50)}).parse(input);
     if(a.scope==='admin')assertAdmin(this.actor);
     const where=a.state==='open'?["t.status='open'"]:a.state==='closed'?["t.status<>'open'"]:[],args:unknown[]=[];where.push('(t.archive_id IS NULL OR ar.id IS NOT NULL)');
     if(a.archive_id){where.push('t.archive_id=?');args.push(a.archive_id);}
+    if(a.query){
+      // Literal substring matching before LIMIT; wildcard characters stay literal.
+      where.push("(instr(lower(t.title),lower(?))>0 OR instr(lower(t.purpose),lower(?))>0 OR instr(lower(t.delivery),lower(?))>0 OR instr(lower(ar.name),lower(?))>0)");
+      args.push(a.query,a.query,a.query,a.query);
+    }
     if(a.scope==='mine') {where.push('t.owner_id=?');args.push(this.actor.id);}
     if(a.scope==='recommended') {where.push('(t.kind IN (\'audit\',\'onboarding\',\'monthly\',\'cooperation\') AND EXISTS (SELECT 1 FROM member_work_preferences p WHERE p.member_id=? AND (p.all_work=1 OR instr(p.kinds_json,\'"\'||t.kind||\'"\')>0)) AND t.owner_id IS NULL)');args.push(this.actor.id);}
     const rows=await this.stmt(`SELECT t.*,
