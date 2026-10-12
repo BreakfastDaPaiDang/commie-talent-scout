@@ -65,3 +65,24 @@ test('MCP and web service share notifications and event receipt confirmation',as
  assert.equal((await registered.get('get_notification_summary').run()).reading,0);
  assert.equal((await n.summary()).messages,1);
 });
+
+test('explicit all-read covers both sources beyond pagination, preserves newer events and business state',async t=>{
+ const f=fixture();t.after(f.close);for(let i=0;i<35;i++)await archive(f);const {task}=await reminder(f),n=new Notifications(f.env,f.actor),first=await n.list({unread:true,limit:2});
+ const later=await archive(f),prior=f.sqlite.prepare('SELECT * FROM work_tasks WHERE id=?').get(task.id);
+ await n.confirm({mode:'all',snapshot:first.snapshot});
+ assert.deepEqual(await n.summary(),{total:1,reading:1,messages:0});assert.equal((await n.list({unread:true})).notifications[0].data.archive_id,later.id);
+ assert.deepEqual(f.sqlite.prepare('SELECT * FROM work_tasks WHERE id=?').get(task.id),prior);
+ assert.equal((await n.confirm({mode:'all',snapshot:first.snapshot})).marked,0);
+ await assert.rejects(n.confirm({mode:'all',snapshot:'invalid'}),{code:'INVALID_CURSOR'});
+ const pending=await n.list();f.sqlite.prepare('UPDATE members SET frozen=1 WHERE id=?').run(f.actor.id);await assert.rejects(n.confirm({mode:'all',snapshot:pending.snapshot}));
+ assert.equal(f.sqlite.prepare('SELECT count(*) n FROM event_read_marks WHERE event_id=(SELECT id FROM archive_events WHERE archive_id=?)').get(later.id).n,0);
+});
+
+test('all-read is personal, skips unavailable archives and rolls both sources back on failure',async t=>{
+ const f=fixture();t.after(f.close);const hidden=await archive(f);await archive(f);await reminder(f);const n=new Notifications(f.env,f.actor),page=await n.list();
+ f.sqlite.prepare('UPDATE archives SET deleted=1 WHERE id=?').run(hidden.id);
+ f.sqlite.exec("CREATE TRIGGER reject_bulk_read BEFORE INSERT ON event_read_marks BEGIN SELECT RAISE(ABORT,'fixture read failure'); END;");
+ await assert.rejects(n.confirm({mode:'all',snapshot:page.snapshot}),/fixture read failure/);assert.equal((await n.summary()).messages,1);assert.equal(f.sqlite.prepare('SELECT count(*) n FROM event_read_marks').get().n,0);
+ f.sqlite.exec('DROP TRIGGER reject_bulk_read');await n.confirm({mode:'all',snapshot:page.snapshot});assert.equal((await n.summary()).total,0);
+ assert.equal(f.sqlite.prepare('SELECT count(*) n FROM event_read_marks WHERE member_id<>?').get(f.actor.id).n,0);assert.equal(f.sqlite.prepare('SELECT count(*) n FROM event_read_marks r JOIN archive_events e ON e.id=r.event_id WHERE e.archive_id=?').get(hidden.id).n,0);
+});

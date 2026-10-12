@@ -183,7 +183,7 @@
   padding: 0 1px;
 }
 .selection-rest {
-  background: #fafafa;
+  background: var(--page-bg);
 }
 .selection-rest .rest-characters {
   width: 180px;

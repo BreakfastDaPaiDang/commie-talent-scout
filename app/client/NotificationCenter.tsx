@@ -1,20 +1,35 @@
-import React,{useState} from 'react';
-import {MessagesPage} from './MessagesPage';
-import {UnreadPage} from './UnreadPage';
-import type {Member} from './api';
+import React,{useEffect,useRef,useState} from 'react';
+import {DetailFrame,WorkspaceFrame} from '../ui/Workspace';
+import {NotificationInbox,type InboxRow} from '../ui/NotificationInbox';
+import {Icon} from '../ui/icons';
+import {groupActivities} from '../shared/activity-groups';
+import {ArchivesPage} from './ArchivesPage';
+import {PageError} from './ConnectionPages';
+import {Avatar} from './Avatar';
+import {avatarUrl} from './AvatarEditor';
+import {api,type Member} from './api';
+import type {ArchiveReadConfirmation} from '../server/archive-reading';
 import './notifications.css';
 
-type Tab='tasks'|'updates';
-
-export function NotificationCenter({actor}:{actor:Member}){
- const initial:Tab=location.pathname==='/unread'||new URLSearchParams(location.search).get('tab')==='updates'?'updates':'tasks';
- const[tab,setTab]=useState<Tab>(initial);
- function select(next:Tab){setTab(next);history.replaceState(null,'',`/messages${next==='updates'?'?tab=updates':''}`);}
- return <main className="notification-center">
-  <nav className="notification-tabs" aria-label="消息类型">
-   <button className={tab==='tasks'?'active':''} aria-current={tab==='tasks'?'page':undefined} onClick={()=>select('tasks')}>任务提醒</button>
-   <button className={tab==='updates'?'active':''} aria-current={tab==='updates'?'page':undefined} onClick={()=>select('updates')}>档案更新</button>
-  </nav>
-  {tab==='tasks'?<MessagesPage compact/>:<UnreadPage actor={actor} compact/>}
- </main>;
+type Data={id:string;seq?:number;archive_id:string|null;archive_name?:string;type?:'person'|'org';actor_id?:string;actor_name?:string;kind:string;title?:string;body?:string;task_id?:string;deadline_at?:string};
+type Notification={id:string;source:'task'|'archive';created_at:string;read:boolean;data:Data};
+type Page={notifications:Notification[];snapshot:string;next_cursor:string|null};
+const kinds:Record<string,string>={'material.uploaded':'新增材料','material.updated':'材料更新','material.deleted':'材料已删除','material.restored':'材料已恢复','material.purged':'材料已清除','material.capacity_changed':'材料容量调整','observation.created':'新的观察','observation.edited':'观察已编辑','observation.deleted':'观察已删除','observation.restored':'观察已恢复','archive.created':'新建档案','archive.profile_changed':'资料更新','archive.tags_changed':'标签变化','archive.state_changed':'状态变化','archive.members_changed':'成员变化','archive.closed':'档案已关闭','archive.reopened':'档案已开启','archive.avatar_changed':'头像更新'};
+const taskKinds:Record<string,string>={task_deadline_reminder:'任务截止提醒',task_expired_uncompleted:'任务未完成关闭',task_overdue:'任务已逾期',archive_status_changed:'对象状态变化'};
+const time=(value:string)=>new Date(value).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false});
+const selection=()=>new URLSearchParams(location.search).get('notification');
+export function NotificationCenter({actor,onNavigate}:{actor:Member;onNavigate:(url:string)=>void}){
+ const[items,setItems]=useState<Notification[]>([]),[selected,setSelected]=useState<string|null>(selection),[snapshot,setSnapshot]=useState(''),[cursor,setCursor]=useState<string|null>(null),[loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[allRead,setAllRead]=useState(false),[error,setError]=useState('');
+ const serial=useRef(0),reads=useRef(new Set<string>()),archiveReads=useRef(new Map<string,ArchiveReadConfirmation>());
+ const current=items.find(n=>n.id===selected);
+ const reconcile=(rows:Notification[])=>rows.map(n=>{const opening=n.data.archive_id&&archiveReads.current.get(n.data.archive_id);return reads.current.has(n.id)||(n.source==='archive'&&opening&&n.data.seq!<=opening.through_seq&&!opening.unread_event_ids.includes(n.data.id))?{...n,read:true}:n;});
+ async function load(more=false){if(!more)setAllRead(false);const sequence=++serial.current;setLoading(true);setError('');try{const p=await api<Page>('/notifications?'+new URLSearchParams({unread:'false',limit:'30',...(more&&cursor?{cursor,snapshot}:{})}));if(sequence!==serial.current)return;setItems(old=>reconcile(more?[...old,...p.notifications.filter(n=>!old.some(o=>o.id===n.id))]:p.notifications));setSnapshot(p.snapshot);setCursor(p.next_cursor);}catch(e){if(sequence===serial.current)setError((e as Error).message);}finally{if(sequence===serial.current)setLoading(false);}}
+ useEffect(()=>{void load();const pop=()=>setSelected(selection());const confirmed=(event:Event)=>{for(const id of (event as CustomEvent<string[]>).detail)reads.current.add('archive:'+id);setItems(reconcile);};const opened=(event:Event)=>{const result=(event as CustomEvent<ArchiveReadConfirmation>).detail;if(result.member_id!==actor.id)return;archiveReads.current.set(result.archive_id,result);setItems(reconcile);};window.addEventListener('popstate',pop);window.addEventListener('cts-reading-confirmed',confirmed);window.addEventListener('cts-archive-reading-confirmed',opened);return()=>{serial.current++;window.removeEventListener('popstate',pop);window.removeEventListener('cts-reading-confirmed',confirmed);window.removeEventListener('cts-archive-reading-confirmed',opened);};},[actor.id]);
+ // Explicit deep links may point beyond the first page; loading never selects a detail itself.
+ useEffect(()=>{if(selected&&!current&&cursor&&!loading&&!error)void load(true);},[selected,current,cursor,loading,error]);
+ function choose(id:string|null){if(id===selected)return;if(!id){if(history.state?.ctsNotificationDetail){history.back();return;}history.replaceState(null,'','/messages');setSelected(null);return;}const url='/messages?notification='+encodeURIComponent(id);if(selected)history.replaceState(history.state,'',url);else history.pushState({ctsNotificationDetail:true},'',url);setSelected(id);}
+ useEffect(()=>{if(!current||current.source!=='task'||current.read)return;let cancelled=false;void api('/notifications/confirm',{mode:'message',ids:[current.id]}).then(()=>{reads.current.add(current.id);if(!cancelled)setItems(reconcile);window.dispatchEvent(new CustomEvent('cts-messages-read'));}).catch(e=>{if(!cancelled)setError(e.message);});return()=>{cancelled=true;};},[current?.id]);
+ async function readAll(){setBusy(true);setError('');try{await api('/notifications/confirm',{mode:'all',snapshot});for(const n of items)reads.current.add(n.id);setItems(old=>old.map(n=>({...n,read:true})));setAllRead(true);window.dispatchEvent(new CustomEvent('cts-messages-read'));window.dispatchEvent(new CustomEvent('cts-reading-confirmed',{detail:[]}));}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
+ const rows:InboxRow[]=groupActivities(items.map(n=>({...n,archive_id:n.source==='archive'?n.data.archive_id!:n.id,actor_id:n.source==='archive'?n.data.actor_id??'':n.id,kind:n.data.kind}))).map(group=>{const n=group.events[0],d=n.data,unread=group.events.filter(x=>!x.read).length;return {id:n.id,ids:group.events.map(x=>x.id),avatar:n.source==='archive'?<Avatar name={d.archive_name??'档案'} type={d.type} src={avatarUrl('archive',d.archive_id!,0)}/>:<span className="notification-task-icon"><Icon name="bell" size={26}/></span>,label:(n.source==='archive'?'档案更新':taskKinds[d.kind]??'任务提醒')+(unread?' · 未读':' · 已读'),title:n.source==='archive'?d.archive_name??'档案更新':d.title??'任务提醒',excerpt:n.source==='archive'?[...new Set(group.events.map(x=>kinds[x.data.kind]??'档案更新'))].join('、'):d.archive_name??'任务',time:(n.source==='archive'&&d.actor_name?d.actor_name+' · ':'')+time(n.created_at),read:!unread};});
+ return <main className="notification-center"><WorkspaceFrame selected={!!selected} list={<NotificationInbox rows={rows} selected={selected} loading={loading} busy={busy} hasMore={!!cursor} error={<PageError error={error} retry={()=>void load(!!cursor)}/>} onSelect={choose} onRefresh={()=>{choose(null);void load();}} onMore={()=>void load(true)} onReadAll={()=>void readAll()} canReadAll={!!snapshot&&((!!cursor&&!allRead)||items.some(n=>!n.read))}/>} detail={current?.source==='archive'?<ArchivesPage key={current.data.archive_id} actor={actor} type={current.data.type??'person'} detailOnly onClose={()=>choose(null)} linked={{archiveId:current.data.archive_id!,focus:{event_id:current.data.id,key:current.id}}}/>:current?<DetailFrame label={taskKinds[current.data.kind]??'任务提醒'} code="" onClose={()=>choose(null)}><section className="notification-detail"><span className="secondary-copy">{current.data.archive_name} · {time(current.created_at)}</span><h1>{current.data.title}</h1><p>{(current.data.body??'').replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z/g,time)}</p>{current.data.task_id&&<button className="button primary" onClick={()=>onNavigate('/tasks?task='+encodeURIComponent(current.data.task_id!))}>查看任务<Icon name="arrow"/></button>}</section></DetailFrame>:selected?<DetailFrame label="消息" code="" onClose={()=>choose(null)}><p className="stream-status">{loading?'正在读取消息…':'这条消息已读或不再适用。'}</p></DetailFrame>:<aside className="selection-rest"><span>选择一条消息，查看详情。</span></aside>}/></main>;
 }

@@ -1,0 +1,7 @@
+import React from 'react';
+import {CaughtUp,UpdateRow} from './Workspace';
+import {Icon} from './icons';
+export type InboxRow={id:string;ids:string[];avatar:React.ReactNode;label:string;title:string;excerpt:string;time:string;read:boolean};
+export function NotificationInbox({rows,selected,loading,busy,hasMore,error,onSelect,onRefresh,onMore,onReadAll,canReadAll}:{rows:InboxRow[];selected:string|null;loading:boolean;busy:boolean;hasMore:boolean;error:React.ReactNode;onSelect:(id:string)=>void;onRefresh:()=>void;onMore:()=>void;onReadAll:()=>void;canReadAll:boolean}){
+ return <><header className="inbox-heading"><h1>消息</h1><div><button className="button outline" disabled={loading||busy||!canReadAll} onClick={onReadAll}><Icon name="check"/>{busy?'正在标记…':'全部标为已读'}</button><button className="icon-button" aria-label="刷新消息" title="刷新消息" onClick={onRefresh} disabled={loading||busy}><Icon name="history"/></button></div></header>{error}<section className="inbox-list" aria-label="消息列表">{rows.map(row=><UpdateRow key={row.id} avatar={row.avatar} label={row.label} name={row.title} excerpt={row.excerpt} time={row.time} read={row.read} selected={!!selected&&row.ids.includes(selected)} onClick={()=>onSelect(row.id)}/>)}{!loading&&!rows.length&&<CaughtUp action={null}/>}</section>{loading?<p className="stream-status" role="status">正在读取消息…</p>:hasMore&&<button className="button archive-load" onClick={onMore}>加载更多消息</button>}</>;
+}

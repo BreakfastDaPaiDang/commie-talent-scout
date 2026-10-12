@@ -1,4 +1,6 @@
 import {z} from 'zod';
+import {authGuard} from './credentials.ts';
+import {uid} from './types.ts';
 import {Failure,now,type Actor,type Env} from './types.ts';
 import {recipientPredicate} from './reading-predicates.ts';
 
@@ -70,6 +72,16 @@ export class NotificationQuery{
   for(const [column,operator,value] of [['seq','<',a.before],['archive_id','=',a.archive_id],['archive_id','<>',a.exclude_archive_id],['source_id','<>',a.exclude_event_id]] as const){if(value!==undefined){where.push(`${column}${operator}?`);args.push(value);}}
   const rows=(await this.stmt(`${p.sql} SELECT * FROM notifications WHERE ${where.join(' AND ')} ORDER BY seq DESC LIMIT ?`,...p.args,...args,a.limit+1).all<Row>()).results;
   return {events:rows.slice(0,a.limit).map(r=>JSON.parse(r.data) as Record<string,unknown>),snapshot,next_cursor:rows.length>a.limit?String(rows[a.limit-1].seq):null};
+ }
+ async markAll(snapshot:string){
+  const bounds=decode(snapshot,boundary),p=this.projection(),at=now(),key=uid();
+  const results=await this.env.DB.batch([
+   authGuard(this.env,this.actor,key,this.actor.role==='admin'),
+   this.stmt(`${p.sql} UPDATE messages SET read_at=? WHERE read_at IS NULL AND id IN (SELECT source_id FROM notifications WHERE source='task' AND source_row<=?)`,...p.args,at,bounds.messages),
+   this.stmt(`${p.sql} INSERT OR IGNORE INTO event_read_marks(member_id,event_id,read_at) SELECT ?,source_id,? FROM notifications WHERE source='archive' AND read_at IS NULL AND source_row<=?`,...p.args,this.actor.id,at,bounds.events),
+   this.stmt('DELETE FROM mutation_guards WHERE id=?',key),
+  ]);
+  return {marked:Number(results[1].meta?.changes??0)+Number(results[2].meta?.changes??0),snapshot};
  }
  async markTasks(ids:string[]){
   const p=this.projection(),unique=[...new Set(ids)];

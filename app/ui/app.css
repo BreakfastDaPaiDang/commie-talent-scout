@@ -10,6 +10,7 @@
   --ink: #202020;
   --red: #ed3327;
   --paper: #fff;
+  --page-bg: #f6f6f6;
   --wash: #f4f4f4;
   --line: #dcdcdc;
   --muted: #747474;
@@ -23,7 +24,7 @@ body {
   margin: 0;
   font: 16px/1.65 var(--font);
   color: var(--ink);
-  background: var(--paper);
+  background: var(--page-bg);
   -webkit-font-smoothing: antialiased;
 }
 button,
