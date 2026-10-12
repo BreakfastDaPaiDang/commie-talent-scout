@@ -1,5 +1,5 @@
 import {taskOverdue} from '../rules/task-notifications.ts';
-import {taskKinds,taskPriorities,taskLabelNames,taskPriorityDefaults} from '../rules/task-policy.ts';
+import {taskKinds,taskPriorities,taskLabelNames,taskPriorityDefaults,reopenableTaskStates} from '../rules/task-policy.ts';
 import {runTaskNotifications} from './task-notifications.ts';
 import {z} from 'zod';
 import {assertAdmin} from './credentials.ts';
@@ -99,7 +99,19 @@ export class WorkTasks {
       :'SELECT e.rowid position,e.id,e.actor_id,(SELECT name FROM members WHERE id=e.actor_id) actor_name,e.source,e.kind,e.before_json,e.after_json,e.reason,e.created_at FROM work_task_events e WHERE e.task_id=? AND e.rowid<? ORDER BY e.rowid DESC LIMIT ?',
       a.id,before,a.limit+1).all<Record<string,unknown>&{position:number}>();
     const page=rows.results.slice(0,a.limit),next_cursor=rows.results.length>a.limit?btoa(JSON.stringify({id:a.id,section:a.section,before:page.at(-1)!.position})):null;
-    const items=comments?await this.comments(task,page as unknown as CommentRow[]):page.map(({position,...event})=>event);
+    const items=comments?await this.comments(task,page as unknown as CommentRow[]):await Promise.all(page.map(async({position,...event})=>{
+      const references=[];let restricted=false;
+      for(const field of ['before_json','after_json']){
+        if(!event[field])continue;
+        const snapshot=JSON.parse(String(event[field]));
+        for(const reference of snapshot.result_references??[]){
+          const visible=await this.visibleReference(task,reference);
+          if(visible)references.push(visible);else restricted=true;
+        }
+        delete snapshot.result_references;event[field]=JSON.stringify(snapshot);
+      }
+      return {...event,references,references_restricted:restricted};
+    }));
     return {section:a.section,items,next_cursor};
   }
   async create(input:unknown){
@@ -225,7 +237,7 @@ export class WorkTasks {
     return command(this.env,this.actor,{requestId:a.request_id,operation:'work_task.complete',parameters:{id:a.id,expected_version:a.expected_version,result_kind:a.result_kind,result_text:a.result_text,references:a.references}},async()=>{
       const task=await this.get(a.id,a.expected_version);this.assertOpenTask(task);if(task.owner_id!==this.actor.id)throw new Failure(403,'TASK_OWNER_REQUIRED','只有当前负责人可以提交完成结果');await this.validateReferences(task,a.references);
       const key=uid(),at=now(),result={id:a.id,status:'completed',result_kind:a.result_kind,result_text:a.result_text,references:a.references,version:task.version+1,changed:true},refGuard=this.referenceGuard(key+':references',task,a.references);
-      return {result,statements:[this.stmt("INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(SELECT 1 FROM work_tasks WHERE id=? AND version=? AND status='open' AND owner_id=?) THEN 1 ELSE 0 END)",key,a.id,a.expected_version,this.actor.id),...(refGuard?[refGuard]:[]),this.stmt("UPDATE work_tasks SET status='completed',result_kind=?,result_text=?,result_references_json=?,completed_at=?,updated_at=?,version=version+1 WHERE id=? AND version=? AND status='open' AND owner_id=?",a.result_kind,a.result_text,JSON.stringify(a.references),at,at,a.id,a.expected_version,this.actor.id),this.event(a.id,'task.completed',{status:task.status,owner_id:task.owner_id,version:task.version},{status:'completed',owner_id:task.owner_id,result_kind:a.result_kind,result_text:a.result_text,reference_count:a.references.length,version:task.version+1}),this.stmt('DELETE FROM mutation_guards WHERE id IN (?,?)',key,key+':references')]};
+      return {result,statements:[this.stmt("INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(SELECT 1 FROM work_tasks WHERE id=? AND version=? AND status='open' AND owner_id=?) THEN 1 ELSE 0 END)",key,a.id,a.expected_version,this.actor.id),...(refGuard?[refGuard]:[]),this.stmt("UPDATE work_tasks SET status='completed',result_kind=?,result_text=?,result_references_json=?,completed_at=?,updated_at=?,version=version+1 WHERE id=? AND version=? AND status='open' AND owner_id=?",a.result_kind,a.result_text,JSON.stringify(a.references),at,at,a.id,a.expected_version,this.actor.id),this.event(a.id,'task.completed',{status:task.status,owner_id:task.owner_id,version:task.version},{status:'completed',owner_id:task.owner_id,result_kind:a.result_kind,result_text:a.result_text,reference_count:a.references.length,result_references:a.references,version:task.version+1}),this.stmt('DELETE FROM mutation_guards WHERE id IN (?,?)',key,key+':references')]};
     });
   }
   async release(input:unknown){
@@ -270,14 +282,14 @@ export class WorkTasks {
   async reopen(input:unknown){
     const a=workTaskReopenInput.parse(input),admin=this.actor.role==='admin';
     return command(this.env,this.actor,{requestId:a.request_id,operation:'work_task.reopen',parameters:{id:a.id,expected_version:a.expected_version,deadline_at:a.deadline_at,owner_mode:a.owner_mode,reason:a.reason},requireAdmin:admin&&a.owner_mode==='unassigned'},async()=>{
-      const task=await this.get(a.id,a.expected_version);if(!['expired','cancelled'].includes(task.status))throw new Failure(409,'TASK_NOT_REOPENABLE','只有已过期或已取消的任务可以重新开启');
+      const task=await this.get(a.id,a.expected_version);if(!(reopenableTaskStates as readonly string[]).includes(task.status))throw new Failure(409,'TASK_NOT_REOPENABLE','只有已关闭的任务可以重新开启');
       if(task.archive_id){const archive=await this.stmt('SELECT closed,deleted FROM archives WHERE id=?',task.archive_id).first<{closed:number;deleted:number}>();if(!archive||archive.deleted)throw new Failure(404,'ARCHIVE_NOT_FOUND','关联档案不存在');if(archive.closed)throw new Failure(409,'ARCHIVE_CLOSED','请先重新开启关联档案');}
       if(Date.parse(a.deadline_at)<=Date.now())throw new Failure(400,'DEADLINE_REQUIRED','重新开启必须给出未来截止时间');
       if(a.owner_mode==='keep'&&(this.actor.role!=='admin'&&task.owner_id!==this.actor.id))throw new Failure(403,'TASK_OWNER_REQUIRED','只有原负责人可以保留负责人身份重新开启');
       if(a.owner_mode==='keep'&&this.actor.role==='admin'&&task.owner_id!==this.actor.id)throw new Failure(403,'TASK_OWNER_REQUIRED','管理员为他人重新开启时应明确退回待领取');
       if(a.owner_mode==='unassigned'&&this.actor.role!=='admin')throw new Failure(403,'ADMIN_REQUIRED','只有管理员可以将异常任务退回待领取');
       const nextOwner=a.owner_mode==='keep'?task.owner_id:null,key=uid(),at=now(),result={id:task.id,status:'open',owner_id:nextOwner,deadline_at:a.deadline_at,version:task.version+1,changed:true,previous_result:task.result_kind?{result_kind:task.result_kind,result_text:task.result_text,completed_at:task.completed_at}:null};
-      return {result,statements:[this.stmt("INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(SELECT 1 FROM work_tasks WHERE id=? AND version=? AND status IN ('expired','cancelled') AND ((?='keep' AND owner_id=?) OR (?='unassigned' AND ?='admin'))) THEN 1 ELSE 0 END)",key,a.id,a.expected_version,a.owner_mode,this.actor.id,a.owner_mode,this.actor.role),this.stmt("UPDATE work_tasks SET status='open',owner_id=?,deadline_at=?,result_kind=NULL,result_text=NULL,completed_at=NULL,closed_reason=NULL,updated_at=?,version=version+1 WHERE id=? AND version=? AND status IN ('expired','cancelled')",nextOwner,a.deadline_at,at,a.id,a.expected_version),this.event(a.id,'task.reopened',{status:task.status,owner_id:task.owner_id,deadline_at:task.deadline_at,result_kind:task.result_kind,result_text:task.result_text,result_reference_count:JSON.parse(task.result_references_json??'[]').length,completed_at:task.completed_at,closed_reason:task.closed_reason,version:task.version},{status:'open',owner_id:nextOwner,deadline_at:a.deadline_at,version:task.version+1},a.reason),this.stmt('DELETE FROM mutation_guards WHERE id=?',key)]};
+      return {result,statements:[this.stmt("INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(SELECT 1 FROM work_tasks WHERE id=? AND version=? AND status IN ('completed','expired','cancelled') AND ((?='keep' AND owner_id=?) OR (?='unassigned' AND ?='admin'))) THEN 1 ELSE 0 END)",key,a.id,a.expected_version,a.owner_mode,this.actor.id,a.owner_mode,this.actor.role),this.stmt("UPDATE work_tasks SET status='open',owner_id=?,deadline_at=?,result_kind=NULL,result_text=NULL,result_references_json='[]',completed_at=NULL,closed_reason=NULL,updated_at=?,version=version+1 WHERE id=? AND version=? AND status IN ('completed','expired','cancelled')",nextOwner,a.deadline_at,at,a.id,a.expected_version),this.event(a.id,'task.reopened',{status:task.status,owner_id:task.owner_id,deadline_at:task.deadline_at,result_kind:task.result_kind,result_text:task.result_text,result_references:JSON.parse(task.result_references_json??'[]'),result_reference_count:JSON.parse(task.result_references_json??'[]').length,completed_at:task.completed_at,closed_reason:task.closed_reason,version:task.version},{status:'open',owner_id:nextOwner,deadline_at:a.deadline_at,version:task.version+1},a.reason),this.stmt('DELETE FROM mutation_guards WHERE id=?',key)]};
     });
   }
   async addComment(input:unknown){

@@ -18,6 +18,19 @@ function environment(){
  const root=createRoot(w.document.getElementById('root')!);
  return {dom,w,root,async close(){await act(async()=>root.unmount());dom.window.close();}};
 }
+test('completed task in hall offers reopening to its owner',async()=>{
+ const f=environment();f.w.history.replaceState(null,'','http://localhost/tasks');
+ const completed={...task,status:'completed',completed_at:new Date().toISOString(),closed_at:new Date().toISOString(),result_text:'原交付结果'};
+ globalThis.fetch=async url=>Response.json(String(url).includes('/work-tasks?')?{tasks:[completed],next_offset:null}:{events:[],comments:[]});
+ try{
+  const {WorkTasksPage}=await import('../app/client/WorkTasksPage');await act(async()=>f.root.render(<WorkTasksPage actor={{...actor,role:'member'}} onOpenArchive={()=>{}}/>));
+  await act(async()=>[...f.w.document.querySelectorAll('button')].find(b=>b.textContent==='看板大厅')!.click());
+  await act(async()=>f.w.document.querySelector<HTMLButtonElement>('.task-board-card-main')!.click());
+  const reopen=[...f.w.document.querySelectorAll('dialog button')].find(b=>b.textContent==='重新开启') as HTMLButtonElement;
+  assert.ok(reopen,'completed owner must have a reopen button in hall detail');await act(async()=>reopen.click());
+  assert.ok(f.w.document.querySelector('.task-delay-options'));
+ }finally{await f.close();}
+});
 test('task page exposes comment history, admin editing and versioned observation links',async()=>{
  const f=environment();
  const detail={events:[{kind:'task.edited',actor_name:'管理员',before_json:JSON.stringify({title:'旧标题',deadline_at:'2099-01-01T00:00:00Z'}),after_json:JSON.stringify({title:'新标题',deadline_at:'2099-02-01T00:00:00Z'}),created_at:'2026-10-08T12:01:00Z'}],comments:[{id:'comment',task_id:id,author_id:'other',author_name:'其他成员',body:'当前评论',references:[{observation_id:'observation',archive_id:archive.id,content_version:1}],history:[{version:1,body:'旧评论',deleted:false,references:[],created_at:'2026-10-08T12:00:00Z'},{version:2,body:'当前评论',deleted:false,references:[{observation_id:'observation',archive_id:archive.id,content_version:1}],created_at:'2026-10-08T12:01:00Z'}],created_at:'2026-10-08T12:00:00Z',updated_at:'2026-10-08T12:01:00Z',deleted:false,version:2}]};

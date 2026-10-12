@@ -18,6 +18,49 @@ function addMember(f,name){
 function taskInput(request_id=uuid()){
  return {kind:'custom',title:'跨入口任务',purpose:'验证网页与 MCP 共享任务数据',delivery:'留下可回查的工作结果',deadline_at:'2099-01-01T00:00:00.000Z',request_id};
 }
+test('completed task can be reopened by owner without losing past result',async t=>{
+ const f=fixture();t.after(f.close);const service=new WorkTasks(f.env,f.actor,'web');
+ const task=await service.create(taskInput()),claimed=await service.claim({id:task.id,expected_version:task.version,request_id:uuid()});
+ const completed=await service.complete({id:task.id,expected_version:claimed.version,result_kind:'completed',result_text:'原交付结果',request_id:uuid()});
+ const reopened=await service.reopen({id:task.id,expected_version:completed.version,owner_mode:'keep',deadline_at:'2099-02-01T00:00:00.000Z',request_id:uuid()});
+ assert.equal(reopened.status,'open');assert.equal(reopened.owner_id,f.actor.id);
+ const detail=await service.detail(task.id);assert.equal(detail.task.completed_at,null);assert.equal(detail.task.result_text,null);
+ assert.equal(JSON.parse(detail.events.find(e=>e.kind==='task.reopened').before_json).result_text,'原交付结果');
+});
+test('reopening enforces ownership, versions and future deadline; administrators return other owners work to queue',async t=>{
+ const f=fixture();t.after(f.close);const owner=new WorkTasks(f.env,f.actor,'web'),other=addMember(f,'其他成员'),stranger=new WorkTasks(f.env,other,'mcp');
+ const task=await owner.create(taskInput()),claimed=await owner.claim({id:task.id,expected_version:task.version,request_id:uuid()}),completed=await owner.complete({id:task.id,expected_version:claimed.version,result_kind:'completed',result_text:'第一轮',request_id:uuid()});
+ const input={id:task.id,expected_version:completed.version,deadline_at:'2099-02-01T00:00:00.000Z',request_id:uuid()};
+ await assert.rejects(stranger.reopen({...input,owner_mode:'keep'}),{code:'TASK_OWNER_REQUIRED'});
+ await assert.rejects(stranger.reopen({...input,owner_mode:'unassigned'}),{code:'ADMIN_REQUIRED'});
+ await assert.rejects(owner.reopen({...input,deadline_at:'2020-01-01T00:00:00.000Z'}),{code:'DEADLINE_REQUIRED'});
+ await assert.rejects(owner.reopen({...input,expected_version:claimed.version}),{code:'VERSION_CONFLICT'});
+ f.sqlite.prepare("UPDATE members SET role='admin' WHERE id=?").run(other.id);other.role='admin';
+ await assert.rejects(stranger.reopen({...input,owner_mode:'keep'}),{code:'TASK_OWNER_REQUIRED'});
+ const reopened=await stranger.reopen({...input,owner_mode:'unassigned'});assert.equal(reopened.owner_id,null);
+ assert.deepEqual(await stranger.reopen({...input,owner_mode:'unassigned'}),{...reopened,replayed:true});
+ assert.equal((await owner.detail(task.id)).events.filter(e=>e.kind==='task.reopened').length,1);
+ await assert.rejects(owner.reopen({...input,expected_version:reopened.version,request_id:uuid()}),{code:'TASK_NOT_REOPENABLE'});
+});
+test('reopening snapshots old observation versions, clears current result, and history obeys reference visibility',async t=>{
+ const f=fixture();t.after(f.close);const service=new WorkTasks(f.env,f.actor,'mcp'),archives=new Archives(f.env,f.actor,'web');
+ const archive=await archives.create({type:'person',name:'虚构重开结果引用',request_id:uuid()});
+ const observation=uuid(),at=new Date().toISOString();f.sqlite.prepare('INSERT INTO observations(id,archive_id,author_id,created_at,updated_at) VALUES(?,?,?,?,?)').run(observation,archive.id,f.actor.id,at,at);f.sqlite.prepare('INSERT INTO observation_versions(observation_id,version,body,editor_id,created_at) VALUES(?,?,?,?,?)').run(observation,1,'第一轮观察',f.actor.id,at);
+ const task=await service.create({...taskInput(),archive_id:archive.id}),claimed=await service.claim({id:task.id,expected_version:task.version,request_id:uuid()}),ref={observation_id:observation,content_version:1};
+ const completed=await service.complete({id:task.id,expected_version:claimed.version,result_kind:'completed',result_text:'第一轮结果',references:[ref],request_id:uuid()});
+ f.sqlite.prepare('UPDATE archives SET closed=1 WHERE id=?').run(archive.id);
+ const input={id:task.id,expected_version:completed.version,deadline_at:'2099-02-01T00:00:00.000Z',request_id:uuid()};
+ await assert.rejects(service.reopen(input),{code:'ARCHIVE_CLOSED'});assert.equal((await service.detail(task.id)).task.status,'completed');f.sqlite.prepare('UPDATE archives SET closed=0 WHERE id=?').run(archive.id);
+ // Old deployed completion events had no reference snapshots; reopening must preserve them too.
+ f.sqlite.prepare("UPDATE work_task_events SET after_json=json_remove(after_json,'$.result_references') WHERE task_id=? AND kind='task.completed'").run(task.id);
+ const reopened=await service.reopen(input);let detail=await service.detail(task.id);assert.deepEqual(detail.task.result_references,[]);
+ assert.deepEqual(detail.events.find(e=>e.kind==='task.reopened').references,[{...ref,archive_id:archive.id}]);
+ await service.complete({id:task.id,expected_version:reopened.version,result_kind:'completed',result_text:'第二轮结果',request_id:uuid()});detail=await service.detail(task.id);
+ assert.equal(detail.task.result_text,'第二轮结果');assert.equal(detail.events.filter(e=>e.kind==='task.completed').length,2);assert.deepEqual(detail.events.find(e=>e.kind==='task.reopened').references,[{...ref,archive_id:archive.id}]);
+ f.sqlite.prepare('UPDATE observations SET deleted=1,deleted_at=? WHERE id=?').run(at,observation);
+ const other=new WorkTasks(f.env,addMember(f,'引用无权读者'),'web'),hidden=(await other.detail(task.id)).events.find(e=>e.kind==='task.reopened');
+ assert.deepEqual(hidden.references,[]);assert.equal(hidden.references_restricted,true);assert.equal(hidden.before_json.includes(observation),false);
+});
 
 test('work task creation is separate from MCP review tasks and can be claimed once',async t=>{
  const f=fixture();t.after(f.close);const service=new WorkTasks(f.env,f.actor,'mcp');
