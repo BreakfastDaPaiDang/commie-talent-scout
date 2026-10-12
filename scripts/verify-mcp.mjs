@@ -1,36 +1,37 @@
 import assert from 'node:assert/strict';
-import {readFileSync,writeFileSync,mkdirSync} from 'node:fs';
-import {randomUUID,createHash} from 'node:crypto';
-import {spawnSync} from 'node:child_process';
+import {randomUUID} from 'node:crypto';
 import {Client,StreamableHTTPClientTransport} from '@modelcontextprotocol/client';
-const remote=process.argv.includes('--remote'),base=remote?'https://scout-staging.dapaidang.org':'http://127.0.0.1:8790';
-assert.equal((await fetch(base+'/api/health').then(r=>r.json())).environment,'staging');
-mkdirSync('tmp/verification',{recursive:true});mkdirSync('secrets',{recursive:true});
-const admin=JSON.parse(readFileSync(`secrets/bootstrap-staging-${remote?'remote':'local'}-admin.json`,'utf8'));
-const report={date:new Date().toISOString(),base,checks:[]},clients=[];
-let cookie;
-const request=async(path,body,session=cookie)=>{const r=await fetch(base+path,{method:body===undefined?'GET':'POST',headers:{...(session?{Cookie:session}:{}),...(body!==undefined?{'Content-Type':'application/json',Origin:base}:{})},body:body===undefined?undefined:JSON.stringify(body),signal:AbortSignal.timeout(30000)});return {status:r.status,body:await r.json(),headers:r.headers};};
+import {verificationClient} from './verification-client.mjs';
+
+const v=await verificationClient('mcp'),checks=[];let connection,client,member,memberCookie;
 const ok=r=>{assert.equal(r.status,200);return r.body;};
-async function check(name,run){await run();report.checks.push(name);console.log('PASS '+name);}
-async function connect(secret){const client=new Client({name:'cts-product-verification',version:'0.1.0'});await client.connect(new StreamableHTTPClientTransport(new URL(base+'/mcp'),{requestInit:{headers:{Authorization:'Bearer '+secret}}}));clients.push(client);return client;}
-function sql(command){writeFileSync('tmp/verification/mcp-fixture.sql',command);const r=spawnSync(process.execPath,['node_modules/wrangler/bin/wrangler.js','d1','execute','cts-staging','--env','staging',remote?'--remote':'--local','--file','tmp/verification/mcp-fixture.sql','--json'],{encoding:'utf8'});assert.equal(r.status,0,'management fixture query succeeds');return JSON.parse(r.stdout.slice(r.stdout.indexOf('[')));}
-const fixtureId=randomUUID(),fixtureSecret=randomUUID()+randomUUID(),hash=createHash('sha256').update(fixtureSecret).digest('hex');
-let token,connectionId;
+const memberRequest=async(path,body)=>{
+ const r=await fetch(v.base+'/api'+path,{method:body===undefined?'GET':'POST',headers:{Origin:v.base,'Content-Type':'application/json',...(memberCookie?{Cookie:memberCookie}:{})},body:body===undefined?undefined:JSON.stringify(body),signal:AbortSignal.timeout(30000)});
+ if(r.headers.get('set-cookie'))memberCookie=r.headers.get('set-cookie').split(';')[0];
+ return {status:r.status,body:await r.json()};
+};
 try{
-  await check('public MCP rejects missing authentication',async()=>{assert.equal((await fetch(base+'/mcp',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})).status,401);});
-  const login=await request('/api/auth/login',{username:admin.username,password:admin.password},null);ok(login);cookie=login.headers.get('set-cookie').split(';')[0];
-  await check('credential creation shows a one-time secret and listing omits hashes and secrets',async()=>{const c=ok(await request('/api/connections',{name:'协议验收 '+new Date().toISOString(),days:1}));token=c.secret;connectionId=c.id;assert.match(token,/^cts_[a-f0-9]{64}$/);const list=ok(await request('/api/connections'));assert.ok(list.credentials.some(x=>x.id===c.id));assert.ok(!JSON.stringify(list).includes(token));assert.ok(list.credentials.every(x=>!('hash'in x)&&!('secret'in x)));writeFileSync(`secrets/mcp-staging-${remote?'remote':'local'}-verification.json`,JSON.stringify({id:connectionId,secret:token,base},null,2),{mode:0o600});});
-  const client=await connect(token);
-  await check('cold initialized client discovers real capabilities and guides without resources or prior chat',async()=>{const catalog=await client.listTools();for(const name of ['whoami','get_usage_guide','list_connections','revoke_connection']){const t=catalog.tools.find(x=>x.name===name);assert.ok(t?.outputSchema&&t.annotations&&t.description.length>30);}const who=await client.callTool({name:'whoami',arguments:{}});assert.equal(who.structuredContent.service,'commie-talent-scout');assert.equal(who.structuredContent.member.id,login.body.member.id);assert.equal(who.structuredContent.environment,'staging');const guide=await client.callTool({name:'get_usage_guide',arguments:{topic:'connections'}});assert.ok(guide.structuredContent.rules.some(x=>x.includes('新客户端进程')));});
-  await check('schema rejection and successful tool calls are journaled as distinct attempts without secrets',async()=>{const invalid=await client.callTool({name:'get_usage_guide',arguments:{topic:'invalid',Authorization:token,password:'excluded'}});assert.ok(invalid.isError);const calls=ok(await request('/api/admin/calls'));const own=calls.calls.filter(x=>x.credential_id===connectionId);assert.ok(own.some(x=>x.tool==='whoami'&&x.outcome==='success'));assert.ok(own.some(x=>x.tool==='get_usage_guide'&&x.outcome==='rejected'));assert.ok(new Set(own.map(x=>x.id)).size===own.length);const stored=JSON.stringify(sql(`SELECT parameters_json,result_json,tool FROM mcp_calls WHERE credential_id='${connectionId}'`));assert.ok(!stored.includes(token)&&!stored.includes('excluded'));});
-  await check('ordinary member cannot review calls or access administrator credentials',async()=>{sql(`INSERT INTO members(id,username,name,role,password_hash,must_change_password,created_at) VALUES('${fixtureId}','fixture-${fixtureId}','虚构验收成员','member','!fixture',0,'${new Date().toISOString()}'); INSERT INTO credentials(id,member_id,hash,kind,name,auth_epoch,created_at,expires_at) VALUES('${randomUUID()}','${fixtureId}','${hash}','session','验收会话',1,'${new Date().toISOString()}','${new Date(Date.now()+3600000).toISOString()}');`);const other='cts_session='+fixtureSecret;assert.equal((await request('/api/admin/calls',undefined,other)).status,403);assert.equal((await request('/api/connections/revoke',{id:connectionId},other)).status,404);});
-  await check('revocation takes effect on the already connected client and retains its final successful action',async()=>{const result=await client.callTool({name:'revoke_connection',arguments:{id:connectionId}});assert.equal(result.structuredContent.revoked,true);await assert.rejects(()=>client.callTool({name:'whoami',arguments:{}}));const calls=ok(await request('/api/admin/calls'));assert.ok(calls.calls.some(x=>x.tool==='revoke_connection'&&x.credential_id===connectionId&&x.outcome==='success'));});
+ assert.equal((await fetch(v.base+'/mcp',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})).status,401);
+ connection=ok(await v.http('/connections',{name:'MCP 协议与撤销验收',days:1}));
+ const listing=ok(await v.http('/connections'));assert.ok(!JSON.stringify(listing).includes(connection.secret));assert.ok(listing.credentials.every(c=>!('hash' in c)&&!('secret' in c)));
+ client=new Client({name:'cts-mcp-contract',version:'1.0.0'});await client.connect(new StreamableHTTPClientTransport(new URL(v.base+'/mcp'),{requestInit:{headers:{Authorization:'Bearer '+connection.secret}}}));
+ const call=async(name,args={})=>{const r=await client.callTool({name,arguments:args});assert.ok(!r.isError,name);return r.structuredContent;};
+ const who=await call('whoami'),catalog=await client.listTools();assert.equal(who.member.id,v.actor.id);assert.equal(who.member.execution_purpose,'verification');
+ assert.deepEqual([...who.capabilities].sort(),catalog.tools.map(t=>t.name).sort());
+ for(const tool of catalog.tools){assert.ok(tool.outputSchema,tool.name);assert.ok(tool.annotations&&tool.description,tool.name);}
+ for(const topic of who.guide_topics){const guide=await call('get_usage_guide',{topic});assert.equal(guide.topic,topic);assert.ok(guide.rules.length);assert.deepEqual(guide.available_topics,who.guide_topics);}
+ checks.push('cold client: capabilities, output schemas, every guide accessible; secrets omitted from credential lists');
+ const invalid=await client.callTool({name:'get_usage_guide',arguments:{topic:'invalid',Authorization:connection.secret,password:'excluded-fixture'}});assert.ok(invalid.isError);
+ const calls=ok(await v.http('/admin/calls?limit=100')).calls.filter(c=>c.credential_id===connection.id);
+ assert.ok(calls.some(c=>c.tool==='whoami'&&c.outcome==='success'));assert.ok(calls.some(c=>c.tool==='get_usage_guide'&&c.outcome==='rejected'));assert.equal(new Set(calls.map(c=>c.id)).size,calls.length);
+ const detail=ok(await v.http('/admin/calls/'+calls.find(c=>c.outcome==='rejected').id));assert.ok(!JSON.stringify(detail).includes(connection.secret));assert.ok(!JSON.stringify(detail).includes('excluded-fixture'));
+ checks.push('invalid parameters and success journaled separately; secrets absent from retained call detail');
+ const username='mcp-verify-'+randomUUID().slice(0,8),password='Fixture!'+randomUUID();member=await v.call('create_member',{username,name:'虚构 MCP 权限核对',role:'member',temporary_password:password,request_id:randomUUID()});
+ ok(await memberRequest('/auth/login',{username,password}));const next='Fixture!'+randomUUID();ok(await memberRequest('/auth/password',{current_password:password,new_password:next}));ok(await memberRequest('/auth/login',{username,password:next}));
+ assert.equal((await memberRequest('/admin/calls')).status,403);assert.equal((await memberRequest('/connections/revoke',{id:connection.id})).status,404);checks.push('ordinary member cannot read administrator calls or revoke service connections');
+ assert.equal((await call('revoke_connection',{id:connection.id})).revoked,true);await assert.rejects(()=>call('whoami'));
+ assert.ok(ok(await v.http('/admin/calls?limit=100')).calls.some(c=>c.tool==='revoke_connection'&&c.credential_id===connection.id&&c.outcome==='success'));checks.push('revocation blocks connected client and retains successful revocation audit');
 }finally{
-  for(const c of clients)await c.close().catch(()=>{});
-  if(cookie){if(connectionId)await request('/api/connections/revoke',{id:connectionId}).catch(()=>{});await request('/api/auth/logout',{}).catch(()=>{});}
-  sql(`DELETE FROM credentials WHERE member_id='${fixtureId}'; DELETE FROM members WHERE id='${fixtureId}';`);
-  writeFileSync(`tmp/verification/mcp-${remote?'cloud':'local'}.json`,JSON.stringify(report,null,2));
+ try{if(client)await client.close();if(connection)ok(await v.http('/connections/revoke',{id:connection.id}));if(memberCookie)await memberRequest('/auth/logout',{});if(member){const current=(await v.call('get_member',{id:member.id})).member;await v.call('set_member_frozen',{id:member.id,expected_version:current.version,frozen:true,request_id:randomUUID()});}}
+ finally{await v.close(checks);}
 }
-console.log(JSON.stringify({base,passed:report.checks.length}));
-
-

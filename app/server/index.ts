@@ -169,6 +169,7 @@ app.get('/api/work-tasks',async c=>c.json(await new WorkTasks(c.env,await authen
 app.post('/api/work-tasks/create',async c=>c.json(await new WorkTasks(c.env,await authenticate(c.req.raw,c.env),'web').create(await c.req.json())));
 app.post('/api/work-tasks/claim',async c=>c.json(await new WorkTasks(c.env,await authenticate(c.req.raw,c.env),'web').claim(await c.req.json())));
 app.post('/api/work-tasks/assign',async c=>c.json(await new WorkTasks(c.env,await authenticate(c.req.raw,c.env),'web').assign(await c.req.json())));
+app.get('/api/work-tasks/:id/history',async c=>c.json(await new WorkTasks(c.env,await authenticate(c.req.raw,c.env),'web').history({...c.req.query(),id:c.req.param('id')})));
 app.get('/api/work-tasks/:id',async c=>c.json(await new WorkTasks(c.env,await authenticate(c.req.raw,c.env),'web').detail(c.req.param('id'))));
 app.post('/api/work-tasks/edit',async c=>c.json(await new WorkTasks(c.env,await authenticate(c.req.raw,c.env),'web').edit(await c.req.json())));
 app.post('/api/work-tasks/extend',async c=>c.json(await new WorkTasks(c.env,await authenticate(c.req.raw,c.env),'web').extend(await c.req.json())));

@@ -24,7 +24,7 @@
 
 模块：`archive-lifecycle`；计划器：[planRules](../../app/rules/contract.ts#L29)。计划按规则顺序返回 steps 和 statements，不执行提交。
 
-触发入口：[transition](../../app/server/archives.ts#L124)、[restoreCancelledAudit](../../app/server/work-tasks.ts#L302)。
+触发入口：[transition](../../app/server/archives.ts#L124)、[restoreCancelledAudit](../../app/server/work-tasks.ts#L320)。
 事务提交：[command](../../app/server/commands.ts#L21)；版本保护：[guard](../../app/server/archives.ts#L50)。
 幂等边界：command 请求收据；transitionChanged 排除无变化操作；档案版本事务校验；任务取消仅匹配 open，消息沿用现有唯一约束。
 失败边界：预校验失败不提交；事务内权限或版本冲突、SQL 失败整体回滚。保留现有行为，不新增任务轮次语义。
@@ -47,7 +47,7 @@
 - 档案事务条件：[guard](../../app/server/archives.ts#L50)。
 - 授权、原子提交与重试收据：[command](../../app/server/commands.ts#L21)。
 - 重开时词义差异、历史与权限：由上述 transition 调用 [TagState](../../app/server/tag-state.ts) 读取；不在生成器中解释 SQL 或任意函数。
-- 取消自动审核任务：[cancel](../../app/server/work-tasks.ts#L221) 通过 [restoreCancelledAudit](../../app/server/work-tasks.ts#L302) 调用 [auditCancellationTarget](../../app/rules/archive-lifecycle.ts#L35) 取得本次引荐前的外部关系，复用同一 planArchiveEffects 并在任务事务中提交。历史无法确认或档案已变更身份时不猜测退回状态。
+- 取消自动审核任务：[cancel](../../app/server/work-tasks.ts#L239) 通过 [restoreCancelledAudit](../../app/server/work-tasks.ts#L320) 调用 [auditCancellationTarget](../../app/rules/archive-lifecycle.ts#L35) 取得本次引荐前的外部关系，复用同一 planArchiveEffects 并在任务事务中提交。历史无法确认或档案已变更身份时不猜测退回状态。
 
 以下条件和结果来自实际参与执行的函数引用及函数体。源码链接供追溯，不把人工说明作为规则来源。
 

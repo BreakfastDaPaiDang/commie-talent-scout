@@ -77,3 +77,30 @@ test('initiator avatar is present in the task book, hall card and hall detail',a
   await act(async()=>[...f.w.document.querySelectorAll('button')].find(b=>b.textContent==='看板大厅')!.click());assertAvatar('.task-board-card');await act(async()=>f.w.document.querySelector<HTMLButtonElement>('.task-board-card-main')!.click());assertAvatar('dialog');
  }finally{await f.close();}
 });
+
+
+test('task defaults put higher priorities first, retain manual hall sorting and reset',async()=>{
+ const f=environment();f.w.history.replaceState(null,'','http://localhost/tasks');
+ const rows=[{...task,id:'normal',title:'常规新任务',priority:'P2',updated_at:'2026-10-12T00:00:00Z'},{...task,id:'important-old',title:'重要旧任务',priority:'P1',updated_at:'2026-10-01T00:00:00Z'},{...task,id:'urgent',title:'紧急任务',priority:'P0',updated_at:'2026-09-01T00:00:00Z'},{...task,id:'important-new',title:'重要新任务',priority:'P1',updated_at:'2026-10-11T00:00:00Z'}];
+ globalThis.fetch=async()=>Response.json({tasks:rows,next_offset:null});
+ try{
+  const {WorkTasksPage}=await import('../app/client/WorkTasksPage');await act(async()=>f.root.render(<WorkTasksPage actor={actor} onOpenArchive={()=>{}}/>));
+  const expected=['紧急任务','重要新任务','重要旧任务','常规新任务'];
+  assert.deepEqual([...f.w.document.querySelectorAll('.task-row-title strong')].map(e=>e.textContent),expected);
+  await act(async()=>[...f.w.document.querySelectorAll('button')].find(b=>b.textContent==='看板大厅')!.click());
+  const titles=()=>[...f.w.document.querySelectorAll('.task-board-card h3')].map(e=>e.textContent);assert.deepEqual(titles(),expected);
+  await act(async()=>f.w.document.querySelector<HTMLButtonElement>('.filter-toggle')!.click());
+  const sort=f.w.document.querySelector('[aria-label="任务排序"]') as unknown as HTMLSelectElement;assert.equal(sort.value,'priority');
+  await act(async()=>{sort.value='updated';sort.dispatchEvent(new f.w.Event('change',{bubbles:true}));});assert.equal(titles()[0],'常规新任务');
+  await act(async()=>[...f.w.document.querySelectorAll('button')].find(b=>b.textContent==='重置筛选')!.click());assert.equal(sort.value,'priority');assert.deepEqual(titles(),expected);
+ }finally{await f.close();}
+});
+
+test('task history loads older comments and events and removes exhausted continuation',async()=>{
+ const f=environment(),requests:string[]=[];
+ globalThis.fetch=async url=>{const path=String(url);requests.push(path);if(path.includes('/work-tasks?'))return Response.json({tasks:[task]});if(path.includes('/history?'))return Response.json({items:path.includes('section=comments')?[{id:'old-comment',author_id:actor.id,author_name:actor.name,body:'较早的评论',references:[],history:[],created_at:'2026-01-01T00:00:00Z',version:1,deleted:false}]:[{kind:'task.created',actor_name:'历史创建人',created_at:'2026-01-01T00:00:00Z'}],next_cursor:null});return Response.json({comments:[],events:[],comments_next_cursor:'comments-cursor',events_next_cursor:'events-cursor'});};
+ try{const {WorkTasksPage}=await import('../app/client/WorkTasksPage');await act(async()=>f.root.render(<WorkTasksPage actor={actor} onOpenArchive={()=>{}}/>));
+  await act(async()=>[...f.w.document.querySelectorAll('button')].find(b=>b.textContent==='加载更早记录')!.click());
+  assert.ok(f.w.document.body.textContent!.includes('较早的评论'));assert.ok(f.w.document.body.textContent!.includes('历史创建人'));assert.ok(requests.some(path=>path.includes('cursor=comments-cursor')));assert.ok(requests.some(path=>path.includes('cursor=events-cursor')));assert.equal([...f.w.document.querySelectorAll('button')].some(b=>b.textContent==='加载更早记录'),false);
+ }finally{await f.close();}
+});

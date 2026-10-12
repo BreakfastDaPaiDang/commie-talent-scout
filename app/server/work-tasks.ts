@@ -30,6 +30,7 @@ export const workTaskCommentDeleteInput=z.object({id:z.uuid(),expected_version:e
 export const workTaskCommentRestoreInput=z.object({id:z.uuid(),expected_version:expectedVersion,request_id:requestId}).strict();
 export const workTaskReferInput=z.object({archive_id:z.uuid(),expected_version:expectedVersion,deadline_at:z.string().datetime(),request_id:requestId}).strict();
 export const workTaskMembershipInput=z.object({archive_id:z.uuid(),expected_version:expectedVersion,deadline_at:z.string().datetime(),request_id:requestId}).strict();
+export const workTaskHistoryInput=z.object({id:z.uuid(),section:z.enum(['comments','events']),cursor:z.string().max(1000).optional(),limit:z.coerce.number().int().min(1).max(100).default(100)}).strict();
 type Row={id:string;archive_id:string|null;kind:typeof taskKinds[number];labels_json:string;priority:typeof taskPriorities[number];initiator_kind:'member'|'system';initiator_id:string|null;title:string;purpose:string;delivery:string;source:'manual'|'rule';status:'open'|'completed'|'expired'|'cancelled';owner_id:string|null;deadline_at:string;created_by:string;created_at:string;updated_at:string;version:number;result_kind:string|null;result_text:string|null;result_references_json:string;completed_at:string|null;closed_reason:string|null;period_key:string|null};
 type CommentRow={id:string;task_id:string;author_id:string;author_name:string|null;body:string;references_json:string;created_at:string;updated_at:string;deleted_at:string|null;version:number};
 type CommentVersionRow={comment_id:string;task_id:string;version:number;actor_id:string|null;source:'web'|'mcp'|'system';body:string;references_json:string;deleted_at:string|null;created_at:string};
@@ -66,12 +67,12 @@ export class WorkTasks {
     const row=await this.stmt(`SELECT o.id observation_id,o.archive_id,ov.version content_version FROM observations o JOIN archives ar ON ar.id=o.archive_id AND (ar.deleted=0 OR ?='admin') JOIN observation_versions ov ON ov.observation_id=o.id AND ov.version=? WHERE o.id=? AND o.archive_id=? AND (o.deleted=0 OR o.author_id=? OR ?='admin')`,this.actor.role,reference.content_version,reference.observation_id,task.archive_id,this.actor.id,this.actor.role).first<{observation_id:string;archive_id:string;content_version:number}>();
     return row?{...row}:null;
   }
-  private async comments(task:Row){
-    const rows=await this.stmt(`SELECT c.*, (SELECT name FROM members WHERE id=c.author_id) author_name FROM work_task_comments c WHERE c.task_id=? ORDER BY c.created_at,c.id LIMIT 100`,task.id).all<CommentRow>();
-    const versionRows=await this.stmt('SELECT * FROM work_task_comment_versions WHERE task_id=? ORDER BY comment_id,version',task.id).all<CommentVersionRow>();
+  private async comments(task:Row,rows:CommentRow[]){
+    if(!rows.length)return [];
+    const versionRows=await this.stmt(`SELECT * FROM work_task_comment_versions WHERE comment_id IN (${rows.map(()=>'?').join(',')}) ORDER BY comment_id,version`,...rows.map(r=>r.id)).all<CommentVersionRow>();
     const versionsByComment=new Map<string,CommentVersionRow[]>();for(const version of versionRows.results){const list=versionsByComment.get(version.comment_id)??[];list.push(version);versionsByComment.set(version.comment_id,list);}
     const result=[];
-    for(const row of rows.results){
+    for(const row of rows){
       const refs=JSON.parse(row.references_json||'[]') as {observation_id:string;content_version:number}[];
       const visible=[];for(const reference of refs){const current=await this.visibleReference(task,reference);if(current)visible.push(current);}
       const canSeeDeleted=!row.deleted_at||row.author_id===this.actor.id||this.actor.role==='admin';
@@ -83,6 +84,23 @@ export class WorkTasks {
       result.push({id:row.id,task_id:row.task_id,author_id:row.author_id,author_name:row.author_name,body:canSeeDeleted?row.body:null,references:visible,references_restricted:visible.length!==refs.length,history,created_at:row.created_at,updated_at:row.updated_at,deleted:!!row.deleted_at,deleted_at:row.deleted_at,version:row.version});
     }
     return result;
+  }
+  async history(input:unknown){
+    const a=workTaskHistoryInput.parse(input),task=await this.get(a.id);
+    if(task.archive_id)await new Archives(this.env,this.actor,this.source).get(task.archive_id);
+    let before=Number.MAX_SAFE_INTEGER;
+    if(a.cursor){
+      try{const c=JSON.parse(atob(a.cursor));if(c.id!==a.id||c.section!==a.section||!Number.isSafeInteger(c.before)||c.before<1)throw new Error();before=c.before;}
+      catch{throw new Failure(400,'INVALID_CURSOR','历史分页位置无效，请从该任务首批重新读取');}
+    }
+    const comments=a.section==='comments';
+    const rows=await this.stmt(comments
+      ?'SELECT c.rowid position,c.*, (SELECT name FROM members WHERE id=c.author_id) author_name FROM work_task_comments c WHERE c.task_id=? AND c.rowid<? ORDER BY c.rowid DESC LIMIT ?'
+      :'SELECT e.rowid position,e.id,e.actor_id,(SELECT name FROM members WHERE id=e.actor_id) actor_name,e.source,e.kind,e.before_json,e.after_json,e.reason,e.created_at FROM work_task_events e WHERE e.task_id=? AND e.rowid<? ORDER BY e.rowid DESC LIMIT ?',
+      a.id,before,a.limit+1).all<Record<string,unknown>&{position:number}>();
+    const page=rows.results.slice(0,a.limit),next_cursor=rows.results.length>a.limit?btoa(JSON.stringify({id:a.id,section:a.section,before:page.at(-1)!.position})):null;
+    const items=comments?await this.comments(task,page as unknown as CommentRow[]):page.map(({position,...event})=>event);
+    return {section:a.section,items,next_cursor};
   }
   async create(input:unknown){
     const a=workTaskCreateInput.parse(input);
@@ -129,7 +147,7 @@ export class WorkTasks {
       (SELECT json_group_array(json_object('id',m.id,'name',m.name,'frozen',m.frozen)) FROM archive_bindings b JOIN members m ON m.id=b.member_id WHERE b.archive_id=ar.id AND b.status=ar.status) archive_members_json
       FROM work_tasks t
       LEFT JOIN archives ar ON ar.id=t.archive_id AND (ar.deleted=0 OR ?='admin')
-      WHERE ${where.join(' AND ')} ORDER BY t.deadline_at,t.created_at,t.id LIMIT ? OFFSET ?`,this.actor.role,...args,a.limit+1,a.offset).all();
+      WHERE ${where.join(' AND ')} ORDER BY t.priority,t.updated_at DESC,t.id LIMIT ? OFFSET ?`,this.actor.role,...args,a.limit+1,a.offset).all();
     const next_offset=rows.results.length>a.limit?a.offset+a.limit:null;
     const tasks=rows.results.slice(0,a.limit) as (Record<string,unknown>&{archive_id:string|null;archive_members_json?:string|null})[];
     const archiveIds=[...new Set(tasks.map(task=>task.archive_id).filter((id):id is string=>!!id))];
@@ -222,7 +240,7 @@ export class WorkTasks {
     const a=workTaskCancelInput.parse(input);
     return command(this.env,this.actor,{requestId:a.request_id,operation:'work_task.cancel',parameters:{id:a.id,expected_version:a.expected_version,reason:a.reason}},async()=>{
       const task=await this.get(a.id,a.expected_version);this.assertOpenTask(task);
-      const creatorMayCancel=task.created_by===this.actor.id&&!task.owner_id,ownerMayCancel=task.owner_id===this.actor.id;if(this.actor.role!=='admin'&&!creatorMayCancel&&!ownerMayCancel)throw new Failure(403,'TASK_CANCEL_FORBIDDEN','只有创建者取消未接取任务，或管理员取消已接取任务');
+      const creatorMayCancel=task.created_by===this.actor.id&&!task.owner_id,ownerMayCancel=task.owner_id===this.actor.id;if(this.actor.role!=='admin'&&!creatorMayCancel&&!ownerMayCancel)throw new Failure(403,'TASK_CANCEL_FORBIDDEN','只有当前负责人、未接取任务的创建者或管理员可以取消任务');
       const key=uid(),at=now(),restoration=await this.restoreCancelledAudit(task,at),result={id:a.id,status:'cancelled',owner_id:task.owner_id,version:task.version+1,changed:true,...restoration.result};
       return {result,statements:[this.stmt("INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(SELECT 1 FROM work_tasks WHERE id=? AND version=? AND status='open') THEN 1 ELSE 0 END)",key,a.id,a.expected_version),this.stmt("UPDATE work_tasks SET status='cancelled',closed_reason=?,updated_at=?,version=version+1 WHERE id=? AND version=? AND status='open'",a.reason,at,a.id,a.expected_version),this.event(a.id,'task.cancelled',{status:task.status,owner_id:task.owner_id,version:task.version},{status:'cancelled',owner_id:task.owner_id,version:task.version+1},a.reason),...restoration.statements,this.stmt('DELETE FROM mutation_guards WHERE id=?',key)]};
     });
@@ -309,7 +327,7 @@ export class WorkTasks {
     return {result:{archive_id:old.id,archive_status:status,archive_version:old.version+1},statements:[archives.guard(old.id,old.version,key),...planArchiveEffects({old,status,memberIds:members.map(member=>member.id).sort(),reopen:false,at,actorId:this.actor.id,source:this.source,members,bindings,tags:new TagState(this.env,this.actor),stmt:this.stmt.bind(this),event:archives.event.bind(archives)}),this.stmt('DELETE FROM mutation_guards WHERE id=?',key)]};
   }
   async detail(id:string){
-    const task=await this.get(id);const archive=task.archive_id?await new Archives(this.env,this.actor,this.source).get(task.archive_id):null;const resultRefs=JSON.parse(task.result_references_json??'[]') as {observation_id:string;content_version:number}[],visibleResultRefs=[];for(const reference of resultRefs){const current=await this.visibleReference(task,reference);if(current)visibleResultRefs.push(current);}const initiator=await this.stmt('SELECT name,version FROM members WHERE id=?',task.initiator_id).first<{name:string;version:number}>();const labelKeys=JSON.parse(task.labels_json??'[]') as string[];const safeTask={...task,ready_to_submit:taskDeliveryReady(task,archive),label_keys:labelKeys,labels:labelKeys.map(key=>(taskLabelNames as Record<string,string>)[key]??key),overdue:taskOverdue(task,now()),initiator_name:initiator?.name??'未知发起人',initiator_version:initiator&&'version' in initiator?initiator.version:null,result_references:visibleResultRefs,result_references_restricted:visibleResultRefs.length!==resultRefs.length};delete (safeTask as {result_references_json?:string;labels_json?:string}).result_references_json;delete (safeTask as {labels_json?:string}).labels_json;const events=await this.stmt('SELECT e.id,e.actor_id,(SELECT name FROM members WHERE id=e.actor_id) actor_name,e.source,e.kind,e.before_json,e.after_json,e.reason,e.created_at FROM work_task_events e WHERE e.task_id=? ORDER BY e.rowid DESC LIMIT 100',id).all<Record<string,unknown>>();return {task:safeTask,events:events.results,comments:await this.comments(task)};
+    const task=await this.get(id);const archive=task.archive_id?await new Archives(this.env,this.actor,this.source).get(task.archive_id):null;const resultRefs=JSON.parse(task.result_references_json??'[]') as {observation_id:string;content_version:number}[],visibleResultRefs=[];for(const reference of resultRefs){const current=await this.visibleReference(task,reference);if(current)visibleResultRefs.push(current);}const initiator=await this.stmt('SELECT name,version FROM members WHERE id=?',task.initiator_id).first<{name:string;version:number}>();const labelKeys=JSON.parse(task.labels_json??'[]') as string[];const safeTask={...task,ready_to_submit:taskDeliveryReady(task,archive),label_keys:labelKeys,labels:labelKeys.map(key=>(taskLabelNames as Record<string,string>)[key]??key),overdue:taskOverdue(task,now()),initiator_name:initiator?.name??'未知发起人',initiator_version:initiator&&'version' in initiator?initiator.version:null,result_references:visibleResultRefs,result_references_restricted:visibleResultRefs.length!==resultRefs.length};delete (safeTask as {result_references_json?:string;labels_json?:string}).result_references_json;delete (safeTask as {labels_json?:string}).labels_json;const [events,comments]=await Promise.all([this.history({id,section:'events'}),this.history({id,section:'comments'})]);return {task:safeTask,events:events.items,comments:comments.items,events_next_cursor:events.next_cursor,comments_next_cursor:comments.next_cursor};
   }
   async expire(at=now()){return runTaskNotifications(this.env,'overdue',at);}
   async refer(input:unknown){return this.personnelTransition(workTaskReferInput.parse(input),'人事审核');}

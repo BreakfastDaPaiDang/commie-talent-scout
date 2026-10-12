@@ -8,10 +8,10 @@
 
 1. 读本文和 [1.0.0 PRD](../../PRD-1.0.0.md) 的第 1—3、16 节，了解目标、权限和本版不做什么。处理具体任务时再读其引用章节，不必一次背完整份 PRD。
 2. 阅读根目录 [AGENTS.md](../../../AGENTS.md) 和 [开发说明](../../development.md)，启动本地环境。按既有脚本准备虚构测试数据，不复制生产数据来练习。
-3. 选一项前置依赖已完成的 Issue。想先熟悉项目，可以从 [#64](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/64) 个性化标签开始；主线从 [#55](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/55) 规则整理开始；[#56](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/56) 视觉方案也能先做。
+3. 先核对 GitHub 中仍开启的 Issue 和[2026-10-12 验收索引](../../validation/mcp-agent-usability-89.md)。原实施路线已被后续社员、任务和消息设计修订，不能把历史验收记录中的旧行为当成当前要求。
 4. 让 AI 先解释现有相关路径，再完成当前 Issue 并演示验收。验收结果清楚后再接下一项，不一次性要求 AI 做完整个版本。
 
-`ready-for-agent` 表示该项要求已经足够清楚，不表示前置任务已完成。总览标记 `ready-for-human` 是方便接手人统筹版本，并不增加产品审批关卡。进度以 GitHub Issue 和里程碑为准，本文不另外维护完成勾选。当前 PRD 已更新至修订 3；本轮社员档案要求见下方 #78，任务生命周期以“开启／关闭”和派生“逾期”分开为准。
+`ready-for-agent` 表示该项要求已经足够清楚，不表示前置任务已完成。总览标记 `ready-for-human` 是方便接手人统筹版本，并不增加产品审批关卡。进度以 GitHub Issue 和里程碑为准，本文不另外维护完成勾选。当前要求以 PRD 最新修订及用户确认的后续 Issue 为准；社员档案要求见下方 #78，任务生命周期以“开启／关闭”和派生“逾期”分开为准。
 
 ## 社员档案重构与验收
 
@@ -64,7 +64,7 @@ Issue 是具体工作与验收清单，PRD 是需求正文，ADR 是架构原因
 | S04 · [#58](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/58) | 支持主动放弃、延期、重开与任务评论历史 | [#57](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/57) |
 | S05 · [#59](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/59) | 升级消息提醒页，并按期限提醒和标记逾期任务 | [#58](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/58) |
 | S06 · [#60](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/60) | 打通引荐审核、入社转档与入社对接 | [#58](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/58) |
-| S07 · [#61](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/61) | 生成独立月度任务，并支持留档时完成关联任务 | [#59](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/59)、[#60](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/60) |
+| S07 · [#61](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/61) | 按正式社员每月生成独立跟进任务，显式交付（#87） | [#59](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/59)、[#60](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/60) |
 | S08 · [#62](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/62) | 处理转为社友、退出及档案变化引起的任务联动 | [#61](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/61) |
 | S09 · [#63](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/63) | 让档案和 Agent 记录当前需求，并提醒补充联系方式 | [#60](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/60) |
 | S10 · [#64](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/64) | 允许个性化标签，并保持观察与依据的完整读取 | 无 |

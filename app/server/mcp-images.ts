@@ -1,3 +1,4 @@
+import {mutationResult,uploadPrepared,imageStatus} from './mcp-upload-outputs.ts';
 import {McpServer} from '@modelcontextprotocol/server';
 import {Buffer} from 'node:buffer';
 import {z} from 'zod';
@@ -21,12 +22,12 @@ export const imageGuides=[
 let reading=false;
 export function registerImageTools(server:McpServer,env:Env,actor:Actor,reply:McpReply){
  const images=new Images(env,actor,'mcp'),read={readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:false},write={...read,readOnlyHint:false};
- server.registerTool('prepare_image_upload',{description:'为用户授权的本地静态图片准备 10 分钟上传票据；不上传、不发布。先算实际 MIME、字节数及 SHA-256，再由客户端按返回 URL/headers PUT 原始字节。票据保密，原始凭证不用于 PUT。详见 images 指南。',annotations:{...write,idempotentHint:false},inputSchema:prepareImageInput},input=>reply(()=>images.prepare(input),r=>({upload_id:r.upload_id,purpose:input.purpose,byte_size:input.byte_size,expires_at:r.expires_at})));
- server.registerTool('get_upload_status',{description:'仅查询本人上传状态。ready 时返回可用于观察或头像的 attachment；pending/expired 未完成，网络结果不明先查此工具。',annotations:read,inputSchema:{upload_id:z.uuid()}},input=>reply(()=>images.status(input.upload_id),r=>({upload_id:r.upload_id,state:r.state})));
- server.registerTool('get_image',{description:'读取当前有权查看的附件，返回标准 MCP image 内容供视觉理解。先从观察、版本历史或上传状态取得 attachment_id；元数据不等于已经看到图片。',annotations:read,inputSchema:{attachment_id:z.uuid()}},input=>reply(async()=>({attachment_id:input.attachment_id}),r=>({attachment_id:r.attachment_id,image_returned:true}),async()=>{
+ server.registerTool('prepare_image_upload',{description:'为用户授权的本地静态图片准备 10 分钟上传票据；不上传、不发布。先算实际 MIME、字节数及 SHA-256，再由客户端按返回 URL/headers PUT 原始字节。票据保密，原始凭证不用于 PUT。详见 images 指南。',annotations:{...write,idempotentHint:false},inputSchema:prepareImageInput,outputSchema:uploadPrepared.extend({attachment_id:z.string()})},input=>reply(()=>images.prepare(input),r=>({upload_id:r.upload_id,purpose:input.purpose,byte_size:input.byte_size,expires_at:r.expires_at})));
+ server.registerTool('get_upload_status',{description:'仅查询本人上传状态。ready 时返回可用于观察或头像的 attachment；pending/expired 未完成，网络结果不明先查此工具。',annotations:read,inputSchema:{upload_id:z.uuid()},outputSchema:imageStatus},input=>reply(()=>images.status(input.upload_id),r=>({upload_id:r.upload_id,state:r.state})));
+ server.registerTool('get_image',{description:'读取当前有权查看的附件，返回标准 MCP image 内容供视觉理解。先从观察、版本历史或上传状态取得 attachment_id；元数据不等于已经看到图片。',annotations:read,inputSchema:{attachment_id:z.uuid()},outputSchema:z.object({attachment_id:z.string()})},input=>reply(async()=>({attachment_id:input.attachment_id}),r=>({attachment_id:r.attachment_id,image_returned:true}),async()=>{
   if(reading)throw new Failure(429,'IMAGE_READ_BUSY','图片读取繁忙，请稍后重试');reading=true;
   try{const response=await images.read(input.attachment_id),bytes=await response.arrayBuffer();return [{type:'image',data:Buffer.from(bytes).toString('base64'),mimeType:response.headers.get('Content-Type')!}];}finally{reading=false;}
  }));
- server.registerTool('set_avatar',{description:'设置或移除档案/猎头头像；先上传对应目的和对象的图片并确认 ready，再提供当前资料版本。null 移除上传头像而不清除 QQ。关闭档案禁止修改，普通成员只能改本人账号头像。',annotations:write,inputSchema:avatarInput},input=>reply(()=>new Avatars(env,actor,'mcp').set(input),r=>({id:r.id,version:r.version,changed:r.changed})));
- server.registerTool('update_own_profile',{description:'按用户要求更新当前登录猎头本人的显示名称和 QQ；id 和 expected_version 来自 whoami，传完整 name/qq。不改变登录名、角色和密码。',annotations:write,inputSchema:memberProfileInput},input=>reply(()=>new Members(env,actor,'mcp').updateOwnProfile(input),r=>({id:r.id,version:r.version,changed:r.changed})));
+ server.registerTool('set_avatar',{description:'设置或移除档案/猎头头像；先上传对应目的和对象的图片并确认 ready，再提供当前资料版本。null 移除上传头像而不清除 QQ。关闭档案禁止修改，普通成员只能改本人账号头像。',annotations:write,inputSchema:avatarInput,outputSchema:mutationResult.extend({subject_type:z.enum(['archive','member']),avatar_id:z.string().nullable()})},input=>reply(()=>new Avatars(env,actor,'mcp').set(input),r=>({id:r.id,version:r.version,changed:r.changed})));
+ server.registerTool('update_own_profile',{description:'按用户要求更新当前登录猎头本人的显示名称和 QQ；id 和 expected_version 来自 whoami，传完整 name/qq。不改变登录名、角色和密码。',annotations:write,inputSchema:memberProfileInput,outputSchema:mutationResult.extend({name:z.string(),qq:z.string().nullable()})},input=>reply(()=>new Members(env,actor,'mcp').updateOwnProfile(input),r=>({id:r.id,version:r.version,changed:r.changed})));
 }

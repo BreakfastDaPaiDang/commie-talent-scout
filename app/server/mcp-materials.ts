@@ -1,3 +1,4 @@
+import {mutationResult,uploadPrepared,materialInfo,materialCapacity,materialStatus} from './mcp-upload-outputs.ts';
 import type {McpServer} from '@modelcontextprotocol/server';
 import {z} from 'zod';
 import type {Actor,Env} from './types.ts';
@@ -19,15 +20,15 @@ export const materialGuides=[
 ];
 const read={readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:false},write={readOnlyHint:false,destructiveHint:false,idempotentHint:true,openWorldHint:false};
 export function registerMaterialTools(server:McpServer,env:Env,actor:Actor,reply:McpReply){const service=new Materials(env,actor,'mcp');
- server.registerTool('prepare_material_upload',{description:'为用户授权的原始文件预留档案容量并签发短期上传票据，不代表上传完成。先核对实际大小/哈希，详见 materials 指南。',annotations:{...write,idempotentHint:false},inputSchema:materialPrepareInput},a=>reply(()=>service.prepare(a),r=>({upload_id:r.upload_id,byte_size:r.byte_size})));
- server.registerTool('get_material_upload_status',{description:'查询本人材料上传状态；ready 才代表已经绑定。结果不明先查，不重复准备上传。',annotations:read,inputSchema:{id:z.uuid()}},a=>reply(()=>service.status(a.id),r=>({upload_id:r.upload_id,state:r.state})));
- server.registerTool('cancel_material_upload',{description:'取消本人未完成的材料上传并释放预留空间；正在传输时先等待状态明确。不能删除已完成材料。',annotations:write,inputSchema:materialCancelInput},a=>reply(()=>service.cancel(a)));
- server.registerTool('list_materials',{description:'列出指定档案的绑定材料和当前容量。deleted:true 查询本人及管理员可见的回收站；元数据不代表已阅读原文。',annotations:read,inputSchema:materialListInput},a=>reply(()=>service.list(a),r=>({count:(r.materials as unknown[]).length})));
- server.registerTool('get_material',{description:'取得有权查看的材料元数据、稳定引用与鉴权下载地址。下载须使用当前认证，仅限同服务 origin；本工具不解析原文。',annotations:read,inputSchema:{id:z.uuid()}},a=>reply(()=>service.get(a.id),r=>({id:a.id})));
- server.registerTool('update_material',{description:'按用户要求修改本人上传或管理员有权维护的材料名称和说明；内容不变，先核对当前版本。',annotations:write,inputSchema:materialUpdateInput},a=>reply(()=>service.update(a)));
- server.registerTool('delete_material',{description:'按用户要求将材料移入回收站，可恢复且仍占容量；仅上传者或管理员可用。',annotations:{...write,destructiveHint:true},inputSchema:materialStateInput},a=>reply(()=>service.setDeleted(a,true)));
- server.registerTool('restore_material',{description:'按用户要求恢复回收站中的材料；所属档案必须可写。',annotations:write,inputSchema:materialStateInput},a=>reply(()=>service.setDeleted(a,false)));
- server.registerTool('purge_material',{description:'用户明确要求彻底删除时，清除回收站材料的在线文件，无法恢复。purging 表示清理尚未完成；保留原请求重试，不提前报告释放空间。',annotations:{...write,destructiveHint:true},inputSchema:materialStateInput},a=>reply(()=>service.purge(a)));
- server.registerTool('get_material_capacity',{description:'读取指定档案已用、预留、总容量及独立版本；不修改额度。',annotations:read,inputSchema:{archive_id:z.uuid()}},a=>reply(()=>service.capacity(a.archive_id)));
- server.registerTool('set_material_capacity',{description:'管理员按用户要求调整指定档案的总材料容量（字节），不能低于默认值或已用及预留空间。expected_version 来自容量查询。',annotations:write,inputSchema:materialQuotaInput},a=>reply(()=>service.setQuota(a)));
+ server.registerTool('prepare_material_upload',{description:'为用户授权的原始文件预留档案容量并签发短期上传票据，不代表上传完成。先核对实际大小/哈希，详见 materials 指南。',annotations:{...write,idempotentHint:false},inputSchema:materialPrepareInput,outputSchema:uploadPrepared},a=>reply(()=>service.prepare(a),r=>({upload_id:r.upload_id,byte_size:r.byte_size})));
+ server.registerTool('get_material_upload_status',{description:'查询本人材料上传状态；ready 才代表已经绑定。结果不明先查，不重复准备上传。',annotations:read,inputSchema:{id:z.uuid()},outputSchema:materialStatus},a=>reply(()=>service.status(a.id),r=>({upload_id:r.upload_id,state:r.state})));
+ server.registerTool('cancel_material_upload',{description:'取消本人未完成的材料上传并释放预留空间；正在传输时先等待状态明确。不能删除已完成材料。',annotations:write,inputSchema:materialCancelInput,outputSchema:z.object({id:z.string(),state:z.literal('cancelled'),changed:z.boolean()}).passthrough()},a=>reply(()=>service.cancel(a)));
+ server.registerTool('list_materials',{description:'列出指定档案的绑定材料和当前容量。deleted:true 查询本人及管理员可见的回收站；元数据不代表已阅读原文。',annotations:read,inputSchema:materialListInput,outputSchema:z.object({materials:z.array(materialInfo),capacity:materialCapacity,next_cursor:z.string().nullable()})},a=>reply(()=>service.list(a),r=>({count:(r.materials as unknown[]).length})));
+ server.registerTool('get_material',{description:'取得有权查看的材料元数据、稳定引用与鉴权下载地址。下载须使用当前认证，仅限同服务 origin；本工具不解析原文。',annotations:read,inputSchema:{id:z.uuid()},outputSchema:z.object({material:materialInfo})},a=>reply(()=>service.get(a.id),r=>({id:a.id})));
+ server.registerTool('update_material',{description:'按用户要求修改本人上传或管理员有权维护的材料名称和说明；内容不变，先核对当前版本。',annotations:write,inputSchema:materialUpdateInput,outputSchema:mutationResult},a=>reply(()=>service.update(a)));
+ server.registerTool('delete_material',{description:'按用户要求将材料移入回收站，可恢复且仍占容量；仅上传者或管理员可用。',annotations:{...write,destructiveHint:true},inputSchema:materialStateInput,outputSchema:mutationResult.extend({deleted:z.boolean()})},a=>reply(()=>service.setDeleted(a,true)));
+ server.registerTool('restore_material',{description:'按用户要求恢复回收站中的材料；所属档案必须可写。',annotations:write,inputSchema:materialStateInput,outputSchema:mutationResult.extend({deleted:z.boolean()})},a=>reply(()=>service.setDeleted(a,false)));
+ server.registerTool('purge_material',{description:'用户明确要求彻底删除时，清除回收站材料的在线文件，无法恢复。purging 表示清理尚未完成；保留原请求重试，不提前报告释放空间。',annotations:{...write,destructiveHint:true},inputSchema:materialStateInput,outputSchema:z.object({id:z.string(),changed:z.boolean(),state:z.enum(['purging','purged'])}).passthrough()},a=>reply(()=>service.purge(a)));
+ server.registerTool('get_material_capacity',{description:'读取指定档案已用、预留、总容量及独立版本；不修改额度。',annotations:read,inputSchema:{archive_id:z.uuid()},outputSchema:materialCapacity},a=>reply(()=>service.capacity(a.archive_id)));
+ server.registerTool('set_material_capacity',{description:'管理员按用户要求调整指定档案的总材料容量（字节），不能低于默认值或已用及预留空间。expected_version 来自容量查询。',annotations:write,inputSchema:materialQuotaInput,outputSchema:z.object({archive_id:z.string(),version:z.number(),limit_bytes:z.number(),changed:z.boolean()}).passthrough()},a=>reply(()=>service.setQuota(a)));
 }
