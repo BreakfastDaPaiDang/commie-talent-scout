@@ -4,7 +4,6 @@ import './task-book.css';
 
 export type TaskStage = 'failed' | 'cancelled' | 'ready' | 'active' | 'waiting' | 'closed';
 export const taskStageLabels: Record<TaskStage,string> = {failed:'未完成关闭',cancelled:'已取消',ready:'待提交',active:'进行中',waiting:'待接取',closed:'已完成'};
-export const taskStagePriority: Record<TaskStage,number> = {failed:0,cancelled:0,ready:1,active:2,waiting:3,closed:4};
 export function RelatedTasksFrame({history,onHistory,count,children}:{history:boolean;onHistory:(value:boolean)=>void;count?:number;children:ReactNode}){
  return <section className="related-tasks" aria-label="关联任务"><header><h3>{history?'已关闭任务':'关联任务'}{!history&&count!==undefined&&<small>{count} 项开启</small>}</h3><button className="text-button" onClick={()=>onHistory(!history)}>{history?'返回开启任务':'查看已关闭任务'}</button></header>{children}</section>;
 }

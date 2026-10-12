@@ -1,6 +1,6 @@
 # 文档导航
 
-当前正式版本 **v0.1.1**，入口为 [scout.dapaidang.org](https://scout.dapaidang.org)。首次上线和后续交付均已完成；功能变化见[更新记录](../CHANGELOG.md)，任务状态以 [GitHub Issues](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues) 为准。
+当前正式版本 **v1.0.0**，入口为 [scout.dapaidang.org](https://scout.dapaidang.org)。首次上线和后续交付均已完成；功能变化见[更新记录](../CHANGELOG.md)，任务状态以 [GitHub Issues](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues) 为准。
 
 ## 给使用者
 
@@ -14,9 +14,9 @@
 
 | 文档 | 职责 |
 | --- | --- |
-| [PRD · 0.1.1](./PRD-0.1.1.md) | 当前线上产品范围、权限、默认值与验收基线 |
+| [PRD · 0.1.1](./PRD-0.1.1.md) | 历史版本需求，仅供追溯 |
 | [1.0.0 从这里开始](./releases/1.0.0/README.md) | 接手顺序、GitHub Issues、依赖、验收覆盖与 AI 协作方式 |
-| [PRD · 1.0.0](./PRD-1.0.0.md) | 新版唯一需求正文（尚未实施）：56 条用户故事与 32 项验收场景 |
+| [PRD · 1.0.0](./PRD-1.0.0.md) | 当前线上产品范围、权限、默认值与验收基线 |
 | [v0.1.1 专题](./releases/0.1.1.md) | 绑定材料规则及本版本交付索引 |
 | [领域词汇](../CONTEXT.md) / [ADR](./adr/) | 统一术语与长期架构取舍 |
 | [开发说明](./development.md) / [部署与恢复](./operations.md) | 本地运行、检查、发布、备份与运维 |

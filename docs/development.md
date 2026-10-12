@@ -46,4 +46,4 @@ MCP 行为检查：`node scripts/verify-mcp.mjs`（本地）或加 `--remote`（
 
 ### 服务账号验证
 
-迁移 `0030_service_subjects.sql` 创建早纪服务账号，显示在猎头管理，不创建社员档案。开发验收账号与早纪分开，后者不签发网页登录或 MCP 凭据。`node scripts/verify-service-subjects.mjs` 在隔离本地库验证账号管理、任务簿、看板、手机端完整头像编辑和真实头像更新，结束时恢复头像并清理本次虚构任务/档案。原始头像为 `public/art/zaoji-hr.png`，不包含凭据或真实人员数据。
+迁移 `0030_service_subjects.sql` 创建早纪服务账号，显示在猎头管理，不创建社员档案。早纪使用专用可撤销凭据运行验收，执行用途标记为 verification；不提供普通密码登录。通用验收入口为 scripts/verification-client.mjs，旧开发测试号已冻结。`node scripts/verify-service-subjects.mjs` 在隔离本地库验证账号管理、任务簿、看板、手机端完整头像编辑和真实头像更新，结束时恢复头像并清理本次虚构任务/档案。原始头像为 `public/art/zaoji-hr.png`，不包含凭据或真实人员数据。

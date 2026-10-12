@@ -89,7 +89,7 @@ export async function handleMcp(request:Request,env:Env,ctx:ExecutionContext){
     try{const result=await action();const rendered=content?await content(result):undefined;outcome=result.changed===false||result.replayed===true?'no_change':'success';resultSummary={...summary(result),...(result.replayed===true?{replayed:true}:{})};return {...success(result),...(rendered?{content:rendered}:{})};}
     catch(error){outcome=error instanceof Failure&&error.status<500?'rejected':'unknown';errorCode=error instanceof Failure?error.code:'RESULT_UNKNOWN';return failed(error);}
   };
-  const server=new McpServer({name:'commie-talent-scout',version:'0.1.1'},{instructions});
+  const server=new McpServer({name:'commie-talent-scout',version:'1.0.0'},{instructions});
   server.registerTool('whoami',{
     description:'接入、新会话或身份不明时先调用。返回当前成员、角色、服务环境、版本与实际能力；不能证明客户端已持久配置。没有业务写入。',annotations:readOnly,inputSchema:{},
     outputSchema:z.object({service:z.string(),environment:z.string(),origin:z.string(),member:z.object({id:z.string(),username:z.string(),name:z.string(),role:z.string()}).passthrough(),contract_version:z.string(),capabilities:z.array(z.string()),guide_topics:z.array(z.string()),limitations:z.array(z.string())}),

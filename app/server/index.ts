@@ -57,7 +57,7 @@ app.onError((error,c)=>{
   console.error(JSON.stringify({event:'request.failed',path:c.req.path,code:'INTERNAL_ERROR'}));
   return c.json({error:{code:'INTERNAL_ERROR',message:'服务暂时不可用，请稍后重试'}},500);
 });
-app.get('/api/health',c=>c.json({ok:true,version:'0.1.1',environment:c.env.ENVIRONMENT}));
+app.get('/api/health',c=>c.json({ok:true,version:'1.0.0',environment:c.env.ENVIRONMENT}));
 app.post('/api/auth/login',async c=>{
   const {secret,member}=await login(c.req.raw,c.env,await c.req.json());
   c.header('Set-Cookie',sessionCookie(secret,c.req.raw));
