@@ -3,6 +3,7 @@
 前后端共享的判断和服务器执行的业务联动都在此目录。按领域找文件，不从 HTTP、MCP 或定时入口逐个查业务条件。
 
 - `service-subjects`：服务账号稳定标识；用于系统任务归属，和真人账号、社员档案区分。
+- `person-account`：社员本人账号绑定的授权、真人身份、唯一性和名称权威来源；不与维护者关联混用。迁移 `0032` 在账号资料历史事务内同步昵称，保留历史与联系更新时间。
 - `archive-states` / `person-identity`：身份、状态、成员范围与主操作。
 - `archive-reminders` / `archive-reminder-query` / `contact-reminders`：提醒条件及同口径的查询排序。
 - `archive-lifecycle` / `archive-task-cleanup`：状态变更、入社任务及删除后的任务联动。
