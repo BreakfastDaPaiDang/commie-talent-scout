@@ -1,3 +1,4 @@
+import {credentialActor} from './authority.ts';
 import {z} from 'zod';
 import {Archives} from './archives.ts';
 import {assertAdmin,authGuard} from './credentials.ts';
@@ -28,7 +29,7 @@ export class Materials{
  constructor(readonly env:Env,readonly actor:Actor,readonly source:Source){this.archives=new Archives(env,actor,source);}
  stmt(sql:string,...args:unknown[]){return this.env.DB.prepare(sql).bind(...args);}
  private subjectGuard(id:string,key:string){return this.stmt('INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(SELECT 1 FROM archives WHERE id=? AND closed=0 AND deleted=0) THEN 1 ELSE 0 END)',key,id);}
- private ownerGuard(id:string,version:number,key:string){return this.stmt("INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(SELECT 1 FROM materials WHERE id=? AND version=? AND state='ready' AND (owner_id=? OR EXISTS(SELECT 1 FROM members WHERE id=? AND role='admin'))) THEN 1 ELSE 0 END)",key,id,version,this.actor.id,this.actor.id);}
+ private ownerGuard(id:string,version:number,key:string){return this.stmt("INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(SELECT 1 FROM materials WHERE id=? AND version=? AND state='ready' AND (owner_id=? OR ?='admin')) THEN 1 ELSE 0 END)",key,id,version,this.actor.id,this.actor.role);}
  private async row(id:string){z.uuid().parse(id);const row=await this.stmt('SELECT f.*,m.name owner_name FROM materials f JOIN members m ON m.id=f.owner_id WHERE f.id=?',id).first<MaterialRow>();if(!row)throw new Failure(404,'MATERIAL_NOT_FOUND','材料不存在或无权读取');return row;}
  private info(row:MaterialRow,archive:{type:'person'|'org';closed:boolean;deleted:boolean}):MaterialInfo{return {id:row.id,archive_id:row.archive_id,owner_id:row.owner_id,owner_name:row.owner_name??this.actor.name,name:row.name,description:row.description,mime_type:row.mime_type,byte_size:row.byte_size,sha256:row.sha256,state:row.state,deleted:!!row.deleted,version:row.version,created_at:row.ready_at??row.created_at,updated_at:row.updated_at,editable:row.state==='ready'&&!archive.closed&&!archive.deleted&&(row.owner_id===this.actor.id||this.actor.role==='admin'),download_url:`${this.env.APP_ORIGIN}/materials/${row.id}/content`,preview_url:previewTypes.has(row.mime_type)?`${this.env.APP_ORIGIN}/materials/${row.id}/content?preview=1`:null,reference_url:`${this.archives.url({id:row.archive_id,type:archive.type})}&material=${row.id}`};}
  async capacity(id:string):Promise<MaterialCapacity>{
@@ -59,7 +60,7 @@ export class Materials{
  static async receive(env:Env,id:string,request:Request){
   z.uuid().parse(id);const ticket=request.headers.get('X-Upload-Ticket');if(!ticket||ticket.length>100)throw new Failure(401,'UPLOAD_TICKET_INVALID','缺少有效上传票据');
   const row=await env.DB.prepare('SELECT * FROM materials WHERE id=? AND ticket_hash=?').bind(id,await digest(ticket)).first<MaterialRow>();if(!row)throw new Failure(401,'UPLOAD_TICKET_INVALID','上传票据不匹配');
-  const actor=await env.DB.prepare("SELECT m.*,c.id credential_id,c.kind credential_kind FROM members m JOIN credentials c ON c.member_id=m.id WHERE m.id=? AND m.auth_epoch=? AND m.frozen=0 AND m.must_change_password=0 AND c.id=? AND c.auth_epoch=m.auth_epoch AND c.revoked_at IS NULL AND c.expires_at>?").bind(row.owner_id,row.auth_epoch,row.credential_id,now()).first<Actor>();if(!actor)throw new Failure(401,'UPLOAD_AUTH_EXPIRED','账号或原凭证已失效，请重新登录后上传');
+  const actor=await credentialActor(env,row.credential_id);if(!actor||actor.id!==row.owner_id||actor.auth_epoch!==row.auth_epoch||actor.must_change_password)throw new Failure(401,'UPLOAD_AUTH_EXPIRED','账号或原凭证已失效，请重新登录后上传');
   return new Materials(env,actor,row.source).upload(row,request);
  }
  private async upload(row:MaterialRow,request:Request){

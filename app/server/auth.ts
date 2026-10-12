@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { hashPassword, verifyPassword } from './password.ts';
 import { digest, Failure, now, uid, type Actor, type Env } from './types.ts';
+import {actorProjection,activeAuthoritySql} from './authority.ts';
 
 export const passwordInput = z.string().min(10,'密码至少 10 个字符').max(128,'密码最多 128 个字符');
 const loginInput = z.object({ username:z.string().trim().min(1).max(80), password:z.string().min(1).max(128) });
@@ -12,9 +13,8 @@ export async function authenticate(request: Request, env: Env, allowPasswordChan
   const cookie = request.headers.get('Cookie')?.match(/(?:^|;\s*)cts_session=([^;]+)/)?.[1];
   const value = isMcp ? bearer : (bearer ?? cookie);
   if (!value) throw new Failure(401,'UNAUTHENTICATED','请先登录或重新连接');
-  const actor=await env.DB.prepare(`SELECT m.id,m.username,m.name,m.role,m.frozen,m.auth_epoch,m.must_change_password,
-    m.version,m.qq,m.avatar_id,c.id credential_id,c.kind credential_kind FROM credentials c JOIN members m ON m.id=c.member_id
-    WHERE c.hash=? AND c.revoked_at IS NULL AND c.expires_at>? AND c.auth_epoch=m.auth_epoch AND m.frozen=0 AND m.identity_kind='human'
+  const actor=await env.DB.prepare(`SELECT ${actorProjection} FROM credentials c JOIN members m ON m.id=c.member_id
+    WHERE c.hash=? AND ${activeAuthoritySql}
     AND c.kind=?`).bind(await digest(value),now(),bearer?'mcp':'session').first<Actor>();
   if (!actor) throw new Failure(401,'UNAUTHENTICATED','登录或连接已失效，请重新认证');
   if (actor.must_change_password && !allowPasswordChange) throw new Failure(403,'PASSWORD_CHANGE_REQUIRED','请先更换临时密码');
@@ -60,6 +60,6 @@ export async function changePassword(env: Env, actor: Actor, input: unknown) {
   ]);
   return {reauthenticate:true};
 }
-export function sessionCookie(secret: string, request: Request, expired=false) {
-  return `${cookieName}=${secret}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${expired?0:604800}${new URL(request.url).protocol==='https:'?'; Secure':''}`;
+export function sessionCookie(secret: string, request: Request, expired=false,maxAge=604800) {
+  return `${cookieName}=${secret}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${expired?0:maxAge}${new URL(request.url).protocol==='https:'?'; Secure':''}`;
 }

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import {readFileSync,writeFileSync,mkdirSync} from 'node:fs';
+import {writeFileSync,mkdirSync} from 'node:fs';
+import {openVerificationSession} from './lib/verification-session.mjs';
 import {Client,StreamableHTTPClientTransport} from '@modelcontextprotocol/client';
 import {setDefaultResultOrder} from 'node:dns';
 import {setDefaultAutoSelectFamily} from 'node:net';
@@ -10,9 +11,9 @@ export async function verificationClient(name,{environment='staging'}={}){
  assert.ok(['staging','production'].includes(environment));const production=environment==='production';if(production)assert.ok(process.argv.includes('--production'),'production verification must be explicitly selected');
  const remote=production||process.argv.includes('--remote'),target=production?'production':remote?'cloud':'local',base=production?'https://scout.dapaidang.org':remote?'https://scout-staging.dapaidang.org':'http://127.0.0.1:8790';
  assert.equal((await fetch(base+'/api/health',{headers:{Connection:'close'}}).then(r=>r.json())).environment,environment);
- const admin=JSON.parse(readFileSync(production?'secrets/development-test-admin.json':`secrets/bootstrap-staging-${remote?'remote':'local'}-admin.json`));let cookie;const recoveries=[],catalogCreated=[];
+ let cookie;const recoveries=[],catalogCreated=[];
  async function http(path,body,{bearer=false}={}){const r=await fetch(base+'/api'+path,{method:body===undefined?'GET':'POST',headers:{Connection:'close',Origin:base,'Content-Type':'application/json',...(bearer?{Authorization:'Bearer '+connection.body.secret}:cookie?{Cookie:cookie}:{})},body:body===undefined?undefined:JSON.stringify(body)});return {status:r.status,body:await r.json(),cookie:r.headers.get('set-cookie')?.split(';')[0]};}
- const login=await http('/auth/login',{username:admin.username,password:admin.password});assert.equal(login.status,200);cookie=login.cookie;
+ const login=await openVerificationSession(base,target,name);cookie=login.cookie;
  const connection=await http('/connections',{name:'验收 '+name,days:1});assert.equal(connection.status,200);
  const client=new Client({name:'cts-verify-'+name,version:'0.1.0'});await client.connect(new StreamableHTTPClientTransport(new URL(base+'/mcp'),{requestInit:{headers:{Authorization:'Bearer '+connection.body.secret,Connection:'close'}}}));
  async function call(tool,args={}){

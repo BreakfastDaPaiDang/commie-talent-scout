@@ -1,6 +1,6 @@
 {
   "format": 1,
-  "count": 30,
+  "count": 31,
   "migrations": {
     "0001_identity.sql": {
       "sha256": "ceb732997de6972d3f88ae3a15b52b4df0def3418cc4b0834cd289ce55daff6a",
@@ -151,6 +151,11 @@
       "sha256": "c221284fa688f4a4507a45231d916683b5a17eee4dc7de582c85a17a22dbe70a",
       "backwards_compatible": true,
       "reason": "Adds a service identity discriminator and service metadata; existing task foreign keys and histories stay intact. Human auth is unchanged. Service login is blocked by an invalid password sentinel and credential triggers, including after code rollback."
+    },
+    "0031_service_verification.sql": {
+      "sha256": "13b3fe6b4354d985faecbbf8b3be6e89abf965c5ba675938d9cb331b0575ce8d",
+      "backwards_compatible": true,
+      "reason": "Adds credential purpose and parent authority plus audit metadata; existing human credentials retain interactive defaults. Old code rejects service authentication and its invalid password, so rollback fails closed for service verification."
     }
   }
 }

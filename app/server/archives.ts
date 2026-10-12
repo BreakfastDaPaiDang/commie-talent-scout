@@ -107,12 +107,12 @@ export class Archives{
   assertStateAndResponsibility(type,status,ids);
   const members:BoundMember[]=[],guards:D1PreparedStatement[]=[],bindings:D1PreparedStatement[]=[],cleanup:D1PreparedStatement[]=[];
   for(const memberId of ids){
-   const member=await this.stmt("SELECT id,name,frozen FROM members WHERE id=? AND identity_kind='human'",memberId).first<BoundMember>();
+   const member=await this.stmt("SELECT id,name,frozen FROM members WHERE id=?",memberId).first<BoundMember>();
    if(!member)throw new Failure(400,'MEMBER_NOT_FOUND','选择的成员不存在');
    const retained=await this.stmt('SELECT 1 FROM archive_bindings WHERE archive_id=? AND member_id=? AND (status=? OR (?=1 AND status=(SELECT status FROM archives WHERE id=?)))',id,memberId,status,isClosedState(status)?1:0,id).first();
    if(member.frozen&&!retained)throw new Failure(409,'MEMBER_FROZEN','不能新分配已冻结成员；已有归属仍保留显示');
    members.push({...member,frozen:!!member.frozen});const key=uid();
-   guards.push(this.stmt('INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(SELECT 1 FROM members m WHERE id=? AND identity_kind=\'human\' AND (frozen=0 OR EXISTS(SELECT 1 FROM archive_bindings WHERE archive_id=? AND member_id=m.id AND (status=? OR (?=1 AND status=(SELECT status FROM archives WHERE id=?)))))) THEN 1 ELSE 0 END)',key,memberId,id,status,isClosedState(status)?1:0,id));
+   guards.push(this.stmt('INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(SELECT 1 FROM members m WHERE id=? AND (frozen=0 OR EXISTS(SELECT 1 FROM archive_bindings WHERE archive_id=? AND member_id=m.id AND (status=? OR (?=1 AND status=(SELECT status FROM archives WHERE id=?)))))) THEN 1 ELSE 0 END)',key,memberId,id,status,isClosedState(status)?1:0,id));
    bindings.push(this.stmt('INSERT INTO archive_bindings(archive_id,status,member_id) VALUES(?,?,?)',id,status,memberId));cleanup.push(this.stmt('DELETE FROM mutation_guards WHERE id=?',key));
   }
   return {members,guards,bindings,cleanup};

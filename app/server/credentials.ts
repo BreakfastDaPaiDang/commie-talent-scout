@@ -1,18 +1,19 @@
 import {z} from 'zod';
 import {digest,Failure,now,uid,type Actor,type Env} from './types.ts';
+import {activeAuthoritySql,effectiveRoleSql} from './authority.ts';
 
 export const credentialInput=z.object({name:z.string().trim().min(1).max(60),days:z.number().int().min(1).max(365).default(90)}).strict();
 export function assertAdmin(actor:Actor){if(actor.role!=='admin')throw new Failure(403,'ADMIN_REQUIRED','仅管理员可以执行此操作');}
 export function authGuard(env:Env,actor:Actor,key:string,requireAdmin=false){
   return env.DB.prepare(`INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(
     SELECT 1 FROM members m JOIN credentials c ON c.member_id=m.id
-    WHERE m.id=? AND m.frozen=0 AND m.identity_kind='human' AND m.auth_epoch=? AND c.id=? AND c.auth_epoch=m.auth_epoch AND c.revoked_at IS NULL AND c.expires_at>? AND (?=0 OR m.role='admin')
-  ) THEN 1 ELSE 0 END)`).bind(key,actor.id,actor.auth_epoch,actor.credential_id,now(),requireAdmin?1:0);
+    WHERE m.id=? AND m.auth_epoch=? AND c.id=? AND ${activeAuthoritySql} AND ${effectiveRoleSql}=? AND (?=0 OR ${effectiveRoleSql}='admin')
+  ) THEN 1 ELSE 0 END)`).bind(key,actor.id,actor.auth_epoch,actor.credential_id,now(),actor.role,requireAdmin?1:0);
 }
 export async function listCredentials(env:Env,actor:Actor){
-  const result=await env.DB.prepare(`SELECT id,name,created_at,expires_at,revoked_at,version,
-    CASE WHEN auth_epoch<>? OR revoked_at IS NOT NULL OR expires_at<=? THEN 0 ELSE 1 END active
-    FROM credentials WHERE member_id=? AND kind='mcp' ORDER BY created_at DESC LIMIT 100`).bind(actor.auth_epoch,now(),actor.id).all();
+  const result=await env.DB.prepare(`SELECT c.id,c.name,c.created_at,c.expires_at,c.revoked_at,c.version,c.purpose,c.parent_id,
+    CASE WHEN ${activeAuthoritySql} THEN 1 ELSE 0 END active
+    FROM credentials c JOIN members m ON m.id=c.member_id WHERE c.member_id=? AND c.kind='mcp' ORDER BY c.created_at DESC LIMIT 100`).bind(now(),actor.id).all();
   return {credentials:result.results};
 }
 export async function createCredential(env:Env,actor:Actor,input:unknown){
@@ -20,12 +21,12 @@ export async function createCredential(env:Env,actor:Actor,input:unknown){
   const a=credentialInput.parse(input),id=uid(),key=uid();
   const bytes=crypto.getRandomValues(new Uint8Array(32));
   const secret='cts_'+Array.from(bytes,n=>n.toString(16).padStart(2,'0')).join('');
-  const created=now(),expires=new Date(Date.now()+a.days*86400000).toISOString();
+  const created=now(),expires=new Date(Math.min(Date.now()+a.days*86400000,actor.execution_purpose==='verification'?Date.parse(actor.credential_expires_at!):Infinity)).toISOString();
   try{
     await env.DB.batch([
       authGuard(env,actor,key),
       env.DB.prepare(`INSERT INTO mutation_guards VALUES(?,CASE WHEN (SELECT count(*) FROM credentials WHERE member_id=? AND kind='mcp' AND revoked_at IS NULL AND expires_at>? AND auth_epoch=?)<20 THEN 1 ELSE 0 END)`).bind(key+':limit',actor.id,created,actor.auth_epoch),
-      env.DB.prepare(`INSERT INTO credentials(id,member_id,hash,kind,name,auth_epoch,created_at,expires_at) VALUES(?,?,?,'mcp',?,?,?,?)`).bind(id,actor.id,await digest(secret),a.name,actor.auth_epoch,created,expires),
+      env.DB.prepare(`INSERT INTO credentials(id,member_id,hash,kind,name,auth_epoch,created_at,expires_at,purpose,parent_id) VALUES(?,?,?,'mcp',?,?,?,?,?,?)`).bind(id,actor.id,await digest(secret),a.name,actor.auth_epoch,created,expires,actor.execution_purpose??'interactive',actor.credential_parent_id??null),
       env.DB.prepare('DELETE FROM mutation_guards WHERE id IN (?,?)').bind(key,key+':limit'),
     ]);
   }catch(error){

@@ -73,6 +73,12 @@ node --experimental-transform-types scripts/restore.mjs --snapshot snapshots/pro
 
 机器客户端入口：Cloudflare Configuration Rule `cts_machine_client_bic` 仅对 `scout.dapaidang.org`、`scout-staging.dapaidang.org` 的精确 `/mcp` 和 `/uploads/` 前缀关闭 Browser Integrity Check，避免默认 Python urllib 被 403/1010 拦截。全局 Browser Integrity Check 保持开启，应用认证、上传票据、权限和限流照常执行。`node scripts/verify-browserless-http.mjs --remote`（或明确 `--production`）检查有效请求、匿名请求及撤销边界。
 
-用户指定 production 的 `admin`（开发 Agent 专用测试号）供开发与验收使用，首次改密已完成。私有凭据保存于本机忽略的 `secrets/development-test-admin.json`；不得写入提交、Issue、截图或日志。日常开发优先使用隔离 staging，生产验收使用该测试号。
+2026-10-12 用户授权 #85：开发与验收改用早纪（人事版）的专用验收凭据；旧 `admin` 测试号在新身份验收通过后冻结，保留历史。共享客户端不再回退到旧号密码。日常开发优先使用隔离 staging，生产写入仅操作明确授权的对象或可清理的验收夹具。
+
+首次签发运行 `node scripts/setup-verification.mjs --target local|cloud|production --admin-file <真人管理员私有凭据文件>`。需目标环境已部署 migration 0031；签发者必须是已登录真人管理员。根凭据最长 90 天，保存至忽略的 `secrets/zaoji-verification-<target>.json`，不得提交或回显。到期换发时先保留旧文件作撤销核对，再签发新文件；旧测试号被冻结后须使用现有人类管理员授权，不能自动解冻旧号。支持通过 `POST /api/admin/service-connections/revoke` 按 ID 撤销根凭据；也可从早纪的连接列表撤销。
+
+每次脚本以根凭据请求 `/api/auth/verification-session`，取得最多一小时的独立浏览器会话，再创建同样不超过会话/根凭据期限的 MCP 连接。结束时撤销运行连接、退出会话，保留根凭据供后续运行。撤销根凭据、冻结账号或改变授权代次会同时使派生会话、连接和上传票据失效。冻结后即使解冻也需重新签发。脚本凭据持有管理员验收权限，账号基础角色仍为 service/member；不得用于未经授权的业务写入。
+
+命令回执和 MCP 调用记录标注 `execution_purpose=verification`，命令还记录 operation/credential_id；固定后台规则保持 source=system，没有借用验收凭据。上传记录已关联 credential_id。代理网络按本机 Node 支持使用 `node --use-env-proxy ...`，不要把秘密写入命令行。
 
 档案删除和账号冻结均保留业务历史，不触发图片清理。档案回收功能启用后，不应手动回退到尚未识别 `archives.deleted` 的旧版本，否则旧列表会重新显示回收内容；需要修复时在支持该权限模型的版本上前滚。首次部署该功能完成冒烟后再进行生产删除验收。

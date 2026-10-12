@@ -14,19 +14,19 @@ import {login} from '../app/server/auth.ts';
 
 function setup(t){const f=fixture();t.after(f.close);f.sqlite.prepare("UPDATE members SET role='admin' WHERE id=?").run(f.actor.id);f.actor.role='admin';return f;}
 
-test('service identity belongs to account management, not member archives; auth and human responsibility stay separate',async t=>{
+test('service identity belongs to account management, not member archives; password auth remains separate from service participation',async t=>{
  const f=setup(t),members=new Members(f.env,f.actor,'web');
  assert.equal(f.sqlite.prepare('SELECT count(*) n FROM archives').get().n,0);
- assert.equal((await members.directory({})).members.some(m=>m.id===zaojiSubject.id),false);
+ assert.equal((await members.directory({})).members.some(m=>m.id===zaojiSubject.id),true);
  const identity=(await members.list({state:'active'})).members.find(m=>m.id===zaojiSubject.id);assert.equal(identity.identity_kind,'service');assert.equal(identity.frozen,false);
  assert.equal((await members.detail(identity.id)).member.identity_kind,'service');
  await assert.rejects(()=>members.setRole({id:identity.id,expected_version:1,role:'admin',request_id:uuid()}),{code:'SERVICE_ROLE_FIXED'});
  await assert.rejects(()=>members.resetPassword({id:identity.id,expected_version:1,temporary_password:'this-is-not-a-service-password',request_id:uuid()}),{code:'SERVICE_AUTH_UNSUPPORTED'});
  assert.throws(()=>f.sqlite.prepare("UPDATE members SET role='admin' WHERE id=?").run(identity.id),/service identity/);
- assert.throws(()=>f.sqlite.prepare('UPDATE credentials SET member_id=?').run(identity.id),/service credentials/);
+ assert.throws(()=>f.sqlite.prepare('UPDATE credentials SET member_id=?').run(identity.id),/immutable/);
  await assert.rejects(()=>login(new Request('https://fixture.invalid/api/auth/login'),f.env,{username:'zaoji-hr',password:'!service-no-password'}),{code:'INVALID_LOGIN'});
  const task=await new WorkTasks(f.env,f.actor,'web').create({kind:'custom',title:'人工任务',purpose:'目的',delivery:'交付',deadline_at:'2099-01-01T00:00:00.000Z',request_id:uuid()});
- await assert.rejects(()=>new WorkTasks(f.env,f.actor,'web').assign({id:task.id,expected_version:1,member_id:identity.id,reason:'不能把服务身份当作真人',request_id:uuid()}),{code:'MEMBER_NOT_ELIGIBLE'});
+ assert.equal((await new WorkTasks(f.env,f.actor,'web').assign({id:task.id,expected_version:1,member_id:identity.id,reason:'显式交给服务执行者',request_id:uuid()})).owner_id,identity.id);
  const events=(await members.history(identity.id)).events;assert.equal(events[0].source,'system');assert.equal(JSON.parse(events[0].after_json).origin,'migration:0030');
  assert.equal(f.sqlite.prepare('SELECT count(*) n FROM credentials WHERE member_id=?').get(identity.id).n,0);
 });

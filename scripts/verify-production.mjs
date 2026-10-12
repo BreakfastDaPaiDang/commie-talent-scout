@@ -1,3 +1,4 @@
+import {openVerificationSession} from './lib/verification-session.mjs';
 import assert from 'node:assert/strict';
 import {randomUUID,randomBytes} from 'node:crypto';
 import {readFileSync,writeFileSync,mkdirSync} from 'node:fs';
@@ -8,7 +9,7 @@ import {projectConfig} from './lib/cloudflare-admin.mjs';
 const {release}=projectConfig(),base=release.environments.production.origin;
 assert.equal(base,'https://scout.dapaidang.org');assert.equal((await fetch(base+'/api/health').then(r=>r.json())).environment,'production');
 const resume=process.argv.includes('--resume')?process.argv[process.argv.indexOf('--resume')+1]:null;
-const file='secrets/bootstrap-production-remote-admin.json',admin=JSON.parse(readFileSync(file,'utf8')),id=randomUUID().slice(0,8),checks=[],members=[],archives=[],errors=[],started=new Date().toISOString(),privateFile=resume??`secrets/production-acceptance-${id}.json`,prior=resume?JSON.parse(readFileSync(resume,'utf8')):null;
+const id=randomUUID().slice(0,8),checks=[],members=[],archives=[],errors=[],started=new Date().toISOString(),privateFile=resume??`secrets/production-acceptance-${id}.json`,prior=resume?JSON.parse(readFileSync(resume,'utf8')):null;
 const password=()=>randomBytes(24).toString('base64url');mkdirSync('secrets',{recursive:true});mkdirSync('tmp/verification',{recursive:true});
 const save=()=>writeFileSync(privateFile,JSON.stringify({members:members.map(({client,call,http,...member})=>member),archives},null,2),{mode:0o600});
 function mark(message){checks.push(message);writeFileSync('tmp/verification/production-progress.json',JSON.stringify({started,base,checks},null,2));console.log(JSON.stringify({production_check:checks.length,passed:message}));}
@@ -19,8 +20,7 @@ async function connect(a,label){a.connection=await ok(a,'/connections',{name:'�
 async function reject(a,name,args,code){const r=await a.client.callTool({name,arguments:args});assert.equal(r.isError,true);assert.equal(r.structuredContent.error.code,code);}
 const root=actor();let browser,page,completed=false;
 try{
- const login=await ok(root,'/auth/login',{username:admin.username,password:admin.password});
- if(login.member.must_change_password){const next=password();writeFileSync(file,JSON.stringify({...admin,pending_password:next},null,2),{mode:0o600});await ok(root,'/auth/password',{current_password:admin.password,new_password:next});admin.password=next;admin.must_change_password=false;writeFileSync(file,JSON.stringify(admin,null,2),{mode:0o600});await ok(root,'/auth/login',{username:admin.username,password:next});}
+ const login=await openVerificationSession(base,'production','production-acceptance');root.cookie=login.cookie;
  await connect(root,'administrator');root.id=(await root.call('whoami')).member.id;
  for(const label of ['author','reader']){const old=prior?.members.find(m=>m.username.startsWith('accept-'+label+'-'));const m=Object.assign(actor(),old??{username:`accept-${label}-${id}`,temporary:password(),password:password()});members.push(m);if(!old){const created=await root.call('create_member',{username:m.username,name:label==='author'?'虚构上线验收作者':'虚构上线验收读者',temporary_password:m.temporary,request_id:randomUUID()});m.id=created.id;save();await ok(m,'/auth/login',{username:m.username,password:m.temporary});assert.equal((await m.http('/workspace')).status,403);await ok(m,'/auth/password',{current_password:m.temporary,new_password:m.password});}else{const current=(await root.call('get_member',{id:m.id})).member;assert.equal(current.username,m.username);if(current.frozen)await root.call('set_member_frozen',{id:m.id,expected_version:current.version,frozen:false,request_id:randomUUID()});}await ok(m,'/auth/login',{username:m.username,password:m.password});await connect(m,label);save();}
  const [author,reader]=members;assert.equal((await reader.http('/admin/members')).status,403);assert.equal((await reader.http('/admin/tasks')).status,403);mark('Production accounts require password change; ordinary members cannot access administration or task review');
@@ -39,8 +39,9 @@ try{
  if(page)await page.evaluate(()=>fetch('/api/auth/logout',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})).catch(()=>{});if(browser)await browser.close();
  if(root.call){for(const archiveId of archives){const a=(await root.call('get_archive',{id:archiveId})).archive;if(!a.closed)await root.call('set_archive_state',{id:a.id,expected_version:a.version,status:'已弃用',member_ids:[],request_id:randomUUID()});}
   for(const m of members){if(m.client)await m.client.close();const current=(await root.call('get_member',{id:m.id})).member;if(!current.frozen)await root.call('set_member_frozen',{id:m.id,expected_version:current.version,frozen:true,request_id:randomUUID()});}
-  // Hand the bootstrap account back with a fresh temporary password and no valid sessions.
-  const current=(await root.call('get_member',{id:root.id})).member,temp=password();writeFileSync(file,JSON.stringify({...admin,pending_password:temp},null,2),{mode:0o600});await ok(root,'/admin/members/reset-password',{id:current.id,expected_version:current.version,temporary_password:temp,request_id:randomUUID()});admin.password=temp;admin.must_change_password=true;writeFileSync(file,JSON.stringify(admin,null,2),{mode:0o600});await root.client.close();
+  // Retire only this run; keep the revocable service root for later verification.
+  await ok(root,'/connections/revoke',{id:root.connection.id});await root.client.close();
  }
- save();const report={date:new Date().toISOString(),started,base,passed:completed,checks,browser_proxy_disabled:true,network_operator_verified:false,actual_codex:false,fictional_archives_closed:archives.length,test_members_frozen:members.length,bootstrap_password_reset:true};writeFileSync('tmp/verification/production-acceptance.json',JSON.stringify(report,null,2));console.log(JSON.stringify(report));
+ await ok(root,'/auth/logout',{});
+ save();const report={date:new Date().toISOString(),started,base,passed:completed,checks,browser_proxy_disabled:true,network_operator_verified:false,actual_codex:false,fictional_archives_closed:archives.length,test_members_frozen:members.length,execution_purpose:'verification',service_session_closed:true};writeFileSync('tmp/verification/production-acceptance.json',JSON.stringify(report,null,2));console.log(JSON.stringify(report));
 }

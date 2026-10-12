@@ -49,8 +49,8 @@ export async function startAttempt(env:Env,actor:Actor,tool:string,args:unknown)
   const requestId=typeof input?.request_id==='string'&&z.uuid().safeParse(input.request_id).success?input.request_id:null;
   try{
     const taskId=typeof input?.task_id==='string'&&z.uuid().safeParse(input.task_id).success&&(await env.DB.prepare('SELECT 1 FROM mcp_tasks WHERE id=? AND member_id=?').bind(input.task_id,actor.id).first())?input.task_id:null;
-    await env.DB.prepare(`INSERT INTO mcp_calls(id,member_id,credential_id,tool,contract_version,started_at,outcome,request_id,parameters_json,body_state,task_id) VALUES(?,?,?,?,?,?,'unknown',?,?,?,?)`)
-      .bind(attempt.id,actor.id,actor.credential_id,tool.slice(0,100),CONTRACT_VERSION,new Date(attempt.started).toISOString(),requestId,safe.json,safe.state,taskId).run();
+    await env.DB.prepare(`INSERT INTO mcp_calls(id,member_id,credential_id,tool,contract_version,started_at,outcome,request_id,parameters_json,body_state,task_id,execution_purpose) VALUES(?,?,?,?,?,?,'unknown',?,?,?,?,?)`)
+      .bind(attempt.id,actor.id,actor.credential_id,tool.slice(0,100),CONTRACT_VERSION,new Date(attempt.started).toISOString(),requestId,safe.json,safe.state,taskId,actor.execution_purpose??'interactive').run();
     attempt.stored=true;
   }catch{await journalDiagnostic(env,'collection_start_failed');}
   return attempt;
@@ -74,7 +74,7 @@ export async function listCalls(env:Env,actor:Actor,input:unknown){
   if(a.to){where.push('started_at<=?');args.push(a.to);}
   if(a.tool){where.push('tool=?');args.push(a.tool);}if(a.task_id){where.push('task_id=?');args.push(a.task_id);}if(a.association!=='all')where.push(a.association==='linked'?'task_id IS NOT NULL':'task_id IS NULL');
   if(a.before){const [time,id]=a.before.split('|');if(!z.iso.datetime().safeParse(time).success||!z.uuid().safeParse(id).success)throw new Failure(400,'INVALID_CURSOR','调用分页位置无效');where.push('(started_at<? OR (started_at=? AND id<?))');args.push(time,time,id);}
-  const rows=await env.DB.prepare(`SELECT id,member_id,credential_id,tool,contract_version,started_at,finished_at,duration_ms,outcome,error_code,request_id,task_id,body_state,
+  const rows=await env.DB.prepare(`SELECT id,member_id,credential_id,execution_purpose,tool,contract_version,started_at,finished_at,duration_ms,outcome,error_code,request_id,task_id,body_state,
     (SELECT name FROM members WHERE members.id=mcp_calls.member_id) member_name,
     (SELECT name FROM credentials WHERE credentials.id=mcp_calls.credential_id) connection_name
     FROM mcp_calls ${where.length?'WHERE '+where.join(' AND '):''} ORDER BY started_at DESC,id DESC LIMIT ?`).bind(...args,a.limit+1).all<Record<string,unknown>>();

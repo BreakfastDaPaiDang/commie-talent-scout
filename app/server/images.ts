@@ -1,3 +1,4 @@
+import {credentialActor} from './authority.ts';
 import {z} from 'zod';
 import {Archives} from './archives.ts';
 import {authGuard} from './credentials.ts';
@@ -28,7 +29,7 @@ export class Images{
   }else await this.archives.get(archiveId!,undefined,true);
  }
  subjectGuard(purpose:Upload['purpose'],archiveId:string|null,memberId:string|null,key:string){
-  return purpose==='member_avatar'?this.stmt("INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(SELECT 1 FROM members WHERE id=?) AND (?=? OR EXISTS(SELECT 1 FROM members WHERE id=? AND role='admin')) THEN 1 ELSE 0 END)",key,memberId,memberId,this.actor.id,this.actor.id):this.stmt('INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(SELECT 1 FROM archives WHERE id=? AND closed=0 AND deleted=0) THEN 1 ELSE 0 END)',key,archiveId);
+  return purpose==='member_avatar'?this.stmt("INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(SELECT 1 FROM members WHERE id=?) AND (?=? OR ?='admin') THEN 1 ELSE 0 END)",key,memberId,memberId,this.actor.id,this.actor.role):this.stmt('INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(SELECT 1 FROM archives WHERE id=? AND closed=0 AND deleted=0) THEN 1 ELSE 0 END)',key,archiveId);
  }
  async prepare(input:unknown){
   const a=prepareImageInput.parse(input),id=uid(),key=uid(),subjectKey=uid(),at=now(),expires=new Date(Date.now()+10*60000).toISOString();await this.subject(a.purpose,a.archive_id??null,a.member_id??null);
@@ -44,8 +45,8 @@ export class Images{
  static async receive(env:Env,id:string,request:Request){
   z.uuid().parse(id);const token=request.headers.get('X-Upload-Ticket');if(!token||token.length>100)throw new Failure(401,'UPLOAD_TICKET_INVALID','缺少有效上传票据');
   const row=await env.DB.prepare('SELECT * FROM attachments WHERE id=? AND ticket_hash=?').bind(id,await digest(token)).first<Upload>();if(!row)throw new Failure(401,'UPLOAD_TICKET_INVALID','上传票据不匹配');
-  const actor=await env.DB.prepare("SELECT m.id,m.username,m.name,m.role,m.frozen,m.auth_epoch,m.must_change_password,m.version,m.qq,m.avatar_id,c.id credential_id,c.kind credential_kind FROM members m JOIN credentials c ON c.member_id=m.id WHERE m.id=? AND m.auth_epoch=? AND m.frozen=0 AND m.must_change_password=0 AND c.id=? AND c.auth_epoch=m.auth_epoch AND c.revoked_at IS NULL AND c.expires_at>?").bind(row.owner_id,row.auth_epoch,row.credential_id,now()).first<Actor>();
-  if(!actor)throw new Failure(401,'UPLOAD_AUTH_EXPIRED','账号或原凭证已失效，这张上传票据不能继续使用');
+  const actor=await credentialActor(env,row.credential_id);
+  if(!actor||actor.id!==row.owner_id||actor.auth_epoch!==row.auth_epoch||actor.must_change_password)throw new Failure(401,'UPLOAD_AUTH_EXPIRED','账号或原凭证已失效，这张上传票据不能继续使用');
   return new Images(env,actor,'web').upload(row,request);
  }
  private async upload(row:Upload,request:Request){

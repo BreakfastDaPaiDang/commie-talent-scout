@@ -13,6 +13,7 @@ import { authenticate, changePassword, login, sessionCookie } from './auth.ts';
 import { PasswordBusy } from './password.ts';
 import { Failure, now, publicMember, type Env, type Actor } from './types.ts';
 import {createCredential,listCredentials,revokeCredential} from './credentials.ts';
+import {issueVerificationCredential,verificationSession,revokeVerificationCredential} from './service-verification.ts';
 import {cleanupJournal,getCall,listCalls} from './mcp-journal.ts';
 import {TaskReview} from './task-review.ts';
 import {handleMcp} from './mcp.ts';
@@ -62,6 +63,9 @@ app.post('/api/auth/login',async c=>{
   return c.json({member:publicMember(member)});
 });
 app.get('/api/auth/me',async c=>c.json({member:publicMember(await authenticate(c.req.raw,c.env,true))}));
+app.post('/api/auth/verification-session',async c=>{const result=await verificationSession(c.env,await authenticate(c.req.raw,c.env),await c.req.json());c.header('Set-Cookie',sessionCookie(result.secret,c.req.raw,false,Math.max(0,Math.floor((Date.parse(result.expires_at)-Date.now())/1000))));return c.json({member:publicMember(result.member),expires_at:result.expires_at});});
+app.post('/api/admin/service-connections/create',async c=>c.json(await issueVerificationCredential(c.env,await authenticate(c.req.raw,c.env),await c.req.json())));
+app.post('/api/admin/service-connections/revoke',async c=>c.json(await revokeVerificationCredential(c.env,await authenticate(c.req.raw,c.env),await c.req.json())));
 app.post('/api/auth/password',async c=>{
   const actor=await authenticate(c.req.raw,c.env,true);
   const result=await changePassword(c.env,actor,await c.req.json());

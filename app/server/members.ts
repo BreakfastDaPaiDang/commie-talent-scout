@@ -32,7 +32,7 @@ export class Members{
   }
   async directory(input:unknown){
     const a=z.object({query:z.string().trim().max(100).default(''),before:z.string().max(150).optional(),limit:z.coerce.number().int().min(1).max(100).default(30)}).parse(input);
-    const where=["identity_kind='human'"],args:unknown[]=[];
+    const where=['1=1'],args:unknown[]=[];
     if(a.query){where.push('instr(lower(name),lower(?))>0');args.push(a.query);}
     if(a.before){where.push('id>?');args.push(a.before);}
     const r=await this.stmt(`SELECT id,name,frozen,avatar_id,qq FROM members WHERE ${where.join(' AND ')} ORDER BY id LIMIT ?`,...args,a.limit+1).all<Record<string,unknown>>();

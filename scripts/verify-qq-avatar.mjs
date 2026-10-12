@@ -1,20 +1,20 @@
 import assert from 'node:assert/strict';
-import {readFileSync,mkdirSync,writeFileSync} from 'node:fs';
+import {mkdirSync,writeFileSync} from 'node:fs';
 import {randomUUID} from 'node:crypto';
 import {setDefaultResultOrder} from 'node:dns';
 import {setDefaultAutoSelectFamily} from 'node:net';
 import {chromium} from 'playwright-core';
 import {Client,StreamableHTTPClientTransport} from '@modelcontextprotocol/client';
+import {openVerificationSession} from './lib/verification-session.mjs';
 setDefaultResultOrder('ipv4first');setDefaultAutoSelectFamily(false);
 const production=process.argv.includes('--production'),environment=production?'production':'staging';
 const qq=process.env.CTS_QQ_AVATAR_QQ,username=process.env.CTS_QQ_AVATAR_USERNAME;
 assert.match(qq??'',/^\d{5,20}$/,'Provide CTS_QQ_AVATAR_QQ for the requested avatar');if(production)assert.ok(username,'Provide CTS_QQ_AVATAR_USERNAME for the production read-only check');
 const base=production?'https://scout.dapaidang.org':'https://scout-staging.dapaidang.org';
-const admin=JSON.parse(readFileSync(production?'secrets/development-test-admin.json':'secrets/bootstrap-staging-remote-admin.json','utf8'));
 let cookie,fixture,connection,client,browser;
 async function http(path,body){const r=await fetch(base+'/api'+path,{method:body===undefined?'GET':'POST',headers:{Origin:base,'Content-Type':'application/json',...(cookie?{Cookie:cookie}:{})},body:body===undefined?undefined:JSON.stringify(body)});const result=await r.json();assert.equal(r.status,200,result.error?.code);return {body:result,cookie:r.headers.get('set-cookie')?.split(';')[0]};}
 try{
- const login=await http('/auth/login',{username:admin.username,password:admin.password});cookie=login.cookie;
+ const login=await openVerificationSession(base,production?'production':'cloud','QQ头像验收');cookie=login.cookie;
  let member;
  if(production){member=(await http('/admin/members')).body.members.find(m=>m.username===username);assert.ok(member);}
  else{fixture=(await http('/admin/members/create',{username:'qqcheck-'+randomUUID().slice(0,8),name:'虚构 QQ 头像验收',qq,temporary_password:randomUUID()+'Aa9!',request_id:randomUUID()})).body;member=fixture;}

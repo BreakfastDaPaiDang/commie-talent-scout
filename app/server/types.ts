@@ -6,6 +6,8 @@ export type Env = {
   APP_ORIGIN: string;
 };
 export type Actor = {
+  identity_kind?: 'human'|'service'; execution_purpose?: 'interactive'|'verification';
+  credential_parent_id?: string|null; credential_expires_at?: string;
   id: string; username: string; name: string; role: 'admin' | 'member'; frozen: number;
   auth_epoch: number; must_change_password: number; version: number;
   credential_id: string; credential_kind: 'session' | 'mcp'; qq: string | null; avatar_id: string | null;
@@ -20,6 +22,6 @@ export async function digest(text: string) {
   return [...new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text)))].map(n=>n.toString(16).padStart(2,'0')).join('');
 }
 export function publicMember(actor: Actor) {
-  return { id:actor.id, username:actor.username, name:actor.name, role:actor.role,
+  return { id:actor.id, username:actor.username, name:actor.name, role:actor.role,identity_kind:actor.identity_kind??'human',execution_purpose:actor.execution_purpose??'interactive',
     must_change_password:!!actor.must_change_password, version:actor.version, qq:actor.qq, avatar_id:actor.avatar_id };
 }

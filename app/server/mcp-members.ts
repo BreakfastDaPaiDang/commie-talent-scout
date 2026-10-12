@@ -16,7 +16,7 @@ const fields:Record<string,string[]>={
 };
 for(const [name,keys] of Object.entries(fields))registerJournalFields(name,keys);
 export const memberGuides=[
- '猎头管理包含 identity_kind=service 的服务账号（如早纪）；它不是社员档案。名称、头像和冻结操作复用账号接口，冻结暂停新的固定规则跟进任务。服务账号当前不签发登录/MCP凭据，不能重置密码或授予管理员，search_members 仍仅列真人负责人。',
+ '猎头管理包含 identity_kind=service 的服务账号（如早纪）；它不是社员档案。名称、头像和冻结操作复用账号接口，冻结暂停新的固定规则跟进任务。服务账号不使用登录密码，管理员可以通过专用接口签发有期限的验收凭据，execution_purpose=verification；权限属于凭据，不改变服务账号的基础角色。不能重置服务密码或直接授予管理员。服务执行者可显式关联档案或任务，不因此建立社员档案。',
   '账号管理只供管理员使用。先 list_members 核对稳定 ID、当前版本与角色；默认只列未冻结账号，查找已冻结账号使用 state:frozen，完整管理核对使用 state:all；人物档案不是登录成员账号。',
   '创建或重置账号时，由客户端产生至少 10 位的临时密码，先保存在用户授权的私有位置并私下交付。服务只保存带盐 scrypt 哈希，不返回密码，不在最终聊天或普通日志回显密码。',
   '重置密码会立即使旧网页会话和 MCP 凭证失效；成员重新登录后必须更换临时密码。重置自己同样会断开本连接，操作前确保新临时密码已妥善保存。',

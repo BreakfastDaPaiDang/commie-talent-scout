@@ -35,8 +35,8 @@ export async function command<R extends Record<string,unknown>>(env:Env,actor:Ac
     await env.DB.batch([
       authGuard(env,actor,key,!!input.requireAdmin),
       ...mutation.statements,
-      env.DB.prepare('INSERT INTO commands(member_id,request_id,input_hash,result,created_at,secret_hash,require_admin) VALUES(?,?,?,?,?,?,?)')
-        .bind(actor.id,input.requestId,hash,JSON.stringify(mutation.result),now(),mutation.secretHash??null,input.requireAdmin?1:0),
+      env.DB.prepare('INSERT INTO commands(member_id,request_id,input_hash,result,created_at,secret_hash,require_admin,operation,credential_id,execution_purpose) VALUES(?,?,?,?,?,?,?,?,?,?)')
+        .bind(actor.id,input.requestId,hash,JSON.stringify(mutation.result),now(),mutation.secretHash??null,input.requireAdmin?1:0,input.operation,actor.credential_id,actor.execution_purpose??'interactive'),
       env.DB.prepare('DELETE FROM mutation_guards WHERE id=?').bind(key),
     ]);
     return mutation.result;
@@ -49,7 +49,7 @@ export async function command<R extends Record<string,unknown>>(env:Env,actor:Ac
 }
 export async function getRequestResult(env:Env,actor:Actor,id:string){
   requestId.parse(id);
-  const row=await env.DB.prepare('SELECT result,require_admin FROM commands WHERE member_id=? AND request_id=?').bind(actor.id,id).first<{result:string;require_admin:number}>();
+  const row=await env.DB.prepare('SELECT result,require_admin,execution_purpose FROM commands WHERE member_id=? AND request_id=?').bind(actor.id,id).first<{result:string;require_admin:number;execution_purpose:string}>();
   if(row?.require_admin)assertAdmin(actor);
-  return row?{status:'completed',result:JSON.parse(row.result)}:{status:'unknown',result:null,message:'尚未找到已提交结果，不表示仍在途的操作未发生；保留原请求标识。'};
+  return row?{status:'completed',result:JSON.parse(row.result),execution_purpose:row.execution_purpose}:{status:'unknown',result:null,message:'尚未找到已提交结果，不表示仍在途的操作未发生；保留原请求标识。'};
 }
