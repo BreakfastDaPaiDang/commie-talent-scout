@@ -493,3 +493,57 @@ function recordReopening(c) {
     ];
 }
 ```
+
+
+## 超期档案跟进任务
+
+模块：`archive-follow-up`；触发入口：[generateArchiveFollowUps](../../app/server/archive-follow-ups.ts#L24)、[generateScheduledArchiveFollowUps](../../app/server/archive-follow-ups.ts#L35)。
+档案 ID + automation_rule + 档案更新时间唯一；另以事务内 NOT EXISTS 阻止同类开启任务叠加。
+任务与创建事件一起提交；版本变化时跳过，后续扫描重新判断；规则不修改档案。
+
+条件复用 [archiveReminder](../../app/shared/archive-reminders.ts)；候选查询复用 [archiveOrderCte](../../app/server/archive-order.ts)，事务内复核档案版本与更新时间。
+
+- 验证：[tests/archive-follow-ups.test.mjs](../../tests/archive-follow-ups.test.mjs)
+### needsArchiveFollowUp
+
+[needsArchiveFollowUp](../../app/server/rules/archive-follow-up.ts#L7)
+
+```javascript
+function needsArchiveFollowUp(c) {
+    return archiveReminder(c.target, Date.parse(c.at)).overdue;
+}
+```
+
+### createArchiveFollowUp
+
+[createArchiveFollowUp](../../app/server/rules/archive-follow-up.ts#L8)
+
+```javascript
+function createArchiveFollowUp(c) {
+    const { target: t, at, taskId } = c, deadline = new Date(Date.parse(at) + 7 * DAY_MS).toISOString();
+    const title = '接触跟进或关闭档案', purpose = '核对近期情况与继续跟进的必要性，尝试联系或收集新的有效信息。', delivery = '将实际接触结果、联系不到的情况或新的有效资料写入关联档案的观察记录；若决定不再跟进，说明原因并关闭档案，再提交任务交付。不要为消除提醒制造空更新。';
+    return [
+        c.stmt(`INSERT OR IGNORE INTO work_tasks(id,archive_id,kind,labels_json,priority,initiator_kind,initiator_id,title,purpose,delivery,source,status,deadline_at,created_by,created_at,updated_at,automation_rule,automation_key)
+   SELECT ?,a.id,'custom','["接触跟进"]','P2','system',NULL,?,?,?,'rule','open',?,?,?,?,?,? FROM archives a
+   WHERE a.id=? AND a.version=? AND a.updated_at=? AND a.closed=0 AND a.deleted=0
+    AND NOT EXISTS(SELECT 1 FROM work_tasks t WHERE t.archive_id=a.id AND t.automation_rule=? AND t.status='open')`, taskId, title, purpose, delivery, deadline, c.legacyCreatorId, at, at, archiveFollowUpRule, t.updated_at, t.id, t.version, t.updated_at, archiveFollowUpRule),
+        c.stmt(`INSERT INTO work_task_events(id,task_id,actor_id,source,kind,after_json,created_at)
+   SELECT ?,id,NULL,'system','task.created',?,? FROM work_tasks WHERE id=?`, c.eventId, JSON.stringify({
+            automation_rule: archiveFollowUpRule,
+            trigger_updated_at: t.updated_at,
+            deadline_at: deadline,
+            initiator_kind: 'system'
+        }), at, taskId)
+    ];
+}
+```
+
+### planArchiveFollowUp
+
+[planArchiveFollowUp](../../app/server/rules/archive-follow-up.ts#L27)
+
+```javascript
+function planArchiveFollowUp(context) {
+    return planRules(archiveFollowUpModule, context);
+}
+```

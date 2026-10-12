@@ -1,10 +1,12 @@
+import {generateArchiveFollowUps,archiveFollowUpInput} from './archive-follow-ups.ts';
 import {z} from 'zod';
 import {WorkTasks,workTaskCreateInput,workTaskClaimInput,workTaskAssignInput,workTaskCompleteInput,workTaskReleaseInput,workTaskCancelInput,workTaskReferInput,workTaskMembershipInput,workTaskEditInput,workTaskExtendInput,workTaskReopenInput,workTaskCommentCreateInput,workTaskCommentEditInput,workTaskCommentDeleteInput,workTaskCommentRestoreInput,monthlyPreviewInput,monthlyGenerateInput} from './work-tasks.ts';
 import {registerJournalFields} from './mcp-journal.ts';
 import type {McpReply} from './mcp-members.ts';
 import type {Actor,Env} from './types.ts';
 
-export const workTaskToolNames=['list_work_tasks','get_work_task','create_work_task','claim_work_task','complete_work_task','release_work_task','cancel_work_task','edit_work_task','extend_work_task','reopen_work_task','add_work_task_comment','edit_work_task_comment','delete_work_task_comment','restore_work_task_comment','refer_archive','confirm_membership','assign_work_task','preview_monthly_work_tasks','generate_monthly_work_tasks'];
+export const workTaskToolNames=['generate_archive_follow_up_tasks','list_work_tasks','get_work_task','create_work_task','claim_work_task','complete_work_task','release_work_task','cancel_work_task','edit_work_task','extend_work_task','reopen_work_task','add_work_task_comment','edit_work_task_comment','delete_work_task_comment','restore_work_task_comment','refer_archive','confirm_membership','assign_work_task','preview_monthly_work_tasks','generate_monthly_work_tasks'];
+registerJournalFields('generate_archive_follow_up_tasks',['archive_ids','request_id']);
 registerJournalFields('list_work_tasks',['scope','state','archive_id','limit']);
 registerJournalFields('get_work_task',['id']);
 registerJournalFields('create_work_task',['archive_id','kind','labels','priority','title','purpose','delivery','deadline_at','source','period_key','request_id']);
@@ -26,6 +28,7 @@ registerJournalFields('preview_monthly_work_tasks',['month']);
 registerJournalFields('generate_monthly_work_tasks',['month','request_id']);
 export const workTaskGuides=['工作任务与 Agent 的任务审查记录分开；创建明确类型的工作任务后，系统只向符合本人倾向的活跃成员推送，不直接分配责任。','成员仍可从全组看板主动领取；管理员队列用于查看无人匹配或推送后未领取的开启任务。'];
 export function registerWorkTaskTools(server:any,env:Env,actor:Actor,reply:McpReply){
+  server.registerTool('generate_archive_follow_up_tasks',{description:'管理员补生成超期外部人物、组织的接触跟进或关闭档案任务。与每小时定时规则相同：只处理当前需要更新或关闭的档案；同轮提醒和已有同类开启任务去重。可用 archive_ids 限定最多 50 个档案，每次最多创建 40 项。发起人为早纪（人事版），不自动关闭档案、不自动完成任务。',annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:true,openWorldHint:false},inputSchema:archiveFollowUpInput,outputSchema:z.object({created_count:z.number(),changed:z.boolean(),tasks:z.array(z.record(z.string(),z.unknown()))}).passthrough()},(input:any)=>reply(()=>generateArchiveFollowUps(env,actor,input),r=>({count:r.created_count,changed:r.changed})));
   const service=new WorkTasks(env,actor,'mcp');
   server.registerTool('list_work_tasks',{description:'查看工作任务看板；query 搜索任务标题、目的、交付要求和相关对象，先筛选再限制数量；next_offset 非空时传入 offset 读取后续任务。scope=recommended 只看按本人倾向推荐的未领取任务，scope=mine 看本人已领取任务，scope=admin 仅管理员查看待处理队列。',annotations:{readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:false},inputSchema:z.object({scope:z.enum(['all','recommended','mine','admin']).default('all'),state:z.enum(['open','closed','all']).default('open'),archive_id:z.uuid().optional(),query:z.string().trim().max(200).default(''),offset:z.coerce.number().int().min(0).default(0),limit:z.coerce.number().int().min(1).max(100).default(50)}),outputSchema:z.object({tasks:z.array(z.record(z.string(),z.unknown())),next_offset:z.number().nullable()})},(input:any)=>reply(()=>service.list(input),r=>({count:(r.tasks as unknown[]).length})));
   server.registerTool('get_work_task',{description:'读取单项工作任务、评论和操作历史；观察引用按当前权限过滤。',annotations:{readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:false},inputSchema:z.object({id:z.uuid()}),outputSchema:z.record(z.string(),z.unknown())},(input:any)=>reply(()=>service.detail(input.id),r=>({events:(r.events as unknown[]).length,comments:(r.comments as unknown[]).length})));

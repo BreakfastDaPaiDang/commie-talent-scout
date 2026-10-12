@@ -1,6 +1,6 @@
 {
   "format": 1,
-  "count": 28,
+  "count": 29,
   "migrations": {
     "0001_identity.sql": {
       "sha256": "ceb732997de6972d3f88ae3a15b52b4df0def3418cc4b0834cd289ce55daff6a",
@@ -141,6 +141,11 @@
       "sha256": "c05b013d634595ae4343acbbcddbaffdc084bad07823b0dbd8637aee3dedf3e7",
       "backwards_compatible": true,
       "reason": "Adds nullable person identity and member availability; legacy reads fall back to personnel state without rewriting identities, closures or history."
+    },
+    "0029_archive_follow_up_tasks.sql": {
+      "sha256": "529bad60ba6be7db0963ae446b7d7b1637f472d87e0ec36fcf182fc0c3e608e4",
+      "backwards_compatible": true,
+      "reason": "Adds nullable automation provenance and deduplication indexes; no historical task or archive changes."
     }
   }
 }

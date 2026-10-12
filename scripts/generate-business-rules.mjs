@@ -1,3 +1,4 @@
+import {archiveFollowUpModule,planArchiveFollowUp} from '../app/server/rules/archive-follow-up.ts';
 import {readFileSync,writeFileSync,mkdirSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {resolve} from 'node:path';
@@ -47,6 +48,12 @@ export function renderBusinessRules(){
   '','## 执行条件与结果的源码','');
  const funcs=new Set([assertReopenAllowed,assertStateAndResponsibility,transitionChanged,planArchiveEffects,auditCancellationTarget,preparePersonnelTask,...archiveTransitionRules.flatMap(r=>[r.when,r.apply])]);
  for(const fn of funcs)lines.push(`### ${fn.name}`,'',link(lifecycle,fn.name),'','```javascript',source(fn),'```','');
+ const follow=archiveFollowUpModule;
+ lines.push('','## 超期档案跟进任务','',`模块：\`${follow.id}\`；触发入口：${follow.triggers.map(t=>link(t.file,t.entry)).join('、')}。`,
+  follow.verification.idempotency,follow.verification.failure,
+  '',`条件复用 [archiveReminder](../../app/shared/archive-reminders.ts)；候选查询复用 [archiveOrderCte](../../app/server/archive-order.ts)，事务内复核档案版本与更新时间。`,
+  '',...follow.verification.tests.map(file=>`- 验证：[${file}](../../${file})`));
+ for(const fn of new Set([...follow.rules.flatMap(r=>[r.when,r.apply]),planArchiveFollowUp]))lines.push(`### ${fn.name}`,'',link(follow.source,fn.name),'','```javascript',source(fn),'```','');
  return lines.join('\n');
 }
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
