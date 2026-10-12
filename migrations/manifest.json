@@ -1,6 +1,6 @@
 {
   "format": 1,
-  "count": 27,
+  "count": 28,
   "migrations": {
     "0001_identity.sql": {
       "sha256": "ceb732997de6972d3f88ae3a15b52b4df0def3418cc4b0834cd289ce55daff6a",
@@ -136,6 +136,11 @@
       "sha256": "3e6345a18c17d860f0d081eedd80aca6821230fbf7fa184e582c980e376bfdb9",
       "backwards_compatible": true,
       "reason": "Adds task labels, priorities, initiator metadata and a board index without changing existing task status values."
+    },
+    "0028_member_archive_profile.sql": {
+      "sha256": "c05b013d634595ae4343acbbcddbaffdc084bad07823b0dbd8637aee3dedf3e7",
+      "backwards_compatible": true,
+      "reason": "Adds nullable person identity and member availability; legacy reads fall back to personnel state without rewriting identities, closures or history."
     }
   }
 }

@@ -14,7 +14,7 @@ test('archive ranges default to 30, persist per page, reset to 30 and leave dele
  const click=async(text:string)=>act(async()=>{[...w.document.querySelectorAll('button')].find(b=>b.textContent===text)!.click();});
  const choose=async(value:string)=>act(async()=>{const s=w.document.querySelector('select[aria-label="已关闭档案"]') as unknown as HTMLSelectElement;s.value=value;s.dispatchEvent(new w.Event('change',{bubbles:true}));});
  try{
-  for(const [key,type,scope] of [['外部人物','person','external'],['社员','person','members'],['组织','org','all']] as const){
+  for(const [key,type,scope] of [['外部人物','person','external'],['组织','org','all']] as const){
    await act(async()=>root.render(<ArchivesPage key={key} actor={actor} pageLabel={key} type={type} personScope={scope}/>));
    assert.equal(requests.at(-1)!.searchParams.get('closed_history'),'30');assert.equal(requests.at(-1)!.searchParams.get('person_scope'),scope);
    assert.equal(w.document.querySelector('.filter-summary')!.textContent,'已关闭档案：最近 30 天');

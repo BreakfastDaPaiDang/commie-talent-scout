@@ -150,11 +150,12 @@ test('referral creates an unowned audit task and explicit membership creates onb
  const claimed=await service.claim({id:referral.task_id,expected_version:1,request_id:uuid()});await service.complete({id:referral.task_id,expected_version:claimed.version,result_kind:'continue',result_text:'对方愿意继续了解组织。',request_id:uuid()});
  const membership=await service.confirmMembership({archive_id:archive.id,expected_version:2,deadline_at:'2099-01-01T00:00:00.000Z',request_id:uuid()});assert.equal(membership.archive_status,'已加入待对接');
  const current=await archives.get(archive.id);assert.equal(current.status,'已加入待对接');assert.equal(current.closed,false);assert.equal(f.sqlite.prepare("SELECT count(*) n FROM work_tasks WHERE archive_id=? AND kind='onboarding' AND status='open'").get(archive.id).n,1);
- const membershipEvent=f.sqlite.prepare("SELECT before_json,after_json FROM archive_events WHERE archive_id=? AND kind='archive.membership_confirmed'").get(archive.id);assert.equal(JSON.parse(membershipEvent.before_json).audit_task_id,referral.task_id);assert.equal(JSON.parse(membershipEvent.after_json).task_id,membership.task_id);
+ const membershipEvent=f.sqlite.prepare("SELECT before_json,after_json FROM archive_events WHERE archive_id=? AND kind='archive.state_changed' ORDER BY seq DESC LIMIT 1").get(archive.id);assert.equal(JSON.parse(membershipEvent.before_json).status,'人事审核');assert.equal(JSON.parse(membershipEvent.after_json).task_id,membership.task_id);
  assert.equal((await archives.list({type:'person',status:'已加入待对接,已入伙'})).archives.some(item=>item.id===archive.id),true);
- assert.equal((await archives.list({type:'person',person_scope:'members'})).archives.some(item=>item.id===archive.id),true);
- assert.equal((await archives.list({type:'person',person_scope:'external'})).archives.some(item=>item.id===archive.id),false);
- await assert.rejects(service.refer({archive_id:archive.id,expected_version:current.version,deadline_at:'2099-01-01T00:00:00.000Z',request_id:uuid()}),{code:'INVALID_REFERRAL_STAGE'});
+ assert.equal((await archives.list({type:'person',person_scope:'members'})).archives.some(item=>item.id===archive.id),false);
+ assert.equal((await archives.list({type:'person',person_scope:'external'})).archives.some(item=>item.id===archive.id),true);
+ const joined=await archives.setState({id:archive.id,expected_version:current.version,status:'已入伙',member_ids:[],request_id:uuid()});
+ await assert.rejects(service.refer({archive_id:archive.id,expected_version:joined.version,deadline_at:'2099-01-01T00:00:00.000Z',request_id:uuid()}),{code:'MEMBERSHIP_ACTION_REQUIRED'});
 });
 
 test('withdrawing an audit cancels only open rule audit tasks atomically, preserving ownership, history and request replay',async t=>{

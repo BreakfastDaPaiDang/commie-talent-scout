@@ -27,11 +27,11 @@ test('local demo setup creates isolated accounts, records, tasks and images',()=
  assert.match(JSON.stringify(accounts),/demo_admin/);
  const rows=query(`SELECT
    (SELECT count(*) FROM members WHERE id IN ('10000000-0000-4000-8000-000000000001','10000000-0000-4000-8000-000000000002')) AS members,
-   (SELECT count(*) FROM archives WHERE id IN ('20000000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000002','20000000-0000-4000-8000-000000000003','30000000-0000-4000-8000-000000000001')) AS archives,
+   (SELECT count(*) FROM archives WHERE id IN ('20000000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000002','20000000-0000-4000-8000-000000000003','20000000-0000-4000-8000-000000000004','30000000-0000-4000-8000-000000000001')) AS archives,
    (SELECT count(*) FROM work_tasks WHERE id IN ('50000000-0000-4000-8000-000000000001','50000000-0000-4000-8000-000000000002','50000000-0000-4000-8000-000000000003','50000000-0000-4000-8000-000000000004')) AS tasks,
    (SELECT count(*) FROM attachments WHERE id IN ('70000000-0000-4000-8000-000000000001','70000000-0000-4000-8000-000000000002') AND state='ready') AS images;`);
  const row=rows[0].results[0];
- assert.deepEqual({members:row.members,archives:row.archives,tasks:row.tasks,images:row.images},{members:2,archives:4,tasks:4,images:2});
+ assert.deepEqual({members:row.members,archives:row.archives,tasks:row.tasks,images:row.images},{members:2,archives:5,tasks:4,images:2});
  const output=resolve(root,'tmp/demo-test-image.png');
  const image=run([wrangler,'r2','object','get','cts-staging-images/demo/archive-avatar.png','--local','--file',output]);
  assert.equal(image.status,0,image.stderr);

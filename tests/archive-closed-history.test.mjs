@@ -9,7 +9,7 @@ const DAY=86400000,NOW=Date.parse('2026-10-20T12:00:00.000Z');
 function setup(t){t.mock.timers.enable({apis:['Date'],now:NOW});const f=fixture();t.after(f.close);return {...f,s:new Archives(f.env,f.actor,'web')};}
 async function add(f,type,age,member=false){
  const a=await f.s.create({type,name:`虚构关闭筛选 ${type} ${age}`,status:member?'已入伙':'个人接触',request_id:uuid()});
- if(age!==null){await f.s.setState({id:a.id,expected_version:a.version,status:'已弃用',member_ids:[],request_id:uuid()});if(member)f.sqlite.prepare("UPDATE archives SET status='已入伙' WHERE id=?").run(a.id);f.sqlite.prepare("UPDATE archive_events SET created_at=? WHERE archive_id=? AND kind='archive.closed'").run(new Date(NOW-age*DAY).toISOString(),a.id);}
+ if(age!==null){await f.s.setState({id:a.id,expected_version:a.version,status:'已弃用',...(member?{membership_action:'leave'}:{}),member_ids:[],request_id:uuid()});if(member)f.sqlite.prepare("UPDATE archives SET status='已入伙',person_role=NULL,member_status=NULL WHERE id=?").run(a.id);f.sqlite.prepare("UPDATE archive_events SET created_at=? WHERE archive_id=? AND kind='archive.closed'").run(new Date(NOW-age*DAY).toISOString(),a.id);}
  // Deliberately decouple activity time from closing evidence.
  f.sqlite.prepare('UPDATE archives SET updated_at=? WHERE id=?').run(new Date(NOW-(age===null?200:0)*DAY).toISOString(),a.id);return a.id;
 }

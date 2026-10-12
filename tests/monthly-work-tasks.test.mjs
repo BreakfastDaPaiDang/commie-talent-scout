@@ -106,7 +106,7 @@ test('membership changes cancel only inapplicable automatic tasks, notify owned 
  const onboarding=await tasks.create({archive_id:member.id,kind:'onboarding',source:'rule',title:'入社对接',purpose:'完成对接',delivery:'留下结果',deadline_at:deadline,request_id:uuid()});
  const cooperation=await tasks.create({archive_id:member.id,kind:'cooperation',title:'合作事项',purpose:'继续确认合作',delivery:'留下合作结果',deadline_at:deadline,request_id:uuid()});
  await tasks.claim({id:cooperation.id,expected_version:cooperation.version,request_id:uuid()});
- const changed=await archives.setState({id:member.id,expected_version:member.version,status:STATES.external,member_ids:[],request_id:uuid()});
+ const changed=await archives.setState({id:member.id,expected_version:member.version,status:STATES.external,membership_action:'to_friend',member_ids:[],request_id:uuid()});
  assert.equal(changed.status,STATES.external);
  assert.equal(f.sqlite.prepare('SELECT status FROM work_tasks WHERE id=?').get(monthly.id).status,'cancelled');
  assert.equal(f.sqlite.prepare('SELECT status FROM work_tasks WHERE id=?').get(onboarding.id).status,'cancelled');
@@ -129,7 +129,7 @@ test('closing, reopening, and deleting an archive preserve cancellation history 
  const audit=await tasks.create({archive_id:closed.id,kind:'audit',source:'rule',title:'遗留审核',purpose:'检查',delivery:'记录',deadline_at:deadline,request_id:uuid()});
  const onboarding=await tasks.create({archive_id:closed.id,kind:'onboarding',source:'rule',title:'遗留对接',purpose:'对接',delivery:'记录',deadline_at:deadline,request_id:uuid()});
  const cooperation=await tasks.create({archive_id:closed.id,kind:'cooperation',title:'保留合作',purpose:'继续合作',delivery:'记录',deadline_at:deadline,request_id:uuid()});
- const closedResult=await archives.setState({id:closed.id,expected_version:closed.version,status:STATES.closed,member_ids:[],request_id:uuid()});
+ const closedResult=await archives.setState({id:closed.id,expected_version:closed.version,status:STATES.closed,membership_action:'leave',member_ids:[],request_id:uuid()});
  for(const task of [monthly,audit,onboarding])assert.equal(f.sqlite.prepare('SELECT status FROM work_tasks WHERE id=?').get(task.id).status,'cancelled',task.kind);
  assert.equal(f.sqlite.prepare('SELECT status FROM work_tasks WHERE id=?').get(cooperation.id).status,'open');
  await assert.rejects(tasks.reopen({id:monthly.id,expected_version:2,deadline_at:deadline,owner_mode:'unassigned',request_id:uuid()}),{code:'ARCHIVE_CLOSED'});

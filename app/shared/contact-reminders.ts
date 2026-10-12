@@ -7,7 +7,7 @@ export type ContactReminder={needed:boolean;count:number;minimum:number;eligible
 // and it does not try to verify whether an address or account is reachable.
 export function contactReminder(type:'person'|'org',status:string,contacts:ContactLike[]):ContactReminder{
   const eligible=type==='person'
-    ? [...memberStatuses,'\u5916\u90e8\u793e\u53cb'].includes(status as typeof memberStatuses[number])
+    ? [...memberStatuses,'已加入待对接','\u5916\u90e8\u793e\u53cb'].includes(status as typeof memberStatuses[number])
     : ['\u4e2a\u4eba\u63a5\u89e6','\u7ec4\u7ec7\u4ea4\u6d41'].includes(status);
   const keys=new Set(contacts.map(contact=>`${contact.type.trim().toLocaleLowerCase()}\u0000${contact.value.trim().toLocaleLowerCase()}`).filter(Boolean));
   const count=keys.size;

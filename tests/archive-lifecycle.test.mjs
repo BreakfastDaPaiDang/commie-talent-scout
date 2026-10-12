@@ -19,7 +19,7 @@ test('web and MCP share close/reopen behavior, request replay and unchanged-save
  const joined=request(working,'已入伙',[f.actor.id]),joinedResult=await mcp.setState(joined);
  assert.equal(joinedResult.closed,false,'1.0.0 keeps 已入伙 open');
  assert.equal((await web.get(a.id)).last_open_status,null);assert.equal((await web.get(a.id)).tag_snapshot_version,null);
- const closing=request(joinedResult,'已弃用'),closed=await mcp.setState(closing);
+ const closing={...request(joinedResult,'已弃用'),membership_action:'leave'},closed=await mcp.setState(closing);
  assert.equal(closed.closed,true);
  assert.equal((await web.setState(closing)).replayed,true);
  await assert.rejects(web.setState(request(closed,'视奸观察')),{code:'ARCHIVE_CLOSED'});
@@ -35,7 +35,7 @@ test('invalid states, required responsibility and retained frozen associations p
  const f=fixture();t.after(f.close);const s=new Archives(f.env,f.actor,'web'),id=member(f);
  const a=await s.create({type:'person',name:'虚构冻结归属',request_id:uuid()});
  await assert.rejects(s.setState(request(a,'组织交流')),{code:'INVALID_STATE'});
- await assert.rejects(s.setState(request(a,'人事审核')),{code:'RESPONSIBLE_REQUIRED'});
+ await assert.rejects(s.setState(request(a,'引荐中（待人事组接触）')),{code:'RESPONSIBLE_REQUIRED'});
  const working=await s.setState(request(a,'人事审核',[id]));
  f.sqlite.prepare('UPDATE members SET frozen=1 WHERE id=?').run(id);
  assert.equal((await s.setState(request(working,'人事审核',[id]))).changed,false);

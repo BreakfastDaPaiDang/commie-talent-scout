@@ -4,7 +4,8 @@ import {command,expectedVersion,requestId,type Source} from './commands.ts';
 import {Failure,now,uid,type Actor,type Env} from './types.ts';
 import {matchesPreference,pushCandidates,pushStage,type PushableTaskKind} from '../shared/task-preferences.ts';
 import {TagState,type TagLabel} from './tag-state.ts';
-import {isMemberStatus,memberStatuses} from '../shared/archive-states.ts';
+import {isMemberArchive,archiveDisplayStatus,archivePath} from '../shared/archive-states.ts';
+import {taskDeliveryReady} from '../shared/task-delivery.ts';
 import {Archives} from './archives.ts';
 import {auditCancellationTarget,planArchiveEffects} from './rules/archive-lifecycle.ts';
 import {monthDeadline,monthKey,monthKeyAt} from '../shared/monthly-tasks.ts';
@@ -128,6 +129,10 @@ export class WorkTasks {
       ar.type archive_type,
       ar.name archive_name,
       ar.status archive_status,
+      ar.person_role archive_person_role,
+      ar.member_status archive_member_status,
+      ar.closed archive_closed,
+      ar.deleted archive_deleted,
       ar.version archive_version,
       ar.updated_at archive_updated_at,
       (SELECT count(*) FROM observations o WHERE o.archive_id=ar.id AND o.deleted=0) archive_observation_count,
@@ -148,12 +153,17 @@ export class WorkTasks {
       task.initiator_name=task.initiator_kind==='system'?systemInitiator.name:(task.initiator_name??'未知发起人');
       task.initiator_avatar_key=task.initiator_kind==='system'?systemInitiator.avatar_key:null;
       const resultRefs=JSON.parse(String(task.result_references_json??'[]')) as {observation_id:string;content_version:number}[],visibleResultRefs=[];for(const reference of resultRefs){const current=await this.visibleReference(task as unknown as Row,reference);if(current)visibleResultRefs.push(current);}task.result_references=visibleResultRefs;task.result_references_restricted=visibleResultRefs.length!==resultRefs.length;delete task.result_references_json;
+      const subject={type:String(task.archive_type),status:String(task.archive_status),person_role:task.archive_person_role as 'external'|'member'|null,member_status:task.archive_member_status as '可接工作'|'请假'|'失联'|null,closed:!!task.archive_closed,deleted:!!task.archive_deleted};
+      task.ready_to_submit=taskDeliveryReady({status:task.status,kind:task.kind,owner_id:task.owner_id,source:task.source},task.archive_id?subject:null);
       if(task.archive_id&&task.archive_name){
         task.archive_preview={
           id:task.archive_id,
           type:task.archive_type,
           name:task.archive_name,
-          status:task.archive_status,
+          status:archiveDisplayStatus(subject),
+          personnel_status:subject.status,
+          person_role:isMemberArchive(subject)?'member':'external',
+          url:`${this.env.APP_ORIGIN}${archivePath(subject)}?archive=${task.archive_id}`,
           version:task.archive_version,
           updated_at:task.archive_updated_at,
           observation_count:task.archive_observation_count??0,
@@ -162,6 +172,7 @@ export class WorkTasks {
           tag_summary:tagSummaries.get(task.archive_id)??{tags:[],total:0},
         };
       }
+      for(const key of ['archive_person_role','archive_member_status','archive_closed','archive_deleted'])delete task[key];
       delete task.archive_members_json;
       delete task.archive_type;
       delete task.archive_name;
@@ -311,7 +322,7 @@ export class WorkTasks {
     return {result:{archive_id:old.id,archive_status:status,archive_version:old.version+1},statements:[archives.guard(old.id,old.version,key),...planArchiveEffects({old,status,memberIds:members.map(member=>member.id).sort(),reopen:false,at,actorId:this.actor.id,source:this.source,members,bindings,tags:new TagState(this.env,this.actor),stmt:this.stmt.bind(this),event:archives.event.bind(archives)}),this.stmt('DELETE FROM mutation_guards WHERE id=?',key)]};
   }
   async detail(id:string){
-    const task=await this.get(id);if(task.archive_id)await new Archives(this.env,this.actor,this.source).get(task.archive_id);const resultRefs=JSON.parse(task.result_references_json??'[]') as {observation_id:string;content_version:number}[],visibleResultRefs=[];for(const reference of resultRefs){const current=await this.visibleReference(task,reference);if(current)visibleResultRefs.push(current);}const initiator=task.initiator_kind==='system'?systemInitiator:await this.stmt('SELECT name,version FROM members WHERE id=?',task.initiator_id).first<{name:string;version:number}>();const labelKeys=JSON.parse(task.labels_json??'[]') as string[];const safeTask={...task,label_keys:labelKeys,labels:labelKeys.map(key=>taskLabelNames[key]??key),overdue:task.status==='open'&&Date.parse(task.deadline_at)<=Date.now(),initiator_name:initiator?.name??'未知发起人',initiator_version:initiator&&'version' in initiator?initiator.version:null,initiator_avatar_key:task.initiator_kind==='system'?systemInitiator.avatar_key:null,result_references:visibleResultRefs,result_references_restricted:visibleResultRefs.length!==resultRefs.length};delete (safeTask as {result_references_json?:string;labels_json?:string}).result_references_json;delete (safeTask as {labels_json?:string}).labels_json;const events=await this.stmt('SELECT e.id,e.actor_id,(SELECT name FROM members WHERE id=e.actor_id) actor_name,e.source,e.kind,e.before_json,e.after_json,e.reason,e.created_at FROM work_task_events e WHERE e.task_id=? ORDER BY e.rowid DESC LIMIT 100',id).all<Record<string,unknown>>();return {task:safeTask,events:events.results,comments:await this.comments(task)};
+    const task=await this.get(id);const archive=task.archive_id?await new Archives(this.env,this.actor,this.source).get(task.archive_id):null;const resultRefs=JSON.parse(task.result_references_json??'[]') as {observation_id:string;content_version:number}[],visibleResultRefs=[];for(const reference of resultRefs){const current=await this.visibleReference(task,reference);if(current)visibleResultRefs.push(current);}const initiator=task.initiator_kind==='system'?systemInitiator:await this.stmt('SELECT name,version FROM members WHERE id=?',task.initiator_id).first<{name:string;version:number}>();const labelKeys=JSON.parse(task.labels_json??'[]') as string[];const safeTask={...task,ready_to_submit:taskDeliveryReady(task,archive),label_keys:labelKeys,labels:labelKeys.map(key=>taskLabelNames[key]??key),overdue:task.status==='open'&&Date.parse(task.deadline_at)<=Date.now(),initiator_name:initiator?.name??'未知发起人',initiator_version:initiator&&'version' in initiator?initiator.version:null,initiator_avatar_key:task.initiator_kind==='system'?systemInitiator.avatar_key:null,result_references:visibleResultRefs,result_references_restricted:visibleResultRefs.length!==resultRefs.length};delete (safeTask as {result_references_json?:string;labels_json?:string}).result_references_json;delete (safeTask as {labels_json?:string}).labels_json;const events=await this.stmt('SELECT e.id,e.actor_id,(SELECT name FROM members WHERE id=e.actor_id) actor_name,e.source,e.kind,e.before_json,e.after_json,e.reason,e.created_at FROM work_task_events e WHERE e.task_id=? ORDER BY e.rowid DESC LIMIT 100',id).all<Record<string,unknown>>();return {task:safeTask,events:events.results,comments:await this.comments(task)};
   }
   async expire(at=now()){
     const rows=await this.stmt("SELECT * FROM work_tasks WHERE status='open' AND deadline_at<=? ORDER BY deadline_at,id",at).all<Row>();
@@ -323,36 +334,21 @@ export class WorkTasks {
     }
     if(statements.length)await this.env.DB.batch(statements);return {count:statements.length,reminded:statements.length,overdue_count:rows.results.length};
   }
-  async refer(input:unknown){
-    const a=workTaskReferInput.parse(input);
-    return command(this.env,this.actor,{requestId:a.request_id,operation:'archive.refer',parameters:{archive_id:a.archive_id,expected_version:a.expected_version,deadline_at:a.deadline_at}},async()=>{
-      const archive=await this.stmt('SELECT id,type,name,status,closed,deleted,version FROM archives WHERE id=?',a.archive_id).first<{id:string;type:'person'|'org';name:string;status:string;closed:number;deleted:number;version:number}>();
-      if(!archive||archive.deleted)throw new Failure(404,'NOT_FOUND','档案不存在');if(archive.version!==a.expected_version)throw new Failure(409,'VERSION_CONFLICT','档案已被更新，请刷新后重试');if(archive.type!=='person')throw new Failure(400,'PERSON_ARCHIVE_REQUIRED','只有外部人物可以发起人事审核');if(archive.closed)throw new Failure(409,'ARCHIVE_CLOSED','关闭档案不能发起引荐');
-      if(isMemberStatus(archive.status))throw new Failure(409,'INVALID_REFERRAL_STAGE','社员不能作为外部人物提交审核');
-      const existing=await this.stmt("SELECT id,version FROM work_tasks WHERE archive_id=? AND kind='audit' AND status='open'",a.archive_id).first<{id:string;version:number}>();if(existing)return {result:{id:existing.id,task_id:existing.id,archive_id:a.archive_id,status:'open',archive_status:'人事审核',archive_version:archive.version,reused:true,changed:false},statements:[]};
-      if(a.deadline_at<=now())throw new Failure(400,'DEADLINE_REQUIRED','审核任务必须有未来期限');
-      const taskId=uid(),key=uid(),at=now(),nextVersion=archive.version+1,task={id:taskId,archive_id:a.archive_id,kind:'audit',labels:['audit'],priority:'P1',initiator_kind:'member',initiator_id:this.actor.id,title:`${archive.name} · 人事审核`,purpose:'了解对方情况、意愿以及可能参与的方向，形成有依据的审核结论。',delivery:'提交审核期间的观察与结论，结果留在关联人物档案。',source:'rule',status:'open',owner_id:null,deadline_at:a.deadline_at,created_at:at,updated_at:at,version:1};
-      return {result:{id:taskId,task_id:taskId,archive_id:a.archive_id,status:'open',archive_status:'人事审核',archive_version:nextVersion,reused:false,changed:true},statements:[this.stmt('INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(SELECT 1 FROM archives WHERE id=? AND version=? AND deleted=0 AND closed=0) THEN 1 ELSE 0 END)',key,a.archive_id,a.expected_version),this.stmt("UPDATE archives SET status='人事审核',closed=0,version=version+1,updated_at=? WHERE id=? AND version=? AND deleted=0 AND closed=0",at,a.archive_id,a.expected_version),this.stmt('INSERT INTO work_tasks(id,archive_id,kind,labels_json,priority,initiator_kind,initiator_id,title,purpose,delivery,source,status,deadline_at,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',taskId,a.archive_id,task.kind,JSON.stringify(task.labels),task.priority,task.initiator_kind,task.initiator_id,task.title,task.purpose,task.delivery,task.source,'open',task.deadline_at,this.actor.id,at,at),this.stmt('INSERT INTO archive_events(id,archive_id,actor_id,source,kind,before_json,after_json,created_at) VALUES(?,?,?,?,?,?,?,?)',uid(),a.archive_id,this.actor.id,this.source,'archive.state_changed',JSON.stringify({status:archive.status}),JSON.stringify({status:'人事审核',task_id:taskId}),at),this.event(taskId,'task.created',null,task),this.stmt('DELETE FROM mutation_guards WHERE id=?',key)]};
-    });
-  }
-  async confirmMembership(input:unknown){
-    const a=workTaskMembershipInput.parse(input);
-    return command(this.env,this.actor,{requestId:a.request_id,operation:'archive.confirm_membership',parameters:{archive_id:a.archive_id,expected_version:a.expected_version,deadline_at:a.deadline_at}},async()=>{
-      const archive=await this.stmt('SELECT id,type,name,status,closed,deleted,version FROM archives WHERE id=?',a.archive_id).first<{id:string;type:'person'|'org';name:string;status:string;closed:number;deleted:number;version:number}>();
-      if(!archive||archive.deleted)throw new Failure(404,'NOT_FOUND','档案不存在');if(archive.version!==a.expected_version)throw new Failure(409,'VERSION_CONFLICT','档案已被更新，请刷新后重试');if(archive.type!=='person')throw new Failure(400,'PERSON_ARCHIVE_REQUIRED','只有人物档案可以确认入社');if(archive.closed)throw new Failure(409,'ARCHIVE_CLOSED','关闭档案不能确认入社');if(archive.status!=='人事审核')throw new Failure(409,'INVALID_MEMBERSHIP_STAGE','只有人事审核中的档案可以确认入社');
-      const audit=await this.stmt("SELECT id FROM work_tasks WHERE archive_id=? AND kind='audit' AND status='completed' ORDER BY completed_at DESC LIMIT 1",a.archive_id).first<{id:string}>();if(!audit)throw new Failure(409,'AUDIT_RESULT_REQUIRED','请先完成并提交人事审核结果');
-      const existing=await this.stmt("SELECT id FROM work_tasks WHERE archive_id=? AND kind='onboarding' AND status='open'",a.archive_id).first<{id:string}>();if(existing)return {result:{id:existing.id,task_id:existing.id,archive_id:a.archive_id,status:'open',archive_status:'已加入待对接',archive_version:archive.version,reused:true,changed:false},statements:[]};
-      if(a.deadline_at<=now())throw new Failure(400,'DEADLINE_REQUIRED','入社对接任务必须有未来期限');
-      const taskId=uid(),key=uid(),at=now(),nextVersion=archive.version+1,task={id:taskId,archive_id:a.archive_id,kind:'onboarding',labels:['onboarding'],priority:'P1',initiator_kind:'member',initiator_id:this.actor.id,title:`${archive.name} · 入社对接`,purpose:'向新社员介绍组织与参与方式，落实后续联系和参与安排。',delivery:'提交对接期间的结果，并记录未解决事项或后续安排。',source:'rule',status:'open',owner_id:null,deadline_at:a.deadline_at,created_at:at,updated_at:at,version:1};
-      return {result:{id:taskId,task_id:taskId,archive_id:a.archive_id,status:'open',archive_status:'已加入待对接',archive_version:nextVersion,reused:false,changed:true},statements:[this.stmt('INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(SELECT 1 FROM archives WHERE id=? AND version=? AND deleted=0 AND closed=0) THEN 1 ELSE 0 END)',key,a.archive_id,a.expected_version),this.stmt("UPDATE archives SET status='已加入待对接',closed=0,version=version+1,updated_at=? WHERE id=? AND version=? AND deleted=0 AND closed=0",at,a.archive_id,a.expected_version),this.stmt('INSERT INTO work_tasks(id,archive_id,kind,labels_json,priority,initiator_kind,initiator_id,title,purpose,delivery,source,status,deadline_at,created_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',taskId,a.archive_id,task.kind,JSON.stringify(task.labels),task.priority,task.initiator_kind,task.initiator_id,task.title,task.purpose,task.delivery,task.source,'open',task.deadline_at,this.actor.id,at,at),this.stmt('INSERT INTO archive_events(id,archive_id,actor_id,source,kind,before_json,after_json,created_at) VALUES(?,?,?,?,?,?,?,?)',uid(),a.archive_id,this.actor.id,this.source,'archive.membership_confirmed',JSON.stringify({status:archive.status,audit_task_id:audit.id}),JSON.stringify({status:'已加入待对接',task_id:taskId}),at),this.event(taskId,'task.created',null,task),this.stmt('DELETE FROM mutation_guards WHERE id=?',key)]};
-    });
+  async refer(input:unknown){return this.personnelTransition(workTaskReferInput.parse(input),'人事审核');}
+  async confirmMembership(input:unknown){return this.personnelTransition(workTaskMembershipInput.parse(input),'已加入待对接');}
+  private async personnelTransition(a:z.infer<typeof workTaskReferInput>,status:'人事审核'|'已加入待对接'){
+    const service=new Archives(this.env,this.actor,this.source);
+    // setState owns request replay, version checks, state, task creation and history in one transaction.
+    // No pre-read can turn a successful retry into a stale-version failure.
+    const result=await service.setState({id:a.archive_id,expected_version:a.expected_version,status,member_ids:[],deadline_at:a.deadline_at,request_id:a.request_id});
+    return {...result,id:result.task_id??result.id,task_id:result.task_id??null,archive_id:a.archive_id,archive_status:status,archive_version:result.version,status:result.task_id?'open':null,reused:result.reused??!result.changed};
   }
   private async monthlyTargets(month:string){
-    const rows=await this.stmt(`SELECT a.id,a.type,a.name,a.status,a.version,
+    const rows=await this.stmt(`SELECT a.id,a.type,a.name,a.status,a.person_role,a.member_status,a.version,
       (SELECT id FROM work_tasks t WHERE t.archive_id=a.id AND t.kind='monthly' AND t.period_key=?) existing_task_id
       FROM archives a
-      WHERE a.deleted=0 AND a.closed=0 AND ((a.type='person' AND a.status IN (?,?)) OR (a.type='person' AND a.status NOT IN (?,?)) OR a.type='org')
-      ORDER BY a.name,a.id`,month,memberStatuses[0],memberStatuses[1],memberStatuses[0],memberStatuses[1]).all<{id:string;type:'person'|'org';name:string;status:string;version:number;existing_task_id:string|null}>();
+      WHERE a.deleted=0 AND a.closed=0 AND a.type IN ('person','org')
+      ORDER BY a.name,a.id`,month).all<{id:string;type:'person'|'org';name:string;status:string;person_role:'external'|'member'|null;member_status:'可接工作'|'请假'|'失联'|null;version:number;existing_task_id:string|null}>();
     return rows.results;
   }
   private async monthlyTasks(month:string){
@@ -362,7 +358,7 @@ export class WorkTasks {
   }
   async previewMonthly(input:unknown={}){
     assertAdmin(this.actor);const a=monthlyPreviewInput.parse(input),month=monthKey(a.month??monthKeyAt()),targets=await this.monthlyTargets(month);
-    return {month,deadline_at:monthDeadline(month),archives:targets.map(target=>({id:target.id,type:target.type,name:target.name,status:target.status,existing_task_id:target.existing_task_id}))};
+    return {month,deadline_at:monthDeadline(month),archives:targets.map(target=>({id:target.id,type:target.type,name:target.name,status:archiveDisplayStatus(target),existing_task_id:target.existing_task_id}))};
   }
   async generateScheduledMonthly(){
     if(this.env.MONTHLY_TASKS_ENABLED!=='true')return null;
@@ -374,7 +370,7 @@ export class WorkTasks {
     const generated=await command(this.env,this.actor,{requestId:a.request_id,operation:'work_task.generate_monthly',parameters:{month,initiator_kind:a.initiator_kind}},async()=>{
       const at=now(),statements:D1PreparedStatement[]=[];
       for(const target of targets){
-        const key=uid(),taskId=uid(),member=target.type==='person'&&isMemberStatus(target.status);
+        const key=uid(),taskId=uid(),member=isMemberArchive(target);
         const title=`${target.name} · ${month} ${member?'月度沟通':'月度观察'}`;
         const purpose=member?'了解近期生活、参与、困难、需要支持或想调整的事项，结合已有联系自然交流；联系不到也如实记录。':'了解近期变化、联系与需求，把有用结果写入关联档案；没有适用资料时如实交代。';
         const delivery='将本次跟进结果及后续关注事项写入关联档案的观察记录；无需在任务评论重复提交。';

@@ -13,6 +13,7 @@ async function waitList(page,scope,query,action){
 }
 async function openList(page,path){
  await page.goto(v.base+path);await page.locator('.archive-head').waitFor({state:'attached'});
+ await page.getByText('正在打开档案…',{exact:true}).waitFor({state:'hidden'});
  const close=page.getByRole('button',{name:'关闭档案详情',exact:true});if(await close.isVisible())await close.click();
 }
 try{
@@ -56,6 +57,6 @@ try{
  checks.push('MCP task cancellation restores the recorded prior contact relationship, and the reloaded web archive agrees');
  assert.deepEqual(errors,[]);console.log('PASS: member/external ranges and audit withdrawal through real interfaces at desktop/mobile widths');
 }finally{
- try{if(browser)await browser.close();for(const id of created){const a=(await v.call('get_archive',{id})).archive;if(!a.closed)await v.call('set_archive_state',{id,expected_version:a.version,status:'已弃用',member_ids:[],request_id:randomUUID()});const latest=(await v.call('get_archive',{id})).archive;await v.call('delete_archive',{id,expected_version:latest.version,request_id:randomUUID()});}}
+ try{if(browser)await browser.close();for(const id of created){const a=(await v.call('get_archive',{id})).archive;if(!a.closed)await v.call('set_archive_state',{id,expected_version:a.version,status:'已弃用',...(a.person_role==='member'?{membership_action:'leave'}:{}),member_ids:[],request_id:randomUUID()});const latest=(await v.call('get_archive',{id})).archive;await v.call('delete_archive',{id,expected_version:latest.version,request_id:randomUUID()});}}
  finally{await v.close(checks);}
 }

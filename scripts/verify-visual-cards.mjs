@@ -23,7 +23,7 @@ try{
   await page.setViewportSize({width,height:width<600?844:1080});
   if(width<600)await page.getByRole('button',{name:'关闭档案详情',exact:true}).click();
   check(`卡片 ${width} 完成标记直接盖住淡化内容`,await page.locator('.entity-row').evaluateAll(es=>es.every(e=>{const r=e.getBoundingClientRect(),stamp=e.querySelector('.completion-stamp')?.getBoundingClientRect(),content=e.querySelector('.row-content'),c=content.getBoundingClientRect();return e.scrollWidth<=e.clientWidth+1&&(!stamp||(stamp.width>=140&&stamp.left<c.right&&stamp.right>c.left&&stamp.top<c.bottom&&stamp.bottom>c.top&&Math.abs((stamp.left+stamp.right)/2-(r.left+r.right)/2)<2&&getComputedStyle(content).opacity==='0.3'));})));
-  check(`卡片 ${width} 大勾大叉均清晰存在`,await page.locator('.completion-stamp.joined').count()===1&&await page.locator('.completion-stamp.discarded').count()>=1);
+  check(`卡片 ${width} 社员不盖完成勾，弃用保留大叉`,await page.locator('.completion-stamp.joined').count()===0&&await page.locator('.completion-stamp.discarded').count()>=1);
   await page.screenshot({path:out+`/cards-${width}.png`});
  }
  await page.setViewportSize({width:1440,height:1080});await page.locator('.entity-row').nth(1).click();await page.getByRole('button',{name:'重新开启',exact:true}).waitFor();

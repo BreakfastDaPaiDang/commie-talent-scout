@@ -25,7 +25,7 @@ test('person ranges partition joined and external archives before counts, filter
   assert.deepEqual((await service.list({type:'person',person_scope,scope:'unread'})).archives.map(row=>row.id).sort(),expected);
  }
  assert.equal((await service.list({type:'person',person_scope:'external',status:'已入伙'})).counts.all,0);
- assert.equal((await service.list({type:'person',person_scope:'members',closed:'open'})).counts.all,2);
+ assert.equal((await service.list({type:'person',person_scope:'members',closed:'open'})).counts.all,1);
  assert.equal((await service.list({type:'person',person_scope:'external',closed:'closed'})).counts.all,1);
  const joined=rows.find(row=>row.status==='已入伙');await new Observations(f.env,f.actor,'mcp').create({archive_id:joined.id,body:'虚构观察中的独特检索词',request_id:uuid()});
  assert.equal((await service.list({type:'person',person_scope:'external',query:'独特检索词'})).counts.all,0);

@@ -7,7 +7,7 @@ const v=await verificationClient('archive-closed-history'),checks=[],created=[],
 try{
  const suffix=randomUUID().slice(0,8),errors=[];
  browser=await chromium.launch({channel:process.env.CTS_TEST_BROWSER??'msedge',headless:true});const context=await browser.newContext({viewport:{width:1440,height:1000}}),[name,...value]=v.sessionCookie.split('=');await context.addCookies([{name,value:value.join('='),url:v.base}]);const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));
- for(const [type,scope,path,status] of [['person','external','/','个人接触'],['person','members','/members','已入伙'],['org','all','/organizations','个人接触']]){
+ for(const [type,scope,path,status] of [['person','external','/','个人接触'],['org','all','/organizations','个人接触']]){
   const a=await v.call('create_archive',{type,name:`虚构历史筛选 ${suffix} ${scope}`,status,request_id:randomUUID()});created.push(a.id);
   // Use a real closure for external people and organizations. Member lifecycle redesign is outside #76.
   if(scope!=='members')await v.call('set_archive_state',{id:a.id,expected_version:a.version,status:'已弃用',member_ids:[],request_id:randomUUID()});

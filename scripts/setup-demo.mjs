@@ -17,6 +17,7 @@ const ids={
  member:'10000000-0000-4000-8000-000000000002',
  auditPerson:'20000000-0000-4000-8000-000000000001',
  friendPerson:'20000000-0000-4000-8000-000000000002',
+ joinedPerson:'20000000-0000-4000-8000-000000000004',
  onboardingPerson:'20000000-0000-4000-8000-000000000003',
  org:'30000000-0000-4000-8000-000000000001',
  observation:'40000000-0000-4000-8000-000000000001',
@@ -74,7 +75,7 @@ function credentials(){
 }
 
 function resetStatements(){
- const archives=[ids.auditPerson,ids.friendPerson,ids.onboardingPerson,ids.org].map(sql).join(',');
+ const archives=[ids.auditPerson,ids.friendPerson,ids.onboardingPerson,ids.joinedPerson,ids.org].map(sql).join(',');
  const tasks=[ids.auditTask,ids.onboardingTask,ids.monthlyTask,ids.failedTask].map(sql).join(',');
  const observations=[ids.observation].map(sql).join(',');
  const tags=[ids.directionTag,ids.identityTag,ids.orgTag].map(sql).join(',');
@@ -129,6 +130,8 @@ function seedSql(account,metadata){
   statement('archives',['id','type','name','contacts_json','links_json','current_need','status','closed','created_by','created_at','updated_at','version'],[ids.friendPerson,'person','北风社友',json([{type:'邮箱',value:'friend@example.invalid'}]),json([]),'保持稳定联系，了解未来合作机会。','外部社友',0,ids.admin,at,at,1]),
   statement('archives',['id','type','name','contacts_json','links_json','current_need','status','closed','created_by','created_at','updated_at','version'],[ids.onboardingPerson,'person','新加入的观察对象',json([{type:'QQ',value:'100000002'}]),json([]),'确认入社后的首次对接方向。','已加入待对接',0,ids.admin,at,at,1]),
   statement('archives',['id','type','name','contacts_json','links_json','current_need','status','closed','created_by','created_at','updated_at','version'],[ids.org,'org','红星社区互助组',json([{type:'网站',value:'https://example.invalid/red-star'}]),json([]),'确认组织交流窗口和长期联系人。','组织交流',0,ids.admin,at,at,1]),
+  statement('archives',['id','type','name','status','person_role','member_status','closed','created_by','created_at','updated_at','version'],[ids.joinedPerson,'person','演示在社成员','已入伙','member','可接工作',0,ids.admin,at,at,1]),
+  statement('archive_events',['id','archive_id','actor_id','source','kind','after_json','created_at'],['b0000000-0000-4000-8000-000000000004',ids.joinedPerson,ids.admin,'web','archive.created',json({name:'演示在社成员',person_role:'member',member_status:'可接工作'}),at]),
   statement('archive_bindings',['archive_id','status','member_id'],[ids.auditPerson,'人事审核',ids.admin]),
   statement('archive_bindings',['archive_id','status','member_id'],[ids.onboardingPerson,'已加入待对接',ids.member]),
   statement('archive_bindings',['archive_id','status','member_id'],[ids.org,'组织交流',ids.member]),

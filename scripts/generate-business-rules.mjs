@@ -2,7 +2,7 @@ import {readFileSync,writeFileSync,mkdirSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {resolve} from 'node:path';
 import {archiveStatePolicy} from '../app/shared/archive-states.ts';
-import {archiveLifecycleModule,archiveTransitionRules,assertReopenAllowed,assertStateAndResponsibility,transitionChanged,planArchiveEffects,auditCancellationTarget} from '../app/server/rules/archive-lifecycle.ts';
+import {archiveLifecycleModule,archiveTransitionRules,assertReopenAllowed,assertStateAndResponsibility,transitionChanged,planArchiveEffects,auditCancellationTarget,preparePersonnelTask} from '../app/server/rules/archive-lifecycle.ts';
 import {planRules} from '../app/server/rules/contract.ts';
 
 const root=new URL('../',import.meta.url),output=new URL('docs/generated/archive-rules.md',root);
@@ -45,7 +45,7 @@ export function renderBusinessRules(){
  });
  lines.push(`  next${archiveTransitionRules.length-1} --> batch["command: 权限与版本复核 / 原子写入 / 收据"]`,'```',
   '','## 执行条件与结果的源码','');
- const funcs=new Set([assertReopenAllowed,assertStateAndResponsibility,transitionChanged,planArchiveEffects,auditCancellationTarget,...archiveTransitionRules.flatMap(r=>[r.when,r.apply])]);
+ const funcs=new Set([assertReopenAllowed,assertStateAndResponsibility,transitionChanged,planArchiveEffects,auditCancellationTarget,preparePersonnelTask,...archiveTransitionRules.flatMap(r=>[r.when,r.apply])]);
  for(const fn of funcs)lines.push(`### ${fn.name}`,'',link(lifecycle,fn.name),'','```javascript',source(fn),'```','');
  return lines.join('\n');
 }

@@ -1,0 +1,76 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {randomUUID as uuid} from 'node:crypto';
+import {fixture} from './d1-fixture.mjs';
+import {Archives} from '../app/server/archives.ts';
+import {WorkTasks} from '../app/server/work-tasks.ts';
+import {Observations} from '../app/server/observations.ts';
+const change=(a,status,extra={})=>({id:a.id,expected_version:a.version,status,member_ids:[],request_id:uuid(),...extra});
+test('personnel transition, automatic task and history roll back together; member edits are idempotent',async t=>{
+ const f=fixture();t.after(f.close);const s=new Archives(f.env,f.actor,'web');
+ let a=await s.create({type:'person',name:'原子状态切换',request_id:uuid()});
+ f.sqlite.exec("CREATE TRIGGER reject_task BEFORE INSERT ON work_tasks BEGIN SELECT RAISE(ABORT,'injected task failure'); END;");
+ await assert.rejects(s.setState(change(a,'人事审核')));
+ assert.equal((await s.get(a.id)).status,'视奸观察');
+ assert.equal(f.sqlite.prepare('SELECT count(*) n FROM work_tasks').get().n,0);
+ assert.equal(f.sqlite.prepare('SELECT count(*) n FROM archive_events WHERE archive_id=?').get(a.id).n,1);
+ f.sqlite.exec('DROP TRIGGER reject_task');
+ a=await s.setState(change(a,'已入伙'));
+ const cmd=change(a,'已入伙',{member_status:'请假',member_ids:[f.actor.id]});
+ const first=await s.setState(cmd),replay=await s.setState(cmd);assert.equal(replay.replayed,true);assert.equal(replay.version,first.version);assert.equal(replay.member_status,'请假');
+ const profile=await s.get(a.id);assert.equal(profile.members[0].id,f.actor.id);
+ const event=f.sqlite.prepare("SELECT before_json,after_json FROM archive_events WHERE archive_id=? AND kind='archive.member_status_changed'").get(a.id);
+ assert.equal(JSON.parse(event.after_json).members[0].id,f.actor.id);
+ const noChange=await s.setState(change(profile,'已入伙',{member_status:'请假',member_ids:[f.actor.id]}));assert.equal(noChange.changed,false);assert.equal(noChange.version,profile.version);
+ await assert.rejects(s.setState(change(a,'已入伙',{member_status:'失联'})),{code:'VERSION_CONFLICT'});
+});
+test('member archive follows personnel stages without completing tasks, with independent availability',async t=>{
+ const f=fixture();t.after(f.close);const s=new Archives(f.env,f.actor,'web'),mcp=new Archives(f.env,f.actor,'mcp'),tasks=new WorkTasks(f.env,f.actor,'web');
+ let a=await s.create({type:'person',name:'虚构社员',request_id:uuid()});
+ a=await s.setState(change(a,'人事审核'));
+ assert.equal((await tasks.list({archive_id:a.id})).tasks.length,1);
+ a=await tasks.confirmMembership({archive_id:a.id,expected_version:a.version,deadline_at:'2099-01-01T00:00:00.000Z',request_id:uuid()}).then(r=>({id:r.archive_id,version:r.archive_version}));
+ assert.equal((await s.list({type:'person',person_scope:'external'})).counts.all,1);
+ assert.equal((await s.list({type:'person',person_scope:'members'})).counts.all,0);
+ a=await s.setState(change(a,'已入伙'));
+ let profile=await mcp.get(a.id);assert.equal(profile.person_role,'member');assert.equal(profile.member_status,'可接工作');assert.equal(profile.closed,false);
+ assert.match((await s.detail(a.id)).archive.url,/\/members\?archive=/);
+ const onboarding=(await tasks.list({archive_id:a.id})).tasks.find(t=>t.kind==='onboarding');
+ assert.equal(onboarding.status,'open');
+ await tasks.claim({id:onboarding.id,expected_version:onboarding.version,request_id:uuid()});
+ assert.equal((await tasks.list({archive_id:a.id})).tasks.find(t=>t.kind==='onboarding').ready_to_submit,true);
+ a=await mcp.setState(change(a,'已入伙',{member_status:'请假'}));
+ assert.equal((await s.list({type:'person',person_scope:'members',member_status:'请假'})).counts.all,1);
+ assert.equal((await s.list({type:'person',person_scope:'external'})).counts.all,0);
+ await assert.rejects(s.setState(change(a,'已弃用')),{code:'MEMBERSHIP_ACTION_REQUIRED'});
+ await assert.rejects(s.setState(change(a,'个人接触')),{code:'MEMBERSHIP_ACTION_REQUIRED'});
+ a=await s.setState(change(a,'已入伙',{member_status:'失联'}));
+ await new Observations(f.env,f.actor,'web').create({archive_id:a.id,body:'暂时联系不到，如实记下。',request_id:uuid()});
+ profile=await s.get(a.id);assert.equal(profile.member_status,'失联');
+ a=await mcp.setState(change(profile,'外部社友',{membership_action:'to_friend'}));
+ profile=await s.get(a.id);assert.equal(profile.person_role,'external');assert.equal(profile.member_status,null);assert.equal(profile.closed,false);
+ assert.equal((await tasks.list({archive_id:a.id})).tasks.filter(t=>t.kind==='onboarding').length,0);
+});
+test('all member states keep monthly followup; default creation and legacy reads do not fabricate history',async t=>{
+ const f=fixture();t.after(f.close);f.sqlite.prepare("UPDATE members SET role='admin' WHERE id=?").run(f.actor.id);f.actor.role='admin';
+ const s=new Archives(f.env,f.actor,'web'),tasks=new WorkTasks(f.env,f.actor,'system'),ids=[];
+ for(const member_status of ['可接工作','请假','失联']){
+  const a=await s.create({type:'person',name:'虚构'+member_status,status:'已入伙',member_status,request_id:uuid()});ids.push(a.id);
+  assert.equal((await tasks.list({archive_id:a.id})).tasks.length,0);
+ }
+ await tasks.generateMonthly({month:'2098-12',request_id:uuid()});await tasks.generateMonthly({month:'2098-12',request_id:uuid()});
+ for(const id of ids){const list=(await tasks.list({archive_id:id})).tasks;assert.equal(list.length,1);assert.match(list[0].title,/月度沟通/);}
+ const unreachable=(await tasks.list({archive_id:ids[2]})).tasks[0];
+ await new Observations(f.env,f.actor,'web').create({archive_id:ids[2],body:'本月暂时联系不到，保留后续关注。',request_id:uuid()});
+ const claimed=await tasks.claim({id:unreachable.id,expected_version:unreachable.version,request_id:uuid()});
+ const completed=await tasks.complete({id:unreachable.id,expected_version:claimed.version,result_kind:'unable_to_contact',result_text:'已如实留档，后续继续联系。',request_id:uuid()});
+ assert.equal(completed.result_kind,'unable_to_contact');assert.equal((await s.get(ids[2])).member_status,'失联');
+ let a=await s.get(ids[0]);await s.setState(change(a,'已入伙',{member_status:'请假'}));
+ assert.equal((await tasks.list({archive_id:a.id})).tasks[0].status,'open');
+ await tasks.generateMonthly({month:'2099-01',request_id:uuid()});assert.equal((await tasks.list({archive_id:a.id})).tasks.length,2);
+ a=await s.get(ids[0]);await s.setState(change(a,'已弃用',{membership_action:'leave'}));assert.equal((await s.get(a.id)).person_role,'external');assert.equal((await s.get(a.id)).closed,true);
+ f.sqlite.prepare('UPDATE archives SET person_role=NULL,member_status=NULL,closed=1 WHERE id=?').run(ids[1]);
+ const before=f.sqlite.prepare('SELECT count(*) n FROM archive_events').get().n;
+ const legacy=await s.get(ids[1]);assert.equal(legacy.person_role,'member');assert.equal(legacy.member_status,'可接工作');assert.equal(legacy.closed,true);
+ assert.equal(f.sqlite.prepare('SELECT count(*) n FROM archive_events').get().n,before);
+});
