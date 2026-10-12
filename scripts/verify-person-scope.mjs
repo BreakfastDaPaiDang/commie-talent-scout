@@ -39,7 +39,10 @@ try{
  }
  await page.setViewportSize({width:390,height:844});
  const external=await v.call('create_archive',{type:'person',name:'虚构审核撤回 '+randomUUID().slice(0,8),status:'个人接触',request_id:randomUUID()});created.push(external.id);
- await page.goto(v.base+'/?archive='+external.id);await page.getByRole('button',{name:'提交人事审核',exact:true}).click();
+ await page.goto(v.base+'/?archive='+external.id);await page.getByRole('button',{name:'编辑档案',exact:true}).click();
+  await page.getByRole('dialog',{name:'编辑档案',exact:true}).getByRole('tab',{name:'状态与成员',exact:true}).click();
+  await page.getByRole('dialog',{name:'编辑档案',exact:true}).getByRole('radio',{name:'人事审核',exact:true}).check();
+  await page.getByRole('dialog',{name:'编辑档案',exact:true}).getByRole('button',{name:'保存状态与成员',exact:true}).click();
  await page.waitForFunction(()=>document.querySelector('.entity-heading .state-badge')?.textContent==='人事审核');
  const tasks=(await v.call('list_work_tasks',{archive_id:external.id})).tasks;assert.equal(tasks.length,1);
  await page.getByRole('button',{name:'编辑档案',exact:true}).click();const editor=page.getByRole('dialog',{name:'编辑档案',exact:true});

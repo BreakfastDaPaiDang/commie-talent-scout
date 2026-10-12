@@ -79,3 +79,5 @@
  .task-workspace-head .archive-head>div:first-child{flex:1}
  .task-workspace-head .archive-head .search-field{order:3;flex-basis:100%}
 }
+
+.related-tasks>header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:18px 0}.related-tasks .task-list-row{border:1px solid var(--line);border-bottom:0}.related-tasks .task-list-row:last-of-type{border-bottom:1px solid var(--line)}

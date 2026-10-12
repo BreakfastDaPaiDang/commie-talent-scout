@@ -9,7 +9,7 @@ import {ArchiveHead,RecordBody,ScopeToolbar} from '../ui/Workspace';
 import {TaskLabelsField,TaskBookLayout,TaskRecommendationCard,TaskDetailCard,TaskListRow,TaskBoardColumn,TaskBoardCard,taskStagePriority,type TaskStage} from '../ui/TaskBook';
 
 export type ArchivePreview={person_role?:'external'|'member';id:string;type:'person'|'org';name:string;status:string;version:number;updated_at:string;observation_count:number;latest_observation:string|null;members:{id:string;name:string;frozen:boolean}[];tag_summary:{tags:{tag_id:string;category_name:string;name:string;color:string;focus:number}[];total:number}};
-type Task={id:string;archive_id:string|null;archive_preview?:ArchivePreview;kind:'audit'|'onboarding'|'monthly'|'cooperation'|'custom';labels?:string[];label_keys?:string[];priority?:'P0'|'P1'|'P2';title:string;purpose:string;delivery:string;status:'open'|'completed'|'expired'|'cancelled';owner_id:string|null;owner_name?:string|null;owner_version?:number|null;initiator_kind?:'member'|'system';initiator_id?:string|null;initiator_name?:string|null;initiator_version?:number|null;initiator_avatar_key?:string|null;created_by:string;deadline_at:string;created_at:string;updated_at?:string;version:number;overdue?:boolean;result_kind?:string|null;result_text?:string|null;result_references?:{observation_id:string;archive_id:string;content_version:number}[];result_references_restricted?:boolean;completed_at?:string|null;closed_at?:string|null;closed_reason?:string|null;period_key?:string|null;candidate_count?:number;push_stage?:string};
+export type Task={id:string;archive_id:string|null;archive_preview?:ArchivePreview;kind:'audit'|'onboarding'|'monthly'|'cooperation'|'custom';labels?:string[];label_keys?:string[];priority?:'P0'|'P1'|'P2';title:string;purpose:string;delivery:string;status:'open'|'completed'|'expired'|'cancelled';owner_id:string|null;owner_name?:string|null;owner_version?:number|null;initiator_kind?:'member'|'system';initiator_id?:string|null;initiator_name?:string|null;initiator_version?:number|null;initiator_avatar_key?:string|null;created_by:string;deadline_at:string;created_at:string;updated_at?:string;version:number;overdue?:boolean;result_kind?:string|null;result_text?:string|null;result_references?:{observation_id:string;archive_id:string;content_version:number}[];result_references_restricted?:boolean;completed_at?:string|null;closed_at?:string|null;closed_reason?:string|null;period_key?:string|null;candidate_count?:number;push_stage?:string};
 type ObservationOption={id:string;content_version:number;author_name:string;created_at:string;body:string;deleted:boolean};
 const labels:Record<Task['kind'],string>={audit:'人事审核',onboarding:'入社对接',monthly:'月度沟通',cooperation:'组织合作',custom:'临时工作'};
 const taskLabelKeys=(value:string)=>[...new Set(value.split(/[、,，]/).map(value=>value.trim()).filter(Boolean).map(value=>Object.entries(labels).find(([,label])=>label===value)?.[0]??value))];
@@ -103,7 +103,7 @@ function taskActionTitle(task:Task){
   return name&&task.title.startsWith(`${name} ${'\u00b7'} `)?task.title.slice(name.length+3):task.title;
 }
 
-function TaskIndexItem({task,actor,selected,onSelect,onDismiss}:{task:Task;actor:Member;selected:boolean;onSelect:()=>void;onDismiss?:()=>void}){
+export function TaskIndexItem({task,actor,selected,onSelect,onDismiss}:{task:Task;actor:Member;selected:boolean;onSelect:()=>void;onDismiss?:()=>void}){
  const stage=taskStage(task),closed=stage==='failed'||stage==='cancelled';
  return <TaskListRow stage={stage} title={taskActionTitle(task)} kind={labels[task.kind]} labels={task.labels} priority={task.priority??'P2'} subject={task.archive_preview?<><Avatar name={task.archive_preview.name} type={task.archive_preview.type} size="micro" src={avatarUrl('archive',task.archive_preview.id,task.archive_preview.version)}/>{task.archive_preview.name}</>:'未关联档案'} owner={task.owner_id?<><Avatar name={task.owner_name??'任务负责人'} size="micro" src={task.owner_version?avatarUrl('member',task.owner_id,task.owner_version):undefined}/>{task.owner_id===actor.id?'我':task.owner_name??'已接取'}</>:undefined} deadline={displayDate(task.deadline_at)} remaining={remainingTime(task)} urgent={task.status==='open'&&Date.parse(task.deadline_at)-Date.now()<86400000} selected={selected} onSelect={onSelect} onDismiss={closed?onDismiss:undefined}/>;
 }
@@ -143,6 +143,10 @@ function TaskScene({task,actor,onChanged,onOpenArchive}:{task:Task;actor:Member;
  </TaskDetailCard>;
 }
 
+export function TaskDetailModal({onClose,...props}:React.ComponentProps<typeof TaskScene>&{onClose:()=>void}){
+ return <Modal title="任务详情" wide onClose={onClose}><TaskScene key={props.task.id} {...props}/></Modal>;
+}
+
 function monthStartInBeijing(at=Date.now()){
  const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Shanghai',year:'numeric',month:'2-digit'}).formatToParts(new Date(at));
  const year=parts.find(part=>part.type==='year')?.value??'2026';
@@ -178,7 +182,7 @@ function BoardHall({tasks,searchTasks,actor,selectedTask,onSelect,onChanged,onOp
   <div className="task-board-columns">{column('waiting','待领取','还没有负责人，等待成员接取',waiting)}{column('active','进行中','已有负责人正在推进',active)}{column('closed','已关闭',closedRange==='all'?'全部已关闭任务':'最近 '+closedRange+' 天内关闭的任务',closed)}</div>
   <footer className="task-hall-footer"><span>点击任务卡查看目的、交付要求和评论历史。</span></footer>
   </section>
-  {selectedTask&&<Modal title="任务详情" wide onClose={()=>onSelect(null)}><TaskScene key={selectedTask.id} task={selectedTask} actor={actor} onChanged={onChanged} onOpenArchive={onOpenArchive}/></Modal>}
+  {selectedTask&&<TaskDetailModal task={selectedTask} actor={actor} onChanged={onChanged} onOpenArchive={onOpenArchive} onClose={()=>onSelect(null)}/>}
  </div>;
 }
 function taskLabelName(key:string){return labels[key as Task['kind']]??key;}

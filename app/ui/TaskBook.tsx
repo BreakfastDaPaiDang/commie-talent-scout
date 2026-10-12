@@ -5,6 +5,9 @@ import './task-book.css';
 export type TaskStage = 'failed' | 'cancelled' | 'ready' | 'active' | 'waiting' | 'closed';
 export const taskStageLabels: Record<TaskStage,string> = {failed:'未完成关闭',cancelled:'已取消',ready:'待提交',active:'进行中',waiting:'待接取',closed:'已完成'};
 export const taskStagePriority: Record<TaskStage,number> = {failed:0,cancelled:0,ready:1,active:2,waiting:3,closed:4};
+export function RelatedTasksFrame({history,onHistory,onRefresh,children}:{history:boolean;onHistory:(value:boolean)=>void;onRefresh?:()=>void;children:ReactNode}){
+ return <section className="related-tasks"><header><div className="scope-tabs" aria-label="关联任务范围"><button className={!history?'active':''} aria-pressed={!history} onClick={()=>onHistory(false)}>开启中</button><button className={history?'active':''} aria-pressed={history} onClick={()=>onHistory(true)}>已关闭</button></div>{onRefresh&&<button className="text-button" onClick={onRefresh}>刷新任务</button>}</header>{children}</section>;
+}
 export function TaskMark({stage}: {stage:TaskStage}) {
  return <span className={`task-mark task-mark-${stage}`} aria-hidden="true">{stage==='closed'?'✓':stage==='ready'||stage==='active'?'?':'!'}</span>;
 }

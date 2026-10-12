@@ -22,7 +22,10 @@ try{
   assert.equal((await v.call('list_archives',{type:'person',person_scope:'members',query:name})).counts.all,0);
   const tasks=(await v.call('list_work_tasks',{archive_id:a.id})).tasks;assert.equal(tasks.length,2);assert.ok(tasks.every(t=>t.status==='open'));
   await page.goto(v.base+'/?archive='+a.id);
-  await page.getByRole('button',{name:'已入伙，转入社员',exact:true}).click();
+  await page.getByRole('button',{name:'编辑档案',exact:true}).click();
+  await page.getByRole('dialog',{name:'编辑档案',exact:true}).getByRole('tab',{name:'状态与成员',exact:true}).click();
+  await page.getByRole('dialog',{name:'编辑档案',exact:true}).getByRole('radio',{name:'已入伙',exact:true}).check();
+  await page.getByRole('dialog',{name:'编辑档案',exact:true}).getByRole('button',{name:'保存状态与成员',exact:true}).click();
   await page.waitForURL('**/members?archive='+a.id);
   await page.waitForFunction(()=>document.querySelector('.entity-heading .state-badge')?.textContent==='可接工作');
   assert.equal((await get(a.id)).closed,false);

@@ -1,3 +1,4 @@
+import {ArchiveTasks} from './ArchiveTasks';
 import {ClosedHistoryFilter,closedHistoryLabel,type ClosedHistoryRange} from '../ui/Workspace';
 import {ArchiveDeletionConfirmation,ArchiveLifecycleNotice} from '../ui/ArchiveLifecycle';
 import {TagFilter} from './TagMaintenance';
@@ -24,8 +25,8 @@ import {TagsSection,TagSummary} from './TagsSection';
 import {ObservationSection} from './ObservationSection';
 
 type Kind='person'|'org';
-type ArchiveTask={id:string;kind:'audit'|'onboarding'|'monthly'|'cooperation'|'custom';title:string;purpose:string;delivery:string;status:string;owner_id:string|null;owner_name?:string|null;owner_version?:number|null;deadline_at:string;version:number;result_kind?:string|null;result_text?:string|null};
-type ArchiveWithTasks=Archive&{work_tasks?:ArchiveTask[]};
+type ArchiveWithTasks=Archive&{open_task_count?:number};
+
 type Preference={query:string;selected:string|null;scope:'all'|'mine'|'unread';status:string;member_id:string;closed:'all'|'open'|'closed';closed_history:ClosedHistoryRange;tag_ids:string[]};
 const defaults:Preference={query:'',selected:null,scope:'all',status:'',member_id:'',closed:'all',closed_history:'30',tag_ids:[]};
 type ListArchive=Archive&{unread_count?:number;search_match?:{observation_id:string;excerpt:string}|null};
@@ -62,6 +63,12 @@ export function ArchivesPage({actor,type,personScope='all',linked,detailOnly=fal
  useEffect(()=>{if(!detailOnly)void load();return()=>{request.current++;};},[type,personScope,pref.query,pref.scope,pref.status,pref.member_id,pref.closed,pref.closed_history,pref.tag_ids.join(','),revision,detailOnly]);
  function choose(id:string|null,match?:ListArchive['search_match']){setNotice('');setExpanded(false);if(pref.selected!==id)setSelected(null);setPref(p=>({...p,selected:id}));const next=match?{observation_id:match.observation_id,query:pref.query,key:crypto.randomUUID()}:undefined;setFocus(next);if(!detailOnly){const params=new URLSearchParams();if(id)params.set('archive',id);if(next){params.set('observation',next.observation_id);params.set('highlight',next.query);}history.replaceState(null,'',location.pathname+(params.size?'?'+params:''));}}
  useEffect(()=>{let timer:ReturnType<typeof setTimeout>|undefined;const refresh=()=>{clearTimeout(timer);timer=setTimeout(()=>{api<{drafts:{archive_id:string}[]}>('/drafts').then(r=>setDraftIds(r.drafts.map(d=>d.archive_id))).catch(()=>{});},500);};refresh();window.addEventListener('cts-drafts-changed',refresh);return()=>{clearTimeout(timer);window.removeEventListener('cts-drafts-changed',refresh);};},[]);
+ function openTaskArchive(archive:import('./WorkTasksPage').ArchivePreview,taskId:string,observationId?:string,contentVersion?:number){
+  const params=new URLSearchParams({archive:archive.id,task:taskId});if(new URLSearchParams(location.search).get('from')==='tasks')params.set('from','tasks');if(observationId)params.set('observation',observationId);if(contentVersion)params.set('version',String(contentVersion));
+  const path=archivePath(archive),previousPath=location.pathname;if(!detailOnly)history.pushState(null,'',path+'?'+params);
+  if(!detailOnly&&path!==previousPath){window.dispatchEvent(new PopStateEvent('popstate'));return;}
+  setPref(p=>({...p,selected:archive.id}));setFocus({observation_id:observationId,content_version:contentVersion,key:crypto.randomUUID()});
+ }
  async function saved(id:string,changed:boolean,message?:string){const r=await api<{archive:Archive}>('/archives/'+id);if(!detailOnly&&!trash&&archivePath(r.archive)!==location.pathname){const params=new URLSearchParams(location.search);params.set('archive',id);history.pushState(null,'',archivePath(r.archive)+'?'+params);window.dispatchEvent(new window.PopStateEvent('popstate'));}setDialog(null);setStateDialog(null);choose(id);setRevision(v=>v+1);setNotice(message??(changed?'档案已保存':'资料没有变化'));}
 
  useEffect(()=>{if(!['档案已保存','资料没有变化'].includes(notice))return;const timer=setTimeout(()=>setNotice(''),2800);return()=>clearTimeout(timer);},[notice]);
@@ -79,7 +86,7 @@ export function ArchivesPage({actor,type,personScope='all',linked,detailOnly=fal
   <PageError error={error} retry={()=>void load()}/>{notice&&!pref.selected&&<p className="form-notice archive-list-message" role="status">{notice}</p>}
   <div className="entity-list">{items.map(a=><ArchiveRow key={a.id} selected={pref.selected===a.id} onClick={()=>choose(a.id,a.search_match)} label={`查看${a.name}`} avatar={<Avatar name={a.name} type={a.type} src={avatarUrl('archive',a.id,a.version)}/>} name={<Highlight text={a.name} query={pref.query}/>} unread={!!a.unread_count} updateReminder={a.update_reminder} state={<span className={'state-badge small '+(isWorkState(a.type,a.status)?'work ':'')+(a.closed?'closed':'')}>{archiveDisplayStatus(a)}</span>} status={archiveDisplayStatus(a)} binding={a.members.length?a.members.map(m=><span className="member-chip" key={m.id}><Avatar name={m.name} src={avatarUrl('member',m.id,0)} size="micro"/>{m.name}{m.frozen&&<small>已冻结</small>}</span>):null} tags={<TagSummary tags={a.tag_summary?.tags??[]} total={a.tag_summary?.total??0}/>} draft={draftIds.includes(a.id)} excerpt={a.search_match?<><small>观察命中 · </small><Highlight text={a.search_match.excerpt} query={pref.query}/></>:a.latest_observation??'还没有观察记录'} footer={<><span>{a.observation_count} 条观察</span><time>{date(a.updated_at)}</time></>}/>)}</div>
   {loading?<p className="archive-list-message" role="status">正在读取档案…</p>:error?null:!items.length?<div className="archive-list-message"><h2>{query||activeFilters||pref.scope!=='all'?'没有符合条件的档案':trash?'没有已删除档案':'从第一个档案开始'}</h2><p>{query?'试试其他关键词，或清除筛选。':trash?'删除的档案会出现在这里。':`把值得关注的${label}留在这里，慢慢积累观察。`}</p></div>:cursor&&<button className="button archive-load" onClick={()=>void load(cursor)}>加载更多档案</button>}
- </>} detail={pref.selected?<ArchiveDetail workTaskId={workTaskId} onDelete={()=>selected&&setDeletion(selected)} type={type} onNextUnread={onNextUnread} expanded={expanded} onExpand={detailOnly?undefined:()=>setExpanded(v=>!v)} focus={focus} actor={actor} onChanged={()=>setRevision(n=>n+1)} key={pref.selected} id={pref.selected} revision={revision} onLoaded={setSelected} onBack={onClose??(detailOnly?undefined:()=>choose(null))} onEdit={()=>{if(selected){setEditTab('profile');setDialog(selected);}}} onState={()=>selected&&setStateDialog(selected)} notice={notice}/>:<aside className="selection-rest" aria-hidden="true"><div className="rest-characters"><Avatar type={type} size="large"/></div><span>打开一个档案，继续观察。</span></aside>}/>
+ </>} detail={pref.selected?<ArchiveDetail onOpenTaskArchive={openTaskArchive} workTaskId={workTaskId} onDelete={()=>selected&&setDeletion(selected)} type={type} onNextUnread={onNextUnread} expanded={expanded} onExpand={detailOnly?undefined:()=>setExpanded(v=>!v)} focus={focus} actor={actor} onChanged={()=>setRevision(n=>n+1)} key={pref.selected} id={pref.selected} revision={revision} onLoaded={setSelected} onBack={onClose??(detailOnly?undefined:()=>choose(null))} onEdit={()=>{if(selected){setEditTab('profile');setDialog(selected);}}} onState={()=>selected&&setStateDialog(selected)} notice={notice}/>:<aside className="selection-rest" aria-hidden="true"><div className="rest-characters"><Avatar type={type} size="large"/></div><span>打开一个档案，继续观察。</span></aside>}/>
 
   {dialog&&<Modal title={dialog==='create'?`新建${label}档案`:'编辑档案'} busy={busy} onClose={()=>setDialog(null)}>
    {dialog!=='create'&&<TabList id="archive-editor" value={editTab} onChange={value=>{if(!busy)setEditTab(value);}} label="编辑内容" items={[{key:'profile',label:'资料'},{key:'state',label:'状态与成员'},{key:'tags',label:'标签'},{key:'avatar',label:'头像'}]}/>}
@@ -95,7 +102,7 @@ export function ArchivesPage({actor,type,personScope='all',linked,detailOnly=fal
   {stateDialog&&<Modal title={stateDialog.closed?'重新开启档案':'状态与成员'} busy={busy} onClose={()=>setStateDialog(null)}><ArchiveStateForm key={stateDialog.id+stateDialog.version} archive={stateDialog} busy={busy} setBusy={setBusy} onSaved={saved} onReload={async()=>{const r=await api<{archive:Archive}>('/archives/'+stateDialog.id);setStateDialog(current=>current?.id===r.archive.id&&current.version<=r.archive.version?r.archive:current);setRevision(n=>n+1);}}/></Modal>}
  </>;
 }
-function ArchiveDetail({type,actor,onChanged,id,revision,onLoaded,onBack,onEdit,onState,notice,focus,expanded,onExpand,onNextUnread,onDelete,workTaskId}:{onDelete:()=>void;workTaskId?:string;type:Kind;focus?:ObservationFocus;actor:Member;onChanged:()=>void;id:string;revision:number;onLoaded:(a:Archive)=>void;onBack?:()=>void;onEdit:()=>void;onState:()=>void;notice:string;expanded:boolean;onExpand?:()=>void;onNextUnread?:()=>void}){
+function ArchiveDetail({onOpenTaskArchive,type,actor,onChanged,id,revision,onLoaded,onBack,onEdit,onState,notice,focus,expanded,onExpand,onNextUnread,onDelete,workTaskId}:{onOpenTaskArchive:React.ComponentProps<typeof ArchiveTasks>['onOpenArchive'];onDelete:()=>void;workTaskId?:string;type:Kind;focus?:ObservationFocus;actor:Member;onChanged:()=>void;id:string;revision:number;onLoaded:(a:Archive)=>void;onBack?:()=>void;onEdit:()=>void;onState:()=>void;notice:string;expanded:boolean;onExpand?:()=>void;onNextUnread?:()=>void}){
  const[archive,setArchive]=useState<ArchiveWithTasks|null>(null),[error,setError]=useState(''),[retry,setRetry]=useState(0),[copy,setCopy]=useState(''),scroll=useRef<HTMLDivElement>(null);
  const[opening,setOpening]=useState<ArchiveReadDelivery|null>();
  const positionKey=`cts:${actor.id}:${id}:reading-position`;
@@ -114,20 +121,10 @@ function ArchiveDetail({type,actor,onChanged,id,revision,onLoaded,onBack,onEdit,
     {copy&&<p className="form-notice" role="status">{copy}</p>}{notice&&<p className="form-notice" role="status">{notice}</p>}
    </EntityHeader>
    <ArchiveLifecycleNotice deleted={archive.deleted} closed={archive.closed} onReopen={onState} onRestore={actor.role==='admin'?onDelete:undefined} onDelete={actor.role==='admin'?onDelete:undefined}/>
-   {!archive.deleted&&!archive.closed&&<ArchiveWorkflow archive={archive} onChanged={onChanged}/>}
-   <TagsSection archive={archive} onChanged={onChanged}/><ObservationSection workTaskId={workTaskId} focus={focus} actor={actor} archive={archive} onChanged={onChanged}/>
+   <TagsSection archive={archive} onChanged={onChanged}/><ObservationSection relatedTasks={<ArchiveTasks key={archive.id} archiveId={archive.id} archiveVersion={archive.version} actor={actor} onChanged={onChanged} onOpenArchive={onOpenTaskArchive}/>} openTaskCount={archive.open_task_count??0} workTaskId={workTaskId} focus={focus} actor={actor} archive={archive} onChanged={onChanged}/>
 
   </ArchiveReadingScope.Provider>}
  </DetailFrame>;
-}
-
-function ArchiveWorkflow({archive,onChanged}:{archive:ArchiveWithTasks;onChanged:()=>void}){
- const[busy,setBusy]=useState(false),[error,setError]=useState('');const tasks=archive.work_tasks??[],open=tasks.filter(t=>t.status==='open');
- const deadline=()=>new Date(Date.now()+7*86400000).toISOString();
- async function action(path:string,confirm:string){if(confirm&&!window.confirm(confirm))return;setBusy(true);setError('');try{await api(path,{archive_id:archive.id,expected_version:archive.version,deadline_at:deadline(),request_id:crypto.randomUUID()});const r=await api<{archive:Archive}>('/archives/'+archive.id);if(archivePath(r.archive)!==location.pathname){history.pushState(null,'',archivePath(r.archive)+'?archive='+archive.id);window.dispatchEvent(new window.PopStateEvent('popstate'));}onChanged();}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
- const canRefer=archive.type==='person'&&['视奸观察','个人接触','外部社友'].includes(archive.status),canJoin=archive.type==='person'&&archive.status==='人事审核',canEnter=archive.type==='person'&&archive.status==='已加入待对接';
- async function enter(){setBusy(true);setError('');try{await api('/archives/state',{id:archive.id,expected_version:archive.version,status:'已入伙',member_ids:[],request_id:crypto.randomUUID()});history.pushState(null,'','/members?archive='+archive.id);window.dispatchEvent(new window.PopStateEvent('popstate'));onChanged();}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
- return <section className="archive-workflow"><header><div><p className="eyebrow">下一步工作</p><h2>{canRefer?'确认对方愿意继续后，提交人事审核':canJoin?'确认加入，安排入社对接':canEnter?'对接完成后，转入社员档案':'关联任务'}</h2></div>{canRefer&&<button className="button primary" disabled={busy} onClick={()=>void action('/archives/refer','提交后会创建待领取的人事审核任务，确认继续？')}>提交人事审核</button>}{canJoin&&<button className="button primary" disabled={busy} onClick={()=>void action('/archives/confirm-membership','确认后会保留同一档案并创建待领取的入社对接任务，继续？')}>确认加入待对接</button>}{canEnter&&<button className="button primary" disabled={busy} onClick={()=>void enter()}>已入伙，转入社员</button>}</header><p className="secondary-copy">在任务看板领取与跟进工作，交付结果留在档案。</p>{error&&<p className="form-error" role="alert">{error}</p>}{open.length>0&&<div className="archive-task-list">{open.map(task=><article key={task.id}><strong>{task.title}</strong><span>{task.owner_id?<><Avatar name={task.owner_name??'任务负责人'} size="micro" src={task.owner_version?avatarUrl('member',task.owner_id,task.owner_version):undefined}/>{task.owner_name??'已接取'}</>:'待接手'} · 截止 {new Date(task.deadline_at).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai',hour12:false,month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})}</span><p>{task.purpose}</p></article>)}</div>}{!open.length&&tasks.length>0&&<p className="secondary-copy">当前关联任务已结束，历史仍保留在任务页。</p>}</section>;
 }
 
 function ArchiveDeletionDialog({archive,busy,setBusy,onCancel,onSaved,onReload}:{archive:Archive;busy:boolean;setBusy:(v:boolean)=>void;onCancel:()=>void;onSaved:()=>void;onReload:()=>Promise<void>}){
