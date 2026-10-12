@@ -31,7 +31,8 @@ export function useWorkspace() {
   const {
     search = "",
     stateFilter = "all",
-    lifeFilter = "open",
+    lifeFilter = "all",
+    closedHistory = "30",
     ownerFilter = [],
     scope = "all",
     filtersOpen = false,
@@ -44,6 +45,7 @@ export function useWorkspace() {
   const setSearch = (value) => setListField("search", value),
     setStateFilter = (value) => setListField("stateFilter", value),
     setLifeFilter = (value) => setListField("lifeFilter", value),
+    setClosedHistory = (value) => setListField("closedHistory", value),
     setOwnerFilter = (value) => setListField("ownerFilter", value),
     setScope = (value) => setListField("scope", value),
     setFiltersOpen = (value) => setListField("filtersOpen", value);
@@ -179,7 +181,8 @@ export function useWorkspace() {
       [listKey]: {
         search: "",
         stateFilter: "all",
-        lifeFilter: "open",
+        lifeFilter: "all",
+        closedHistory: "30",
         ownerFilter: [],
         scope: "all",
         filtersOpen: false,
@@ -191,6 +194,7 @@ export function useWorkspace() {
     (!search || `${e.name} ${e.contacts.map(c => c.value).join(" ")} ${e.records.filter(r => !r.deleted).map(r => r.body).join(" ")}`.toLowerCase().includes(search.toLowerCase())) &&
     (stateFilter === "all" || e.state === stateFilter) &&
     (lifeFilter === "all" || (lifeFilter === "closed") === isClosed(e.state)) &&
+    (!isClosed(e.state) || closedHistory === "all" || Date.parse(e.closed_at) >= Date.now()-Number(closedHistory)*86400000) &&
     (!ownerFilter.length || (e.owners[e.state] ?? []).some(id => ownerFilter.includes(id))),
   );
   const associated = e => (e.owners[e.state] ?? []).includes(actorId);
@@ -245,7 +249,7 @@ export function useWorkspace() {
       entity.id,
       (d) => {
         const before = d.state;
-        if (!isClosed(before) && isClosed(next)) d.lastOpenState = before;
+        if (!isClosed(before) && isClosed(next)) {d.lastOpenState = before;d.closed_at=new Date().toISOString();}
         d.state = next;
         if (!isClosed(next)) d.owners[next] = owners;
         const message = sameState
@@ -410,6 +414,7 @@ export function useWorkspace() {
     search,
     stateFilter,
     lifeFilter,
+    closedHistory,
     ownerFilter,
     scope,
     entities,
@@ -447,6 +452,8 @@ export function useWorkspace() {
     setStateFilter,
     lifeFilter,
     setLifeFilter,
+    closedHistory,
+    setClosedHistory,
     ownerFilter,
     setOwnerFilter,
     recordView,

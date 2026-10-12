@@ -24,7 +24,7 @@
 
 模块：`archive-lifecycle`；计划器：[planRules](../../app/server/rules/contract.ts#L29)。计划按规则顺序返回 steps 和 statements，不执行提交。
 
-触发入口：[transition](../../app/server/archives.ts#L116)、[restoreCancelledAudit](../../app/server/work-tasks.ts#L305)。
+触发入口：[transition](../../app/server/archives.ts#L122)、[restoreCancelledAudit](../../app/server/work-tasks.ts#L305)。
 事务提交：[command](../../app/server/commands.ts#L21)；版本保护：[guard](../../app/server/archives.ts#L47)。
 幂等边界：command 请求收据；transitionChanged 排除无变化操作；档案版本事务校验；任务取消仅匹配 open，消息沿用现有唯一约束。
 失败边界：预校验失败不提交；事务内权限或版本冲突、SQL 失败整体回滚。保留现有行为，不新增任务轮次语义。
@@ -39,10 +39,10 @@
 
 ## 触发与事务边界
 
-网页 HTTP 与 MCP 的状态修改、显式重开都进入 [transition](../../app/server/archives.ts#L116)。该入口调用下表定义产生 SQL，最后一起提交；规则不单独写库。
+网页 HTTP 与 MCP 的状态修改、显式重开都进入 [transition](../../app/server/archives.ts#L122)。该入口调用下表定义产生 SQL，最后一起提交；规则不单独写库。
 
 - 读取与预校验：[get](../../app/server/archives.ts#L37)（存在性、删除权限、关闭锁定、版本）。
-- 关联成员：[planBindings](../../app/server/archives.ts#L100)（存在、冻结及原归属保留；事务内再次校验）。
+- 关联成员：[planBindings](../../app/server/archives.ts#L106)（存在、冻结及原归属保留；事务内再次校验）。
 - 档案事务条件：[guard](../../app/server/archives.ts#L47)。
 - 授权、原子提交与重试收据：[command](../../app/server/commands.ts#L21)。
 - 重开时词义差异、历史与权限：由上述 transition 调用 [TagState](../../app/server/tag-state.ts) 读取；不在生成器中解释 SQL 或任意函数。

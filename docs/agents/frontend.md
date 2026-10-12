@@ -1,5 +1,9 @@
 # 原型到正式前端
 
+## 档案关闭历史筛选（2026-10-12 / #76）
+
+外部人物、社员、组织共用 `ScopeToolbar` 的折叠条件摘要和 `ClosedHistoryFilter`；正式页与原型引用同一组件。收起显示“已关闭档案：最近 30 天”，展开在原筛选区选择 30／90 天或全部，重置恢复 30 天，不新增说明面板。正式 API 在计数、分页前筛选，旧 API/MCP 默认范围不变，回收站保留原范围。`verify-archive-closed-history.mjs` 检查真实 HTTP/MCP 和桌面／手机展开、折叠、切换、重置。见 [验收记录](../validation/archive-closed-history-76.md)。
+
 ## 统一消息接口（2026-10-12 / #73）
 
 消息中心保留现有任务提醒、档案更新页签及共享详情布局。两类列表已接入 `/notifications`，铃铛使用同一模型的 summary；确认统一到 `/notifications/confirm`，按任务消息、事件票据、档案打开快照分派。历史 `/unread` 链接和旧 API 继续兼容。真实接口验证使用 `node scripts/verify-notifications.mjs`，核对 HTTP/MCP 一致、桌面与手机确认和铃铛同步；设计对照夹具保留旧协议并补充新协议，不替换历史设计基线。见 [验收](../validation/unified-notifications-73.md)。
