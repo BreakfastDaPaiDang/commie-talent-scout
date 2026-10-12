@@ -25,6 +25,7 @@ try{
   await page.getByRole('button',{name:'看板大厅',exact:true}).click();const card=page.locator('.task-board-card').filter({hasText:fixtureName});await card.locator('.task-board-card-main').click();
   await page.locator('dialog .task-scene-meta-grid .task-owner-value img').evaluate(e=>e.decode());await page.screenshot({path:`tmp/verification/service-subjects/hall-${width}.png`});
   await page.goto(v.base+'/admin/members',{waitUntil:'domcontentloaded'});const row=page.getByRole('row').filter({hasText:'zaoji-hr'});await row.waitFor();assert.ok((await row.innerText()).includes('服务账号'));await row.locator('img').evaluate(e=>e.decode());
+  assert.ok((await page.getByRole('row').filter({has:page.getByRole('button')}).first().innerText()).includes('zaoji-hr'),'Zaoji is first before pagination');
   await page.screenshot({path:`tmp/verification/service-subjects/accounts-${width}.png`});
   await row.getByRole('button',{name:'管理 早纪（人事版）',exact:true}).click();const dialog=page.getByRole('dialog',{name:'管理猎头账号',exact:true});assert.equal(await dialog.getByRole('button',{name:'重置密码'}).count(),0);assert.equal(await dialog.getByRole('button',{name:'授予管理员'}).count(),0);
   await dialog.getByRole('button',{name:'修改早纪（人事版）的头像',exact:true}).click();await page.getByRole('dialog',{name:'修改头像',exact:true}).getByText('移除上传头像后恢复早纪的默认头像。').waitFor();await page.screenshot({path:`tmp/verification/service-subjects/editor-${width}.png`});await page.keyboard.press('Escape');await page.keyboard.press('Escape');

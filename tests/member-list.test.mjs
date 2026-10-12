@@ -11,7 +11,8 @@ test('member lists hide frozen accounts before pagination, while explicit frozen
  const archive=await new Archives(f.env,actor,'web').create({type:'person',name:'虚构历史归属',status:'人事审核',member_ids:[ids[0]],request_id:uuid()});
  await s.setFrozen({id:ids[0],expected_version:1,frozen:true,request_id:uuid()});let cursor,seen=[];
  do{const r=await s.list({limit:1,...(cursor?{before:cursor}:{})});seen.push(...r.members);cursor=r.next_cursor;}while(cursor);
- assert.deepEqual(seen.map(m=>m.username),['bbb','ccc','fixture','zaoji-hr']);assert.ok(seen.every(m=>!m.frozen));assert.equal((await s.list({state:'frozen'})).members[0].id,ids[0]);assert.equal((await s.list({state:'all'})).members.length,5);
+ assert.deepEqual(seen.map(m=>m.username),['zaoji-hr','bbb','ccc','fixture']);assert.ok(seen.every(m=>!m.frozen));assert.equal((await s.list({state:'frozen'})).members[0].id,ids[0]);assert.equal((await s.list({state:'all'})).members.length,5);
+ assert.deepEqual((await s.list({before:'bbb'})).members.map(m=>m.username),['ccc','fixture']);
  const historical=(await new Archives(f.env,actor,'web').detail(archive.id)).archive;assert.equal(historical.members[0].id,ids[0]);assert.equal(historical.members[0].frozen,true);
- const frozen=(await s.detail(ids[0])).member;await s.setFrozen({id:ids[0],expected_version:frozen.version,frozen:false,request_id:uuid()});assert.equal((await s.list({state:'frozen'})).members.length,0);assert.equal((await s.list({limit:1})).members[0].id,ids[0]);
+ const frozen=(await s.detail(ids[0])).member;await s.setFrozen({id:ids[0],expected_version:frozen.version,frozen:false,request_id:uuid()});assert.equal((await s.list({state:'frozen'})).members.length,0);assert.equal((await s.list({limit:1})).members[0].username,'zaoji-hr');
 });

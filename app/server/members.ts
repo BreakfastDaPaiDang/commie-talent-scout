@@ -5,6 +5,7 @@ import {assertAdmin} from './credentials.ts';
 import {command,requestId,expectedVersion,type Source} from './commands.ts';
 import {Failure,now,uid,type Actor,type Env} from './types.ts';
 import {normalizePreference,pushableTaskKinds,type PushableTaskKind} from '../rules/task-preferences.ts';
+import {zaojiSubject} from '../rules/service-subjects.ts';
 
 export const memberCreateInput=z.object({
   username:z.string().trim().regex(/^[a-zA-Z0-9_.-]{3,40}$/,'账号使用 3–40 位字母、数字、点、下划线或连字符'),
@@ -41,10 +42,16 @@ export class Members{
   private event(id:string,kind:string,before:unknown,after:unknown){return this.stmt('INSERT INTO member_events(id,actor_id,member_id,source,kind,before_json,after_json,created_at) VALUES(?,?,?,?,?,?,?,?)',uid(),this.actor.id,id,this.source,kind,JSON.stringify(before),JSON.stringify(after),now());}
   async list(input:unknown={}){
     assertAdmin(this.actor);
-    const a=memberListInput.parse(input),where=['1=1'],args:unknown[]=[];if(a.state!=='all')where.push(a.state==='frozen'?'frozen=1':'frozen=0');if(a.before){where.push('username COLLATE NOCASE>?');args.push(a.before);}
-    const rows=await this.stmt(`SELECT id,username,name,identity_kind,role,frozen,must_change_password,qq,avatar_id,version,created_at FROM members WHERE ${where.join(' AND ')} ORDER BY username COLLATE NOCASE LIMIT ?`,...args,a.limit+1).all();
+    const a=memberListInput.parse(input),where=['1=1'],args:unknown[]=[];
+    const rank=`CASE WHEN id='${zaojiSubject.id}' THEN 0 ELSE 1 END`;
+    if(a.state!=='all')where.push(a.state==='frozen'?'frozen=1':'frozen=0');
+    if(a.before){
+      const cursor=/^([01]):(.+)$/.exec(a.before),username=cursor?.[2]??a.before,priority=cursor?Number(cursor[1]):username===zaojiSubject.key?0:1;
+      where.push(`(${rank}>? OR (${rank}=? AND username COLLATE NOCASE>?))`);args.push(priority,priority,username);
+    }
+    const rows=await this.stmt(`SELECT id,username,name,identity_kind,role,frozen,must_change_password,qq,avatar_id,version,created_at FROM members WHERE ${where.join(' AND ')} ORDER BY ${rank},username COLLATE NOCASE LIMIT ?`,...args,a.limit+1).all();
     const members:Record<string,unknown>[]=rows.results.slice(0,a.limit).map(m=>({...m,frozen:!!m.frozen,must_change_password:!!m.must_change_password}));
-    return {members,next_cursor:rows.results.length>a.limit?String(members.at(-1)?.username):null};
+    const last=members.at(-1);return {members,next_cursor:rows.results.length>a.limit?`${last?.id===zaojiSubject.id?0:1}:${last?.username}`:null};
   }
   async detail(id:string){assertAdmin(this.actor);z.uuid().parse(id);const {auth_epoch:_,...member}=await this.get(id);return {member:{...member,frozen:!!member.frozen,must_change_password:!!member.must_change_password}};}
   async create(input:unknown){
