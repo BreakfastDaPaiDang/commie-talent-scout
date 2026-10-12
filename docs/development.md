@@ -42,3 +42,8 @@ MCP 行为检查：`node scripts/verify-mcp.mjs`（本地）或加 `--remote`（
 档案阅读验收使用 `node scripts/verify-reading-ui.mjs`，可加 `--remote` 验证隔离 staging。当前覆盖 Issue #36 邮件式阅读；S10 的旧逐条滚动证据仅保留历史含义。阅读边界见 [ADR 0012](./adr/0012-mail-style-archive-reading.md)。
 
 辅助工具页与 MCP QQ 导出指南：运行 `node scripts/verify-auxiliary-tools.mjs`，加 `--remote` 检查云端 staging。脚本仅使用验收连接读取指南与页面，不连接成员 QCE 或导出私人聊天；本地同时核对当前原型共享页面。
+
+
+### 服务账号验证
+
+迁移 `0030_service_subjects.sql` 创建早纪服务账号，显示在猎头管理，不创建社员档案。开发验收账号与早纪分开，后者不签发网页登录或 MCP 凭据。`node scripts/verify-service-subjects.mjs` 在隔离本地库验证账号管理、任务簿、看板、手机端完整头像编辑和真实头像更新，结束时恢复头像并清理本次虚构任务/档案。原始头像为 `public/art/zaoji-hr.png`，不包含凭据或真实人员数据。

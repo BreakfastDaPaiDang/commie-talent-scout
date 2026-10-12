@@ -24,7 +24,7 @@
 
 模块：`archive-lifecycle`；计划器：[planRules](../../app/rules/contract.ts#L29)。计划按规则顺序返回 steps 和 statements，不执行提交。
 
-触发入口：[transition](../../app/server/archives.ts#L122)、[restoreCancelledAudit](../../app/server/work-tasks.ts#L303)。
+触发入口：[transition](../../app/server/archives.ts#L122)、[restoreCancelledAudit](../../app/server/work-tasks.ts#L302)。
 事务提交：[command](../../app/server/commands.ts#L21)；版本保护：[guard](../../app/server/archives.ts#L49)。
 幂等边界：command 请求收据；transitionChanged 排除无变化操作；档案版本事务校验；任务取消仅匹配 open，消息沿用现有唯一约束。
 失败边界：预校验失败不提交；事务内权限或版本冲突、SQL 失败整体回滚。保留现有行为，不新增任务轮次语义。
@@ -47,7 +47,7 @@
 - 档案事务条件：[guard](../../app/server/archives.ts#L49)。
 - 授权、原子提交与重试收据：[command](../../app/server/commands.ts#L21)。
 - 重开时词义差异、历史与权限：由上述 transition 调用 [TagState](../../app/server/tag-state.ts) 读取；不在生成器中解释 SQL 或任意函数。
-- 取消自动审核任务：[cancel](../../app/server/work-tasks.ts#L222) 通过 [restoreCancelledAudit](../../app/server/work-tasks.ts#L303) 调用 [auditCancellationTarget](../../app/rules/archive-lifecycle.ts#L35) 取得本次引荐前的外部关系，复用同一 planArchiveEffects 并在任务事务中提交。历史无法确认或档案已变更身份时不猜测退回状态。
+- 取消自动审核任务：[cancel](../../app/server/work-tasks.ts#L221) 通过 [restoreCancelledAudit](../../app/server/work-tasks.ts#L302) 调用 [auditCancellationTarget](../../app/rules/archive-lifecycle.ts#L35) 取得本次引荐前的外部关系，复用同一 planArchiveEffects 并在任务事务中提交。历史无法确认或档案已变更身份时不猜测退回状态。
 
 以下条件和结果来自实际参与执行的函数引用及函数体。源码链接供追溯，不把人工说明作为规则来源。
 
@@ -497,7 +497,7 @@ function recordReopening(c) {
 
 ## 超期档案跟进任务
 
-模块：`archive-follow-up`；触发入口：[generateArchiveFollowUps](../../app/server/archive-follow-ups.ts#L24)、[generateScheduledArchiveFollowUps](../../app/server/archive-follow-ups.ts#L35)。
+模块：`archive-follow-up`；触发入口：[generateArchiveFollowUps](../../app/server/archive-follow-ups.ts#L24)、[generateScheduledArchiveFollowUps](../../app/server/archive-follow-ups.ts#L34)。
 档案 ID + automation_rule + 档案更新时间唯一；另以事务内 NOT EXISTS 阻止同类开启任务叠加。
 任务与创建事件一起提交；版本变化时跳过，后续扫描重新判断；规则不修改档案。
 
@@ -506,7 +506,7 @@ function recordReopening(c) {
 - 验证：[tests/archive-follow-ups.test.mjs](../../tests/archive-follow-ups.test.mjs)
 ### needsArchiveFollowUp
 
-[needsArchiveFollowUp](../../app/rules/archive-follow-up.ts#L7)
+[needsArchiveFollowUp](../../app/rules/archive-follow-up.ts#L8)
 
 ```javascript
 function needsArchiveFollowUp(c) {
@@ -516,7 +516,7 @@ function needsArchiveFollowUp(c) {
 
 ### createArchiveFollowUp
 
-[createArchiveFollowUp](../../app/rules/archive-follow-up.ts#L8)
+[createArchiveFollowUp](../../app/rules/archive-follow-up.ts#L9)
 
 ```javascript
 function createArchiveFollowUp(c) {
@@ -524,11 +524,11 @@ function createArchiveFollowUp(c) {
     const title = '接触跟进或关闭档案', purpose = '核对近期情况与继续跟进的必要性，尝试联系或收集新的有效信息。', delivery = '将实际接触结果、联系不到的情况或新的有效资料写入关联档案的观察记录；若决定不再跟进，说明原因并关闭档案，再提交任务交付。不要为消除提醒制造空更新。';
     return [
         c.stmt(`INSERT OR IGNORE INTO work_tasks(id,archive_id,kind,labels_json,priority,initiator_kind,initiator_id,title,purpose,delivery,source,status,deadline_at,created_by,created_at,updated_at,automation_rule,automation_key)
-   SELECT ?,a.id,'custom','["接触跟进"]','P2','system',NULL,?,?,?,'rule','open',?,?,?,?,?,? FROM archives a
-   WHERE a.id=? AND a.version=? AND a.updated_at=? AND a.closed=0 AND a.deleted=0
-    AND NOT EXISTS(SELECT 1 FROM work_tasks t WHERE t.archive_id=a.id AND t.automation_rule=? AND t.status='open')`, taskId, title, purpose, delivery, deadline, c.legacyCreatorId, at, at, archiveFollowUpRule, t.updated_at, t.id, t.version, t.updated_at, archiveFollowUpRule),
+   SELECT ?,a.id,'custom','["接触跟进"]','P2','system',?,?,?,?,'rule','open',?,?,?,?,?,? FROM archives a
+   WHERE a.id=? AND a.version=? AND a.updated_at=? AND a.closed=0 AND a.deleted=0 AND EXISTS(SELECT 1 FROM members s WHERE s.id=? AND s.identity_kind='service' AND s.frozen=0)
+    AND NOT EXISTS(SELECT 1 FROM work_tasks t WHERE t.archive_id=a.id AND t.automation_rule=? AND t.status='open')`, taskId, zaojiSubject.id, title, purpose, delivery, deadline, zaojiSubject.id, at, at, archiveFollowUpRule, t.updated_at, t.id, t.version, t.updated_at, zaojiSubject.id, archiveFollowUpRule),
         c.stmt(`INSERT INTO work_task_events(id,task_id,actor_id,source,kind,after_json,created_at)
-   SELECT ?,id,NULL,'system','task.created',?,? FROM work_tasks WHERE id=?`, c.eventId, JSON.stringify({
+   SELECT ?,id,?,'system','task.created',?,? FROM work_tasks WHERE id=?`, c.eventId, zaojiSubject.id, JSON.stringify({
             automation_rule: archiveFollowUpRule,
             trigger_updated_at: t.updated_at,
             deadline_at: deadline,
@@ -540,7 +540,7 @@ function createArchiveFollowUp(c) {
 
 ### planArchiveFollowUp
 
-[planArchiveFollowUp](../../app/rules/archive-follow-up.ts#L27)
+[planArchiveFollowUp](../../app/rules/archive-follow-up.ts#L28)
 
 ```javascript
 function planArchiveFollowUp(context) {

@@ -6,7 +6,7 @@ export function assertAdmin(actor:Actor){if(actor.role!=='admin')throw new Failu
 export function authGuard(env:Env,actor:Actor,key:string,requireAdmin=false){
   return env.DB.prepare(`INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(
     SELECT 1 FROM members m JOIN credentials c ON c.member_id=m.id
-    WHERE m.id=? AND m.frozen=0 AND m.auth_epoch=? AND c.id=? AND c.auth_epoch=m.auth_epoch AND c.revoked_at IS NULL AND c.expires_at>? AND (?=0 OR m.role='admin')
+    WHERE m.id=? AND m.frozen=0 AND m.identity_kind='human' AND m.auth_epoch=? AND c.id=? AND c.auth_epoch=m.auth_epoch AND c.revoked_at IS NULL AND c.expires_at>? AND (?=0 OR m.role='admin')
   ) THEN 1 ELSE 0 END)`).bind(key,actor.id,actor.auth_epoch,actor.credential_id,now(),requireAdmin?1:0);
 }
 export async function listCredentials(env:Env,actor:Actor){

@@ -18,7 +18,7 @@ function recommend(c:Context){
  const task={id:c.task.id,kind:c.task.kind,open:c.task.status==='open',ownerId:c.task.owner_id,createdAt:c.task.created_at};
  const stage=pushStage(task,c.at);if(stage==='admin')return [];
  return pushCandidates(task,c.members).map(member=>c.stmt(`INSERT OR IGNORE INTO work_task_pushes(id,task_id,member_id,stage,pushed_at)
-  SELECT ?,t.id,?,?,? FROM work_tasks t JOIN members m ON m.id=? AND m.frozen=0
+  SELECT ?,t.id,?,?,? FROM work_tasks t JOIN members m ON m.id=? AND m.frozen=0 AND m.identity_kind='human'
   WHERE t.id=? AND t.status='open' AND t.owner_id IS NULL AND t.version=?
    AND ${preferenceMatchesSql('m.id')}`,
   c.uid(),member.id,stage,c.at,member.id,c.task.id,c.task.version));
@@ -26,7 +26,7 @@ function recommend(c:Context){
 function message(c:Context,kind:'task_overdue'|'task_deadline_reminder',title:string,body:string){
  return [c.stmt(`INSERT OR IGNORE INTO messages(id,recipient_id,kind,task_id,object_type,object_id,title,body,task_version,deadline_at,created_at)
   SELECT ?,t.owner_id,?,t.id,'work_task',t.id,?,?,t.version,t.deadline_at,?
-  FROM work_tasks t JOIN members m ON m.id=t.owner_id AND m.frozen=0
+  FROM work_tasks t JOIN members m ON m.id=t.owner_id AND m.frozen=0 AND m.identity_kind='human'
   WHERE t.id=? AND t.status='open' AND t.version=? AND t.owner_id=? AND t.deadline_at=?`,
   c.uid(),kind,title,body,c.at,c.task.id,c.task.version,c.task.owner_id,c.task.deadline_at)];
 }

@@ -19,19 +19,19 @@ export const memberFrozenInput=z.object({id:z.uuid(),expected_version:expectedVe
 export const memberRoleInput=z.object({id:z.uuid(),expected_version:expectedVersion,role:z.enum(['admin','member']),request_id:requestId}).strict();
 export const memberProfileInput=z.object({id:z.uuid(),expected_version:expectedVersion,name:z.string().trim().min(1).max(80),qq:z.string().regex(/^\d{5,20}$/).nullable(),request_id:requestId}).strict();
 export const memberWorkPreferenceInput=z.object({all:z.boolean(),kinds:z.array(z.enum(pushableTaskKinds)).max(pushableTaskKinds.length).default([]),expected_version:z.number().int().min(0).default(0),request_id:requestId}).strict();
-type ManagedMember={id:string;username:string;name:string;role:'admin'|'member';frozen:number;must_change_password:number;qq:string|null;avatar_id:string|null;version:number;auth_epoch:number};
+type ManagedMember={identity_kind:'human'|'service';id:string;username:string;name:string;role:'admin'|'member';frozen:number;must_change_password:number;qq:string|null;avatar_id:string|null;version:number;auth_epoch:number};
 export class Members{
   constructor(private env:Env,private actor:Actor,private source:Source){}
   private stmt(sql:string,...args:unknown[]){return this.env.DB.prepare(sql).bind(...args);}
   private async get(id:string,version?:number){
-    const member=await this.stmt('SELECT id,username,name,role,frozen,must_change_password,qq,avatar_id,version,auth_epoch FROM members WHERE id=?',id).first<ManagedMember>();
+    const member=await this.stmt("SELECT id,username,name,identity_kind,role,frozen,must_change_password,qq,avatar_id,version,auth_epoch FROM members WHERE id=?",id).first<ManagedMember>();
     if(!member)throw new Failure(404,'NOT_FOUND','猎头账号不存在');
     if(version!==undefined&&member.version!==version)throw new Failure(409,'VERSION_CONFLICT','账号已被更新，请刷新后核对');
     return member;
   }
   async directory(input:unknown){
     const a=z.object({query:z.string().trim().max(100).default(''),before:z.string().max(150).optional(),limit:z.coerce.number().int().min(1).max(100).default(30)}).parse(input);
-    const where=['1=1'],args:unknown[]=[];
+    const where=["identity_kind='human'"],args:unknown[]=[];
     if(a.query){where.push('instr(lower(name),lower(?))>0');args.push(a.query);}
     if(a.before){where.push('id>?');args.push(a.before);}
     const r=await this.stmt(`SELECT id,name,frozen,avatar_id,qq FROM members WHERE ${where.join(' AND ')} ORDER BY id LIMIT ?`,...args,a.limit+1).all<Record<string,unknown>>();
@@ -42,7 +42,7 @@ export class Members{
   async list(input:unknown={}){
     assertAdmin(this.actor);
     const a=memberListInput.parse(input),where=['1=1'],args:unknown[]=[];if(a.state!=='all')where.push(a.state==='frozen'?'frozen=1':'frozen=0');if(a.before){where.push('username COLLATE NOCASE>?');args.push(a.before);}
-    const rows=await this.stmt(`SELECT id,username,name,role,frozen,must_change_password,qq,avatar_id,version,created_at FROM members WHERE ${where.join(' AND ')} ORDER BY username COLLATE NOCASE LIMIT ?`,...args,a.limit+1).all();
+    const rows=await this.stmt(`SELECT id,username,name,identity_kind,role,frozen,must_change_password,qq,avatar_id,version,created_at FROM members WHERE ${where.join(' AND ')} ORDER BY username COLLATE NOCASE LIMIT ?`,...args,a.limit+1).all();
     const members:Record<string,unknown>[]=rows.results.slice(0,a.limit).map(m=>({...m,frozen:!!m.frozen,must_change_password:!!m.must_change_password}));
     return {members,next_cursor:rows.results.length>a.limit?String(members.at(-1)?.username):null};
   }
@@ -64,7 +64,7 @@ export class Members{
     assertAdmin(this.actor);const a=memberResetInput.parse(input);
     await limitPasswordWork(this.env,this.actor.id);
     return command(this.env,this.actor,{requestId:a.request_id,operation:'member.reset_password',parameters:{id:a.id,expected_version:a.expected_version},secret:a.temporary_password,requireAdmin:true},async()=>{
-      const member=await this.get(a.id,a.expected_version),key=uid(),password=await hashPassword(a.temporary_password);
+      const member=await this.get(a.id,a.expected_version);if(member.identity_kind==='service')throw new Failure(409,'SERVICE_AUTH_UNSUPPORTED','服务账号不使用登录密码');const key=uid(),password=await hashPassword(a.temporary_password);
       return {result:{id:a.id,version:member.version+1,must_change_password:true,changed:true},secretHash:password,statements:[
         this.versionGuard(a.id,a.expected_version,key),
         this.stmt('UPDATE members SET password_hash=?,must_change_password=1,auth_epoch=auth_epoch+1,version=version+1 WHERE id=?',password,a.id),
@@ -81,7 +81,7 @@ export class Members{
     const removingAdmin=(m:ManagedMember)=>(m.role==='admin'&&!m.frozen)&&((patch.role!==undefined&&patch.role!=='admin')||patch.frozen===1);
     try{
       return await command(this.env,this.actor,{requestId:a.request_id,operation:patch.role!==undefined?'member.role':'member.frozen',parameters:{id:a.id,expected_version:a.expected_version,...patch},requireAdmin:true},async()=>{
-        const member=await this.get(a.id,a.expected_version),role=patch.role??member.role,frozen=patch.frozen??member.frozen,key=uid();
+        const member=await this.get(a.id,a.expected_version);if(member.identity_kind==='service'&&patch.role!==undefined)throw new Failure(409,'SERVICE_ROLE_FIXED','服务账号不授予真人管理员角色');const role=patch.role??member.role,frozen=patch.frozen??member.frozen,key=uid();
         const changed=role!==member.role||frozen!==member.frozen;
         if(changed&&removingAdmin(member)&&await this.activeAdminCount()<=1)throw new Failure(409,'LAST_ADMIN_REQUIRED','至少需要保留一名未冻结的管理员');
         const result={id:a.id,role,frozen:!!frozen,version:member.version+(changed?1:0),changed};
@@ -141,5 +141,5 @@ export class Members{
       return {result:{id:a.id,name:a.name,qq:a.qq,version:member.version+(changed?1:0),changed},statements};
     });
   }
-  async history(id:string){assertAdmin(this.actor);z.uuid().parse(id);await this.get(id);const rows=await this.stmt('SELECT id,actor_id,(SELECT name FROM members WHERE members.id=member_events.actor_id) actor_name,source,kind,before_json,after_json,created_at FROM member_events WHERE member_id=? ORDER BY created_at DESC,id DESC LIMIT 100',id).all();return {events:rows.results,complete:rows.results.length<100};}
+  async history(id:string){assertAdmin(this.actor);z.uuid().parse(id);await this.get(id);const rows=await this.stmt("SELECT id,actor_id,(SELECT name FROM members WHERE members.id=member_events.actor_id) actor_name,source,kind,before_json,after_json,created_at FROM member_events WHERE member_id=? UNION ALL SELECT id,NULL,'系统','system',kind,NULL,after_json,created_at FROM service_subject_events WHERE subject_id=? ORDER BY created_at DESC,id DESC LIMIT 100",id,id).all();return {events:rows.results,complete:rows.results.length<100};}
 }

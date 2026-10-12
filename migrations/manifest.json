@@ -1,6 +1,6 @@
 {
   "format": 1,
-  "count": 29,
+  "count": 30,
   "migrations": {
     "0001_identity.sql": {
       "sha256": "ceb732997de6972d3f88ae3a15b52b4df0def3418cc4b0834cd289ce55daff6a",
@@ -146,6 +146,11 @@
       "sha256": "529bad60ba6be7db0963ae446b7d7b1637f472d87e0ec36fcf182fc0c3e608e4",
       "backwards_compatible": true,
       "reason": "Adds nullable automation provenance and deduplication indexes; no historical task or archive changes."
+    },
+    "0030_service_subjects.sql": {
+      "sha256": "c221284fa688f4a4507a45231d916683b5a17eee4dc7de582c85a17a22dbe70a",
+      "backwards_compatible": true,
+      "reason": "Adds a service identity discriminator and service metadata; existing task foreign keys and histories stay intact. Human auth is unchanged. Service login is blocked by an invalid password sentinel and credential triggers, including after code rollback."
     }
   }
 }

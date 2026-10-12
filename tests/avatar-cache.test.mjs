@@ -11,7 +11,8 @@ test('an expired cached QQ avatar is served while the upstream refresh runs in t
  f.objects.set('qq/00000/old',png);f.sqlite.prepare("INSERT INTO qq_avatar_cache(qq,object_key,mime_type,refresh_after) VALUES('00000','qq/00000/old','image/png','2020-01-01T00:00:00.000Z')").run();
  t.mock.method(globalThis,'fetch',async()=>{await pending;return new Response(png);});
  const service=new Avatars(f.env,f.actor,'web',task=>tasks.push(task));
- try{const response=await Promise.race([service.read('member',f.actor.id),new Promise((_,reject)=>setTimeout(()=>reject(new Error('cached avatar waited for QQ')),100))]);assert.equal(response.status,200);assert.deepEqual(Buffer.from(await response.arrayBuffer()),png);assert.equal(tasks.length,1);}finally{finish();await Promise.all(tasks);}
+ // The upstream promise stays blocked: this checks independence, not a 100ms CPU scheduling SLA under the parallel suite.
+ try{const response=await Promise.race([service.read('member',f.actor.id),new Promise((_,reject)=>setTimeout(()=>reject(new Error('cached avatar waited for QQ')),2000))]);assert.equal(response.status,200);assert.deepEqual(Buffer.from(await response.arrayBuffer()),png);assert.equal(tasks.length,1);}finally{finish();await Promise.all(tasks);}
 });
 test('QQ fetch works in Workers and rejects upstream redirects without following them',async t=>{
  const f=fixture();t.after(f.close);let redirect=false;const requests=[];

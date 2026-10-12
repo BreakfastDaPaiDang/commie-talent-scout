@@ -5,14 +5,14 @@ import {inspectImage,MAX_IMAGE_BYTES} from './image-format.ts';
 import {Failure,now,uid,type Actor,type Env} from './types.ts';
 
 export const avatarInput=z.object({subject_type:z.enum(['archive','member']),id:z.uuid(),expected_version:expectedVersion,attachment_id:z.uuid().nullable(),request_id:requestId}).strict();
-type Subject={id:string;version:number;avatar_id:string|null;type?:'person'|'org';contacts_json?:string;qq?:string|null};
+type Subject={identity_kind?:'human'|'service';id:string;version:number;avatar_id:string|null;type?:'person'|'org';contacts_json?:string;qq?:string|null};
 type Cache={object_key:string|null;mime_type:string|null;refresh_after:string;refreshing_until:string|null};
 export class Avatars{
  private images:Images;
  constructor(private env:Env,private actor:Actor,private source:Source,private defer?:(task:Promise<unknown>)=>void){this.images=new Images(env,actor,source);}
  private stmt(sql:string,...args:unknown[]){return this.env.DB.prepare(sql).bind(...args);}
  private async subject(type:'archive'|'member',id:string){
-  z.uuid().parse(id);const row=await this.stmt(type==='archive'?"SELECT id,version,avatar_id,type,contacts_json FROM archives WHERE id=? AND (deleted=0 OR ?='admin')":'SELECT id,version,avatar_id,qq FROM members WHERE id=?',id,...(type==='archive'?[this.actor.role]:[])).first<Subject>();
+  z.uuid().parse(id);const row=await this.stmt(type==='archive'?"SELECT id,version,avatar_id,type,contacts_json FROM archives WHERE id=? AND (deleted=0 OR ?='admin')":'SELECT id,version,avatar_id,qq,identity_kind FROM members WHERE id=?',id,...(type==='archive'?[this.actor.role]:[])).first<Subject>();
   if(!row)throw new Failure(404,'NOT_FOUND','头像所属对象不存在');return row;
  }
  async set(value:unknown){
@@ -37,9 +37,18 @@ export class Avatars{
    return {statements,result:{id:a.id,subject_type:a.subject_type,avatar_id:a.attachment_id,version:old.version+(changed?1:0),changed}};
   });
  }
- async read(type:'archive'|'member',id:string,requestHeaders?:Headers){
+ async read(type:'archive'|'member',id:string,requestHeaders?:Headers):Promise<Response>{
   const row=await this.subject(type,id);
   if(row.avatar_id){try{return await this.images.read(row.avatar_id,requestHeaders);}catch(e){if(!(e instanceof Failure&&e.status===404))throw e;}}
+  const service=type==='member'&&row.identity_kind==='service'?await this.stmt('SELECT avatar_asset FROM service_subjects WHERE id=?',id).first<{avatar_asset:string}>():null;
+  if(service){
+   const headers=new Headers();if(requestHeaders?.has('If-None-Match'))headers.set('If-None-Match',requestHeaders.get('If-None-Match')!);
+   const asset=await this.env.ASSETS.fetch(new Request(new URL(service.avatar_asset,this.env.APP_ORIGIN),{headers}));
+   if(asset.status===304||asset.ok&&asset.headers.get('content-type')?.startsWith('image/')){
+    const response=new Response(asset.body,asset);response.headers.set('Cache-Control','private, max-age=0, must-revalidate');return response;
+   }
+   throw new Failure(404,'AVATAR_UNAVAILABLE','服务主体头像暂不可用');
+  }
   const qq=type==='member'?row.qq:row.type==='person'?(JSON.parse(row.contacts_json??'[]') as {type:string;value:string}[]).find(c=>c.type.toUpperCase()==='QQ'&&/^\d{5,20}$/.test(c.value))?.value:null;
   if(qq&&/^\d{5,20}$/.test(qq)){const response=await this.qq(qq,requestHeaders);if(response)return response;}
   throw new Failure(404,'AVATAR_UNAVAILABLE','暂无可用头像');

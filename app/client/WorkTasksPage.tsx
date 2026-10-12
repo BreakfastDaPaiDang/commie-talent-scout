@@ -10,7 +10,7 @@ import {ArchiveHead,RecordBody,ScopeToolbar} from '../ui/Workspace';
 import {TaskLabelsField,TaskBookLayout,TaskRecommendationCard,TaskDetailCard,TaskListRow,TaskBoardColumn,TaskBoardCard,taskStagePriority,type TaskStage} from '../ui/TaskBook';
 
 export type ArchivePreview={person_role?:'external'|'member';id:string;type:'person'|'org';name:string;status:string;version:number;updated_at:string;observation_count:number;latest_observation:string|null;members:{id:string;name:string;frozen:boolean}[];tag_summary:{tags:{tag_id:string;category_name:string;name:string;color:string;focus:number}[];total:number}};
-export type Task={id:string;archive_id:string|null;archive_preview?:ArchivePreview;kind:'audit'|'onboarding'|'monthly'|'cooperation'|'custom';labels?:string[];label_keys?:string[];priority?:'P0'|'P1'|'P2';title:string;purpose:string;delivery:string;status:'open'|'completed'|'expired'|'cancelled';owner_id:string|null;owner_name?:string|null;owner_version?:number|null;initiator_kind?:'member'|'system';initiator_id?:string|null;initiator_name?:string|null;initiator_version?:number|null;initiator_avatar_key?:string|null;created_by:string;deadline_at:string;created_at:string;updated_at?:string;version:number;overdue?:boolean;result_kind?:string|null;result_text?:string|null;result_references?:{observation_id:string;archive_id:string;content_version:number}[];result_references_restricted?:boolean;completed_at?:string|null;closed_at?:string|null;closed_reason?:string|null;period_key?:string|null;candidate_count?:number;push_stage?:string};
+export type Task={id:string;archive_id:string|null;archive_preview?:ArchivePreview;kind:'audit'|'onboarding'|'monthly'|'cooperation'|'custom';labels?:string[];label_keys?:string[];priority?:'P0'|'P1'|'P2';title:string;purpose:string;delivery:string;status:'open'|'completed'|'expired'|'cancelled';owner_id:string|null;owner_name?:string|null;owner_version?:number|null;initiator_kind?:'member'|'system';initiator_id?:string|null;initiator_name?:string|null;initiator_version?:number|null;created_by:string;deadline_at:string;created_at:string;updated_at?:string;version:number;overdue?:boolean;result_kind?:string|null;result_text?:string|null;result_references?:{observation_id:string;archive_id:string;content_version:number}[];result_references_restricted?:boolean;completed_at?:string|null;closed_at?:string|null;closed_reason?:string|null;period_key?:string|null;candidate_count?:number;push_stage?:string};
 type ObservationOption={id:string;content_version:number;author_name:string;created_at:string;body:string;deleted:boolean};
 const labels=taskLabelNames;
 const taskLabelKeys=(value:string)=>[...new Set(value.split(/[、,，]/).map(value=>value.trim()).filter(Boolean).map(value=>Object.entries(labels).find(([,label])=>label===value)?.[0]??value))];
@@ -106,8 +106,8 @@ function TaskRecommendation({task,onSelect,onRefresh}:{task:Task|null;onSelect:(
 }
 
 function TaskInitiator({task}:{task:Task}){
- const name=task.initiator_name??(task.initiator_kind==='system'?'早纪（人事版）':'未知发起人');
- return <span className="task-owner-value">{task.initiator_kind==='system'?<Avatar name={name} size="micro"/>:task.initiator_id?<Avatar name={name} size="micro" src={avatarUrl('member',task.initiator_id,task.initiator_version??0)}/>:null}{name}</span>;
+ const name=task.initiator_name??'未知发起人';
+ return <span className="task-owner-value">{task.initiator_id&&<Avatar name={name} size="micro" src={avatarUrl('member',task.initiator_id,task.initiator_version??0)}/>} {name}</span>;
 }
 
 function TaskScene({task,actor,onChanged,onOpenArchive}:{task:Task;actor:Member;onChanged:()=>void;onOpenArchive:(archive:ArchivePreview,taskId:string,observationId?:string,contentVersion?:number)=>void}){

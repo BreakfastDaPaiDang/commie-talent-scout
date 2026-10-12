@@ -1,3 +1,4 @@
+import {zaojiSubject} from '../app/rules/service-subjects.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID as uuid} from 'node:crypto';
@@ -22,8 +23,8 @@ test('follow-up eligibility matches archive reminders, excludes member/closed/de
  assert.deepEqual(result.tasks.map(x=>x.archive_id).sort(),[person,org,audit].sort());
  for(const row of originals){assert.equal(result.tasks.some(x=>x.archive_id===row.id),archiveReminder({...row,closed:!!row.closed,deleted:!!row.deleted},Date.parse(at)).overdue);}
  assert.deepEqual(f.sqlite.prepare('SELECT * FROM archives').all(),originals,'generation must not clear the reminder by touching the archive');
- const task=f.sqlite.prepare('SELECT * FROM work_tasks WHERE automation_rule IS NOT NULL LIMIT 1').get();assert.equal(task.owner_id,null);assert.equal(task.priority,'P2');assert.equal(task.initiator_kind,'system');assert.equal(task.initiator_id,null);assert.equal(Date.parse(task.deadline_at)-Date.parse(at),7*DAY_MS);
- const detail=await new WorkTasks(f.env,f.actor,'mcp').detail(task.id);assert.equal(detail.task.initiator_name,'早纪（人事版）');assert.equal(detail.task.initiator_avatar_key,'zaoji-hr');assert.equal(detail.events[0].source,'system');assert.equal(detail.events[0].actor_id,null);
+ const task=f.sqlite.prepare('SELECT * FROM work_tasks WHERE automation_rule IS NOT NULL LIMIT 1').get();assert.equal(task.owner_id,null);assert.equal(task.priority,'P2');assert.equal(task.initiator_kind,'system');assert.equal(task.initiator_id,zaojiSubject.id);assert.equal(task.created_by,zaojiSubject.id);assert.equal(Date.parse(task.deadline_at)-Date.parse(at),7*DAY_MS);
+ const detail=await new WorkTasks(f.env,f.actor,'mcp').detail(task.id);assert.equal(detail.task.initiator_name,'早纪（人事版）');assert.equal(detail.events[0].source,'system');assert.equal(detail.events[0].actor_id,zaojiSubject.id);
  assert.equal((await generateScheduledArchiveFollowUps(f.env,new Date(Date.parse(at)+1).toISOString())).created_count,1,'one millisecond past the boundary qualifies');
 });
 test('one task per reminder cycle, no stacked open follow-up, later stale cycle works after manual completion',async t=>{

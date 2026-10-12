@@ -24,7 +24,7 @@ const sqlString=value=>"'"+value.replaceAll("'","''")+"'";
 // One conditional SQL statement is atomic in D1; it also works with the remote import API,
 // which does not accept explicit BEGIN/COMMIT. Existing members prevent reinitialization.
 const memberId=randomUUID();
-const sql=`INSERT INTO members(id,username,name,role,password_hash,created_at) SELECT ${[memberId,username,name,'admin',encoded,new Date().toISOString()].map(sqlString).join(',')} WHERE NOT EXISTS(SELECT 1 FROM members);\n`;
+const sql=`INSERT INTO members(id,username,name,role,password_hash,created_at) SELECT ${[memberId,username,name,'admin',encoded,new Date().toISOString()].map(sqlString).join(',')} WHERE NOT EXISTS(SELECT 1 FROM members WHERE identity_kind='human');\n`;
 mkdirSync('secrets',{recursive:true});
 const sqlFile=resolve('secrets',`bootstrap-${target}-${remote?'remote':'local'}.sql`);
 writeFileSync(sqlFile,sql,{mode:0o600});
