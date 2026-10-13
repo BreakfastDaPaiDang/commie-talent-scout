@@ -1,3 +1,4 @@
+import {memberArchiveGuidance} from './member-archive-guidance.ts';
 import {TagDeletion,tagDeletionInput} from './tag-deletion.ts';
 import {advisorRule,proposalRule,approvalRule,draftRule,compressionRule} from './mcp-consent.ts';
 import {McpServer} from '@modelcontextprotocol/server';
@@ -30,6 +31,7 @@ export const tagGuides=[
  '管理员停用或恢复先 preview_tag_availability，再 apply_tag_availability。停用不删除原绑定，停用类别禁止其下新增。恢复曾合并词条会清除当前跳转，已迁出的绑定不会自动迁回，旧历史保留。普通成员不能合并或停用/恢复；冻结和降权以当前服务身份为准。',
 ];
 export const compressionGuides=[
+ memberArchiveGuidance,
  advisorRule,proposalRule,approvalRule,draftRule,compressionRule,
  '先 whoami，再查询同类型候选档案、已有观察和标签定义/依据；名称不唯一，结合已有联系方式、组织或事件确定稳定 ID。有影响结果的同名歧义只问一个具体问题，不先猜一个对象写入。',
  '区别聊天发言者、本人自述、成员转述和判断；保留事件、背景、发生时间与条件。不从计划推出能力、不从用词/议题/交往推断身份、健康诊断或可靠性。观察可长可短，保留关键事实而非逐句复述。',

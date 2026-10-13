@@ -1,0 +1,30 @@
+import assert from 'node:assert/strict';
+import {randomUUID} from 'node:crypto';
+import {mkdirSync} from 'node:fs';
+import {chromium} from 'playwright-core';
+import {verificationClient} from './verification-client.mjs';
+const v=await verificationClient('task-label-search'),checks=[],created=[];let browser;
+try{
+ mkdirSync('tmp/verification',{recursive:true});const suffix=randomUUID().slice(0,8);
+ const label=await v.call('create_work_task_label',{name:'虚构资源协调 '+suffix,request_id:randomUUID()});assert.equal((await v.call('search_work_task_labels',{query:suffix})).labels[0].key,label.key);
+ const tools=(await v.client.listTools()).tools;assert.ok(tools.some(t=>t.name==='search_work_task_labels'));assert.ok(tools.some(t=>t.name==='create_work_task_label'));
+ for(const topic of ['archives','compression','work_tasks'])assert.ok((await v.call('get_usage_guide',{topic})).rules.some(rule=>rule.includes('短期忙碌不等于请假')));
+ browser=await chromium.launch({channel:process.env.CTS_TEST_BROWSER??'msedge',headless:true});const context=await browser.newContext({timezoneId:'Asia/Shanghai'});const[name,...value]=v.sessionCookie.split('=');await context.addCookies([{name,value:value.join('='),url:v.base}]);const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
+ for(const width of [1440,390]){
+  await page.setViewportSize({width,height:width===390?844:1000});await page.goto(v.base+'/tasks');await page.getByRole('button',{name:'新建',exact:true}).click();const form=page.getByRole('dialog',{name:'发布任务',exact:true});
+  await form.getByRole('button',{name:'移除标签 临时工作',exact:true}).click();await form.getByRole('textbox',{name:'搜索任务标签',exact:true}).fill('人事');await form.getByRole('checkbox',{name:/人事审核/}).check();
+  const custom='虚构界面标签 '+width+' '+suffix;await form.getByRole('textbox',{name:'搜索任务标签',exact:true}).fill(custom);await form.getByRole('button',{name:'＋ 新建标签：'+custom,exact:true}).click();await form.getByRole('button',{name:'移除标签 '+custom,exact:true}).waitFor();
+  await form.getByRole('textbox',{name:'搜索任务标签',exact:true}).fill(suffix);await form.getByRole('checkbox',{name:new RegExp('虚构资源协调')}).check();
+  await form.locator('.task-label-select').scrollIntoViewIfNeeded();await page.screenshot({path:`tmp/verification/task-labels-${width}-picker.png`});
+  await form.getByRole('textbox',{name:'标题',exact:true}).fill('虚构标签任务 '+width+' '+suffix);await form.getByRole('textbox',{name:'要处理什么',exact:true}).fill('核对可搜索多选标签，不触发审核流程');await form.getByText('调整交付和期限',{exact:true}).click();await form.getByRole('textbox',{name:'交付要求',exact:true}).fill('记录验收结果');
+  assert.ok(await form.evaluate(e=>e.scrollWidth<=e.clientWidth+1));await page.screenshot({path:`tmp/verification/task-labels-${width}-create.png`});await form.getByRole('button',{name:'发布任务',exact:true}).scrollIntoViewIfNeeded();await page.screenshot({path:`tmp/verification/task-labels-${width}-create-bottom.png`});
+  const response=page.waitForResponse(r=>r.url().endsWith('/api/work-tasks/create')&&r.request().method()==='POST');await form.getByRole('button',{name:'发布任务',exact:true}).click();const r=await response;assert.equal(r.status(),200);const task=await r.json();created.push(task.id);await form.waitFor({state:'detached'});
+  const saved=(await v.call('get_work_task',{id:task.id})).task;assert.equal(saved.kind,'custom');assert.equal(saved.label_keys.length,3);assert.ok(saved.labels.includes('人事审核'));
+  assert.ok((await v.call('list_work_tasks',{labels:[label.key],priority:'P2',query:suffix})).tasks.some(t=>t.id===task.id));
+  await page.getByRole('textbox',{name:'搜索任务',exact:true}).fill(suffix);await page.locator('.task-index-item').filter({hasText:'虚构标签任务 '+width}).click();await page.getByRole('button',{name:'编辑任务',exact:true}).click();const editor=page.getByRole('dialog',{name:'编辑任务',exact:true});await editor.getByRole('button',{name:'移除标签 人事审核',exact:true}).click();await editor.getByRole('textbox',{name:'搜索任务标签',exact:true}).fill('月度');await editor.getByRole('checkbox',{name:/月度沟通/}).check();await page.screenshot({path:`tmp/verification/task-labels-${width}-edit.png`});await editor.getByRole('button',{name:'保存任务',exact:true}).click();await editor.waitFor({state:'detached'});assert.equal((await v.call('get_work_task',{id:task.id})).task.kind,'custom');
+  if(width===390)await page.getByRole('button',{name:'返回任务簿',exact:true}).click();
+  await page.locator('.task-book-controls button').first().click();const filters=page.locator('.task-book-filters');await filters.getByRole('button',{name:'全部标签',exact:true}).click();await filters.getByRole('textbox',{name:'搜索筛选标签',exact:true}).fill(suffix);await filters.getByRole('checkbox',{name:/虚构资源协调/}).check();await filters.getByRole('checkbox',{name:new RegExp('虚构界面标签 '+width)}).check();await page.screenshot({path:`tmp/verification/task-labels-${width}-book-filter.png`});assert.ok(await page.locator('.task-index').getByText('虚构标签任务 '+width+' '+suffix,{exact:true}).isVisible());
+  await page.getByRole('button',{name:'看板大厅',exact:true}).click();await page.getByRole('button',{name:/筛选/}).click();const hall=page.locator('.task-board-toolbar');await hall.getByRole('button',{name:'全部标签',exact:true}).click();await hall.getByRole('textbox',{name:'搜索筛选标签',exact:true}).fill(suffix);await hall.getByRole('checkbox',{name:/虚构资源协调/}).check();await page.screenshot({path:`tmp/verification/task-labels-${width}-hall-filter.png`});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));checks.push(width+'px: full create/edit, explicit creation, search/reuse/multi-select, book and hall filters, MCP roundtrip, no type-triggered workflow');
+ }
+ assert.deepEqual(errors,[]);checks.push('MCP catalog discovery/create/search and member advice available in all three relevant guides');console.log('PASS: task label search through real HTTP/MCP');
+}finally{try{if(browser)await browser.close();for(const id of created){const {task}=await v.call('get_work_task',{id});if(task.status==='open')await v.call('cancel_work_task',{id,expected_version:task.version,reason:'虚构标签验收结束',request_id:randomUUID()});}}finally{await v.close(checks);}}

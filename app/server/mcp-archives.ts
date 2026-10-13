@@ -1,3 +1,4 @@
+import {memberArchiveGuidance} from './member-archive-guidance.ts';
 import {businessInput,taskIdSchema} from './mcp-tasks.ts';
 import {McpServer} from '@modelcontextprotocol/server';
 import {z} from 'zod';
@@ -10,16 +11,17 @@ import {type McpReply} from './mcp-members.ts';
 export const archiveToolNames=['list_archives','get_archive','create_archive','update_archive','list_archive_events','search_members','set_archive_state','reopen_archive','delete_archive','restore_archive'];
 for(const [name,fields] of Object.entries({delete_archive:['id','expected_version','request_id'],restore_archive:['id','expected_version','request_id'],list_archives:['type','person_scope','deleted','query','scope','status','member_status','member_id','closed','closed_history','tag_ids','before','limit'],get_archive:['id'],create_archive:['type','name','contacts','links','current_need','status','member_status','member_ids','request_id'],update_archive:['id','expected_version','name','contacts','links','current_need','request_id'],list_archive_events:['id','before','limit'],search_members:['query','before','limit'],set_archive_state:['id','expected_version','status','member_status','membership_action','deadline_at','member_ids','request_id'],reopen_archive:['id','expected_version','status','member_status','membership_action','deadline_at','member_ids','request_id']}))registerJournalFields(name,fields);
 export const archiveGuides=[
+ memberArchiveGuidance,
  '审核通过（待对接）表示人事审核已通过、尚待入社对接，对象表达加入意愿不等于审核通过。其 status API 兼容值仍为“已加入待对接”，查询或写入使用该值；网页显示新名称，不迁移原状态和历史。',
  'closed_history 可选 30、90、all，仅限制已关闭档案距最后关闭的天数，开启档案不受影响；不传保持全部历史。网页默认30天，查询旧关闭档案时可显式用 all。缺少关闭事件时间的历史档案只在 all 中出现，列表隐藏不影响按 ID 读取。',
  '整张档案采用可恢复删除：仅管理员按用户明确要求调用 delete_archive / restore_archive。关闭档案也可删除，恢复保持原业务状态，不自动重新开启。已删除档案从普通查询、搜索和未读隐藏；管理员用 list_archives(deleted:true) 查询并只读核对内容，其他成员（包括观察作者）无权读取。',
  '人物 person 与组织 org 是关注对象；猎头账号是登录成员。先查询名称、联系方式并核对稳定 ID，同名可以是不同对象，不自动合并。',
- 'list_archives 的 person_scope 默认 all，保留全部人物查询；external 包含审核通过（待对接），切到已入伙后才转入 members；通过 person_role 区分社员身份，member_status 表示可接工作、请假、失联，默认可接工作。网页外部人物与社员列表分别使用对应范围，搜索、关联我、未读、分页和计数都受此条件约束；人物身份不等于登录账号。',
+ 'list_archives 的 person_scope 默认 all，保留全部人物查询；external 包含审核通过（待对接），切到已入伙后才转入 members；通过 person_role 区分社员身份，member_status 表示可接工作、暂不接工作、请假、失联，默认可接工作。网页外部人物与社员列表分别使用对应范围，搜索、关联我、未读、分页和计数都受此条件约束；人物身份不等于登录账号。',
  'list_archives 的 scope:mine 表示关联我：人物或组织当前状态的关联成员包含调用者就展示，不限工作或开启状态；旧状态关联、创建者或观察作者身份不会自动计入。counts.mine 同口径，仍遵循搜索、状态、开启/关闭及删除权限。',
  '创建或整理前检查用户提供材料中的联系方式、QQ、来源链接、关联成员和图片；有已授权资料就填入，未知可以留空。不要凭空补齐；有用的缺失信息可在完成后简短提醒。QQ 使用字符串，保留前导零。',
  '档案创建默认视奸观察，不默认分配调用者。状态无顺序限制，组织交流等要求负责成员的状态须明确关联人；人事审核与审核通过（待对接）自动创建待领取任务，不要求预先分配档案关联人或任务负责人。其他状态可选关联成员。无别名或简介字段，不把长材料塞入名称或联系方式。',
  `人物状态：${personStates.join('、')}。组织状态：${orgStates.join('、')}。已入伙保持开启，已弃用自动关闭；已关闭只能显式 reopen_archive，不为其他任务擅自重新开启。`,
- '社员由人事组维护可接工作、请假、失联，网页/MCP 语义相同，三种状态都继续生成月度跟进。入社资料直接保留历史，正在进行的工作在任务中记录，不另建当前工作字段。不批量重开或改写历史社员档案。',
+ '社员由人事组维护可接工作、暂不接工作、请假、失联，网页/MCP 语义相同，四种状态都继续生成月度跟进。入社资料直接保留历史，正在进行的工作在任务中记录，不另建当前工作字段。不批量重开或改写历史社员档案。',
  '明确将人物从引荐中或人事审核退回视奸观察、个人接触、外部社友或已弃用时，同一事务取消仍开启的自动审核任务并保留取消历史；不取消已完成审核或独立手动任务。',
  '取消当前自动审核任务且档案仍处于该次审核时，同一事务恢复本次引荐前的外部关系及其原关联成员。历史不明确、档案已关闭／删除或身份后来已变更时不自动退回。',
  'search_members 按姓名查询成员稳定 ID；冻结成员不能新分配，既有冻结归属仍保留标记。状态切换只展示该状态的绑定，get_archive.bindings 保留各状态既有关联；不得把旧状态负责人悄悄当成新状态负责人。',

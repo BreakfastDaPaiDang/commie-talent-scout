@@ -1,6 +1,6 @@
 {
   "format": 1,
-  "count": 33,
+  "count": 35,
   "migrations": {
     "0001_identity.sql": {
       "sha256": "ceb732997de6972d3f88ae3a15b52b4df0def3418cc4b0834cd289ce55daff6a",
@@ -166,6 +166,16 @@
       "sha256": "8ecef9f31476b49dfde6a4616d29482857fa4fbb756909b87c1b461d564bd37c",
       "backwards_compatible": true,
       "reason": "Renames only the existing service username/key, preserving ID, avatar, authority and all historical references. Old code resolves service identity by stable ID."
+    },
+    "0034_member_work_paused.sql": {
+      "sha256": "b942d063166b5cd26e10e95fc856f2f1ffca9de8d69992e3a0e15c2c6addf0ff",
+      "backwards_compatible": true,
+      "reason": "Adds a separate work-acceptance flag without changing legacy state constraints or historical values; legacy code and writes remain supported."
+    },
+    "0035_work_task_labels.sql": {
+      "sha256": "41226837dd668759aec541e10648d150ecf0cb0caed705088c00015ca78890d8",
+      "backwards_compatible": true,
+      "reason": "Adds an independent label catalog and imports label names without changing existing task rows; imported labels require visible usage for discovery. Old code can ignore the catalog."
     }
   }
 }

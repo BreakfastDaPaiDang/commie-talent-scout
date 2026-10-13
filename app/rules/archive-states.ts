@@ -20,8 +20,10 @@ export const memberLabel=(type:'person'|'org',status:string)=>isWorkState(type,s
 export const memberStatuses=['已入伙'] as const;
 export type PersonScope='all'|'external'|'members';
 export const isMemberStatus=(status:string)=>(memberStatuses as readonly string[]).includes(status);
-export const memberBasicStates=['可接工作','请假','失联'] as const;
+export const memberBasicStates=['可接工作','暂不接工作','请假','失联'] as const;
 export type MemberBasicState=typeof memberBasicStates[number];
+export const storedMemberStatus=(status:MemberBasicState|null)=>status==='暂不接工作'?'可接工作':status;
+export const effectiveMemberStatus=(status:MemberBasicState|null,paused?:number)=>paused&&(!status||status==='可接工作')?'暂不接工作':status??'可接工作';
 export type PersonRole='external'|'member';
 export type PersonIdentity={type?:string;status:string;person_role?:PersonRole|null;member_status?:MemberBasicState|null};
 export const isMemberArchive=(a:PersonIdentity)=>a.type!=='org'&&(a.person_role?a.person_role==='member':isMemberStatus(a.status));

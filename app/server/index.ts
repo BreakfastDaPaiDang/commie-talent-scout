@@ -1,3 +1,4 @@
+import {WorkTaskLabels} from './work-task-labels.ts';
 import {generateMemberMonthlyFollowUps,generateScheduledMemberMonthlyFollowUps} from './member-monthly-follow-ups.ts';
 import {runTaskNotifications} from './task-notifications.ts';
 import {generateArchiveFollowUps,generateScheduledArchiveFollowUps} from './archive-follow-ups.ts';
@@ -165,6 +166,8 @@ app.post('/api/avatars/set',async c=>c.json(await new Avatars(c.env,await authen
 app.post('/api/profile',async c=>c.json(await new Members(c.env,await authenticate(c.req.raw,c.env),'web').updateOwnProfile(await c.req.json())));
 app.get('/api/profile/work-preference',async c=>c.json(await new Members(c.env,await authenticate(c.req.raw,c.env),'web').getOwnWorkPreference()));
 app.post('/api/profile/work-preference',async c=>c.json(await new Members(c.env,await authenticate(c.req.raw,c.env),'web').setOwnWorkPreference(await c.req.json())));
+app.get('/api/work-task-labels',async c=>c.json(await new WorkTaskLabels(c.env,await authenticate(c.req.raw,c.env),'web').list(c.req.query())));
+app.post('/api/work-task-labels/create',async c=>c.json(await new WorkTaskLabels(c.env,await authenticate(c.req.raw,c.env),'web').create(await c.req.json())));
 app.get('/api/work-tasks',async c=>c.json(await new WorkTasks(c.env,await authenticate(c.req.raw,c.env),'web').list(c.req.query())));
 app.post('/api/work-tasks/create',async c=>c.json(await new WorkTasks(c.env,await authenticate(c.req.raw,c.env),'web').create(await c.req.json())));
 app.post('/api/work-tasks/claim',async c=>c.json(await new WorkTasks(c.env,await authenticate(c.req.raw,c.env),'web').claim(await c.req.json())));

@@ -24,8 +24,8 @@
 
 模块：`archive-lifecycle`；计划器：[planRules](../../app/rules/contract.ts#L29)。计划按规则顺序返回 steps 和 statements，不执行提交。
 
-触发入口：[transition](../../app/server/archives.ts#L124)、[restoreCancelledAudit](../../app/server/work-tasks.ts#L332)。
-事务提交：[command](../../app/server/commands.ts#L21)；版本保护：[guard](../../app/server/archives.ts#L50)。
+触发入口：[transition](../../app/server/archives.ts#L125)、[restoreCancelledAudit](../../app/server/work-tasks.ts#L340)。
+事务提交：[command](../../app/server/commands.ts#L21)；版本保护：[guard](../../app/server/archives.ts#L51)。
 幂等边界：command 请求收据；transitionChanged 排除无变化操作；档案版本事务校验；任务取消仅匹配 open，消息沿用现有唯一约束。
 失败边界：预校验失败不提交；事务内权限或版本冲突、SQL 失败整体回滚。保留现有行为，不新增任务轮次语义。
 
@@ -40,14 +40,14 @@
 
 ## 触发与事务边界
 
-网页 HTTP 与 MCP 的状态修改、显式重开都进入 [transition](../../app/server/archives.ts#L124)。该入口调用下表定义产生 SQL，最后一起提交；规则不单独写库。
+网页 HTTP 与 MCP 的状态修改、显式重开都进入 [transition](../../app/server/archives.ts#L125)。该入口调用下表定义产生 SQL，最后一起提交；规则不单独写库。
 
-- 读取与预校验：[get](../../app/server/archives.ts#L40)（存在性、删除权限、关闭锁定、版本）。
-- 关联成员：[planBindings](../../app/server/archives.ts#L108)（存在、冻结及原归属保留；事务内再次校验）。
-- 档案事务条件：[guard](../../app/server/archives.ts#L50)。
+- 读取与预校验：[get](../../app/server/archives.ts#L41)（存在性、删除权限、关闭锁定、版本）。
+- 关联成员：[planBindings](../../app/server/archives.ts#L109)（存在、冻结及原归属保留；事务内再次校验）。
+- 档案事务条件：[guard](../../app/server/archives.ts#L51)。
 - 授权、原子提交与重试收据：[command](../../app/server/commands.ts#L21)。
 - 重开时词义差异、历史与权限：由上述 transition 调用 [TagState](../../app/server/tag-state.ts) 读取；不在生成器中解释 SQL 或任意函数。
-- 取消自动审核任务：[cancel](../../app/server/work-tasks.ts#L251) 通过 [restoreCancelledAudit](../../app/server/work-tasks.ts#L332) 调用 [auditCancellationTarget](../../app/rules/archive-lifecycle.ts#L35) 取得本次引荐前的外部关系，复用同一 planArchiveEffects 并在任务事务中提交。历史无法确认或档案已变更身份时不猜测退回状态。
+- 取消自动审核任务：[cancel](../../app/server/work-tasks.ts#L258) 通过 [restoreCancelledAudit](../../app/server/work-tasks.ts#L340) 调用 [auditCancellationTarget](../../app/rules/archive-lifecycle.ts#L35) 取得本次引荐前的外部关系，复用同一 planArchiveEffects 并在任务事务中提交。历史无法确认或档案已变更身份时不猜测退回状态。
 
 以下条件和结果来自实际参与执行的函数引用及函数体。源码链接供追溯，不把人工说明作为规则来源。
 
@@ -198,9 +198,9 @@ async function preparePersonnelTask(stmt, archiveId, status, deadline) {
 
 ```javascript
 function saveStateAndBindings(c) {
-    const closed = isClosedState(c.status);
+    const closed = isClosedState(c.status), memberStatus = c.status === '已入伙' ? c.memberStatus ?? (isMemberArchive(c.old) ? c.old.member_status : null) ?? '可接工作' : null;
     return [
-        c.stmt('UPDATE archives SET status=?,person_role=?,member_status=?,closed=?,last_open_status=?,version=version+1,updated_at=? WHERE id=?', c.status, c.old.type === 'person' ? c.status === '已入伙' ? 'member' : 'external' : null, c.status === '已入伙' ? c.memberStatus ?? (isMemberArchive(c.old) ? c.old.member_status : null) ?? '可接工作' : null, closed ? 1 : 0, closed ? isMemberArchive(c.old) ? null : c.old.status : c.old.last_open_status, c.at, c.old.id),
+        c.stmt('UPDATE archives SET status=?,person_role=?,member_status=?,member_work_paused=?,closed=?,last_open_status=?,version=version+1,updated_at=? WHERE id=?', c.status, c.old.type === 'person' ? c.status === '已入伙' ? 'member' : 'external' : null, storedMemberStatus(memberStatus), memberStatus === '暂不接工作' ? 1 : 0, closed ? 1 : 0, closed ? isMemberArchive(c.old) ? null : c.old.status : c.old.last_open_status, c.at, c.old.id),
         c.stmt('DELETE FROM archive_bindings WHERE archive_id=? AND status=?', c.old.id, c.status),
         ...c.bindings
     ];
@@ -556,7 +556,7 @@ function planArchiveFollowUp(context) {
 任务和创建事件一起提交；提交时复核社员身份、版本、开启状态与服务冻结；失败下次重试。
 ### memberMonth
 
-[memberMonth](../../app/rules/member-monthly-follow-up.ts#L9)
+[memberMonth](../../app/rules/member-monthly-follow-up.ts#L13)
 
 ```javascript
 function memberMonth(at) {
@@ -571,7 +571,7 @@ function memberMonth(at) {
 
 ### needsMemberMonthly
 
-[needsMemberMonthly](../../app/rules/member-monthly-follow-up.ts#L14)
+[needsMemberMonthly](../../app/rules/member-monthly-follow-up.ts#L18)
 
 ```javascript
 function needsMemberMonthly(c) {
@@ -581,13 +581,12 @@ function needsMemberMonthly(c) {
 
 ### createMemberMonthly
 
-[createMemberMonthly](../../app/rules/member-monthly-follow-up.ts#L15)
+[createMemberMonthly](../../app/rules/member-monthly-follow-up.ts#L19)
 
 ```javascript
 function createMemberMonthly(c) {
     const month = memberMonth(c.at), t = c.target;
-    const purpose = '了解社员本月的近况、参与意愿、需要的支持和联系情况，保持持续的人事联系。';
-    const delivery = '将实际接触情况与结论写入社员档案的观察记录，再提交任务交付；暂时联系不到也如实记录。必要时维护可接工作、请假或失联状态，不为完成任务编造沟通。';
+    const { purpose, delivery } = memberMonthlyCopy;
     return [
         c.stmt(`INSERT INTO work_tasks(id,archive_id,kind,labels_json,priority,initiator_kind,initiator_id,title,purpose,delivery,source,status,deadline_at,created_by,created_at,updated_at,period_key,automation_rule,automation_key)
   SELECT ?,a.id,'monthly','["月度沟通"]','P2','system',?,?,?,?,'rule','open',?,?,?,?,?,?,? FROM archives a
@@ -607,7 +606,7 @@ function createMemberMonthly(c) {
 
 ### planMemberMonthly
 
-[planMemberMonthly](../../app/rules/member-monthly-follow-up.ts#L34)
+[planMemberMonthly](../../app/rules/member-monthly-follow-up.ts#L37)
 
 ```javascript
 function planMemberMonthly(context) {

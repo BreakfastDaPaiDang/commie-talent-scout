@@ -1,3 +1,4 @@
+import {canRefreshMemberMonthlyCopy,legacyMemberMonthlyCopy,memberMonthlyCopy} from '../app/rules/member-monthly-follow-up.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID as uuid} from 'node:crypto';
@@ -16,12 +17,12 @@ test('month follows China midnight, year boundary and leap February',()=>{
  assert.equal(memberMonth('2026-12-31T16:00:00.000Z').key,'2027-01');assert.equal(memberMonth('2028-02-01T00:00:00.000Z').deadline,'2028-02-29T15:59:59.999Z');
 });
 test('monthly uses formal archives including leave/unreachable, never external, org, accounts, closed or deleted',async t=>{
- const f=setup(t);for(const member_status of ['可接工作','请假','失联'])await member(f,{member_status});
+ const f=setup(t);for(const member_status of ['可接工作','暂不接工作','请假','失联'])await member(f,{member_status});
  await member(f,{status:'个人接触'});await member(f,{type:'org',status:'个人接触'});
  const closed=await member(f),deleted=await member(f);f.sqlite.prepare('UPDATE archives SET closed=1 WHERE id=?').run(closed.id);f.sqlite.prepare('UPDATE archives SET deleted=1 WHERE id=?').run(deleted.id);
- const result=await generate(f.env,oct);assert.equal(result.created_count,3);assert.equal(result.pending_count,0);
+ const result=await generate(f.env,oct);assert.equal(result.created_count,4);assert.equal(result.pending_count,0);
  const tasks=f.sqlite.prepare('SELECT * FROM work_tasks').all();for(const task of tasks){assert.equal(task.kind,'monthly');assert.equal(task.period_key,'2026-10');assert.equal(task.automation_rule,memberMonthlyRule);assert.equal(task.priority,'P2');assert.equal(task.owner_id,null);assert.equal(task.status,'open');assert.equal(task.initiator_id,zaojiSubject.id);assert.equal(task.created_by,zaojiSubject.id);assert.equal(task.initiator_kind,'system');assert.equal(task.deadline_at,'2026-10-31T15:59:59.999Z');}
- assert.equal(f.sqlite.prepare('SELECT count(*) n FROM work_task_events WHERE actor_id=? AND source=?').get(zaojiSubject.id,'system').n,3);
+ assert.equal(f.sqlite.prepare('SELECT count(*) n FROM work_task_events WHERE actor_id=? AND source=?').get(zaojiSubject.id,'system').n,4);
  assert.equal((await generate(f.env,oct)).created_count,0);
  f.sqlite.prepare("UPDATE work_tasks SET status='completed'").run();assert.equal((await generate(f.env,oct)).created_count,0);
  assert.equal(f.sqlite.prepare('SELECT username FROM members WHERE id=?').get(zaojiSubject.id).username,'saki-hr');
@@ -49,3 +50,11 @@ test('bounded batches drain all members and a later join gets only the current m
  await member(f,{name:'虚构月中入社'});assert.equal((await generate(f.env,'2026-10-20T12:00:00+08:00')).created_count,1);
  assert.equal(f.sqlite.prepare('SELECT count(*) n FROM work_tasks').get().n,46);
 });
+
+ test('copy refresh only targets untouched current-month open automation and preserves all task ownership/state/labels',async t=>{
+  const base={status:'open',kind:'monthly',source:'rule',automation_rule:memberMonthlyRule,period_key:'2026-10',...legacyMemberMonthlyCopy};assert.equal(canRefreshMemberMonthlyCopy(base,'2026-10'),true);
+  for(const patch of [{status:'completed'},{status:'cancelled'},{period_key:'2026-09'},{purpose:'人工修改'},{delivery:'人工修改'},{source:'manual'},{automation_rule:null}])assert.equal(canRefreshMemberMonthlyCopy({...base,...patch},'2026-10'),false);
+  const f=setup(t);await member(f);const first=(await generate(f.env,oct)).tasks[0];f.sqlite.prepare('UPDATE work_tasks SET purpose=?,delivery=? WHERE id=?').run(legacyMemberMonthlyCopy.purpose,legacyMemberMonthlyCopy.delivery,first.id);
+  f.actor.role='admin';f.sqlite.prepare("UPDATE members SET role='admin' WHERE id=?").run(f.actor.id);const service=new WorkTasks(f.env,f.actor,'mcp'),before=f.sqlite.prepare('SELECT * FROM work_tasks WHERE id=?').get(first.id);await service.edit({id:first.id,expected_version:before.version,...memberMonthlyCopy,request_id:uuid()});const after=f.sqlite.prepare('SELECT * FROM work_tasks WHERE id=?').get(first.id);
+  for(const key of ['status','owner_id','deadline_at','priority','title','labels_json','period_key'])assert.equal(after[key],before[key]);assert.equal(after.purpose,memberMonthlyCopy.purpose);assert.equal(canRefreshMemberMonthlyCopy(after,'2026-10'),false);
+ });

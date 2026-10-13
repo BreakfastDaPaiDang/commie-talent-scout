@@ -1,4 +1,4 @@
-import {archiveStateLabel,isClosedState,isWorkState,statesFor,isMemberArchive,type MemberBasicState} from './archive-states.ts';
+import {storedMemberStatus,archiveStateLabel,isClosedState,isWorkState,statesFor,isMemberArchive,type MemberBasicState} from './archive-states.ts';
 import {Failure,uid} from '../server/types.ts';
 import type {Archive,BoundMember} from '../server/archives.ts';
 import type {TagState} from '../server/tag-state.ts';
@@ -89,8 +89,8 @@ function notifyManualTasksWhen(c:Transition){
 }
 
 function saveStateAndBindings(c:Effects){
- const closed=isClosedState(c.status);
- return [c.stmt('UPDATE archives SET status=?,person_role=?,member_status=?,closed=?,last_open_status=?,version=version+1,updated_at=? WHERE id=?',c.status,c.old.type==='person'?(c.status==='已入伙'?'member':'external'):null,c.status==='已入伙'?(c.memberStatus??(isMemberArchive(c.old)?c.old.member_status:null)??'可接工作'):null,closed?1:0,closed?(isMemberArchive(c.old)?null:c.old.status):c.old.last_open_status,c.at,c.old.id),
+ const closed=isClosedState(c.status),memberStatus=c.status==='已入伙'?(c.memberStatus??(isMemberArchive(c.old)?c.old.member_status:null)??'可接工作'):null;
+ return [c.stmt('UPDATE archives SET status=?,person_role=?,member_status=?,member_work_paused=?,closed=?,last_open_status=?,version=version+1,updated_at=? WHERE id=?',c.status,c.old.type==='person'?(c.status==='已入伙'?'member':'external'):null,storedMemberStatus(memberStatus),memberStatus==='暂不接工作'?1:0,closed?1:0,closed?(isMemberArchive(c.old)?null:c.old.status):c.old.last_open_status,c.at,c.old.id),
   c.stmt('DELETE FROM archive_bindings WHERE archive_id=? AND status=?',c.old.id,c.status),...c.bindings];
 }
 function recordStateChange(c:Effects){

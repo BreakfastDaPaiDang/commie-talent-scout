@@ -14,7 +14,7 @@ test('member editor offers availability and explicit identity exits, with no per
  const archive={id:'fixture',type:'person',status:'已入伙',person_role:'member',member_status:'可接工作',closed:false,version:1,members:[],bindings:{}} as unknown as Archive;
  try{
   await act(async()=>root.render(<ArchiveStateForm archive={archive} busy={false} setBusy={()=>{}} onSaved={async()=>{}} onReload={async()=>{}}/>));
-  assert.deepEqual([...w.document.querySelectorAll<HTMLInputElement>('input[type="radio"]')].map(e=>e.value),['可接工作','请假','失联']);
+  assert.deepEqual([...w.document.querySelectorAll<HTMLInputElement>('input[type="radio"]')].map(e=>e.value),['可接工作','暂不接工作','请假','失联']);
   assert.ok(!w.document.body.textContent?.includes('保存并关闭档案'));
   await act(async()=>w.document.querySelector<HTMLInputElement>('input[value="请假"]')!.click());
   await act(async()=>w.document.querySelector('form')!.dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true})));
