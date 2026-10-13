@@ -1,4 +1,4 @@
-import {isClosedState,isWorkState,statesFor,isMemberArchive,type MemberBasicState} from './archive-states.ts';
+import {archiveStateLabel,isClosedState,isWorkState,statesFor,isMemberArchive,type MemberBasicState} from './archive-states.ts';
 import {Failure,uid} from '../server/types.ts';
 import type {Archive,BoundMember} from '../server/archives.ts';
 import type {TagState} from '../server/tag-state.ts';
@@ -54,7 +54,7 @@ function cancelsInapplicableTasks(c:Effects){
  const leavesMembership=isMemberArchive(c.old)&&c.status!=='已入伙';
  const kinds=isClosedState(c.status)?"'audit','monthly','onboarding'":leavesMembership?"'monthly','onboarding'":null;
  if(!kinds)return [];
- const reason=`档案从${c.old.status}变为${c.status}，关联工作不再适用`;
+ const reason=`档案从${archiveStateLabel(c.old.status)}变为${archiveStateLabel(c.status)}，关联工作不再适用`;
  return [
   c.stmt(`INSERT INTO work_task_events(id,task_id,actor_id,source,kind,before_json,after_json,reason,created_at)
    SELECT lower(hex(randomblob(16))),id,?,?,'task.cancelled',
@@ -67,7 +67,7 @@ function cancelsInapplicableTasks(c:Effects){
 
 function notifyManualTasks(c:Effects){
  if(!stateChanged(c)||c.old.type!=='person')return [];
- const reason=`档案状态已从${c.old.status}变为${c.status}，请负责人核对合作任务是否继续`;
+ const reason=`档案状态已从${archiveStateLabel(c.old.status)}变为${archiveStateLabel(c.status)}，请负责人核对合作任务是否继续`;
  return [
   c.stmt(`INSERT INTO work_task_events(id,task_id,actor_id,source,kind,before_json,after_json,reason,created_at)
    SELECT lower(hex(randomblob(16))),id,?,?,'task.archive_status_changed',

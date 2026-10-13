@@ -1,5 +1,6 @@
 import React,{useId,type ReactNode,type Dispatch,type SetStateAction} from 'react';
 import './forms.css';
+import {archiveStateLabel} from '../rules/archive-states';
 type Contact={type:string;value:string;note:string};
 type Link={label:string;url:string};
 export function ProfileFields({type,name,setName,nameManaged=false,currentNeed,setCurrentNeed,contacts,setContacts,links,setLinks,children}:{type:'person'|'org';nameManaged?:boolean;name:string;setName:(name:string)=>void;currentNeed:string;setCurrentNeed:(value:string)=>void;contacts:Contact[];setContacts:Dispatch<SetStateAction<Contact[]>>;links:Link[];setLinks:Dispatch<SetStateAction<Link[]>>;children?:ReactNode}){
@@ -14,5 +15,5 @@ export function ProfileFields({type,name,setName,nameManaged=false,currentNeed,s
 }
 export function StateChoices({value,onChange,choices,label='业务状态'}:{value:string;onChange:(value:string)=>void;choices:readonly string[];label?:string}){
  const name=useId();
- return <fieldset className="state-choice-field"><legend>{label}</legend><div className="state-choices" role="radiogroup" aria-label={label}>{choices.map(s=><label className={value===s?'selected':''} key={s}><input type="radio" name={name} value={s} checked={value===s} onChange={()=>onChange(s)}/><span>{s}</span></label>)}</div></fieldset>;
+ return <fieldset className="state-choice-field"><legend>{label}</legend><div className="state-choices" role="radiogroup" aria-label={label}>{choices.map(s=><label className={value===s?'selected':''} key={s}><input type="radio" name={name} value={s} checked={value===s} onChange={()=>onChange(s)}/><span>{archiveStateLabel(s)}</span></label>)}</div></fieldset>;
 }

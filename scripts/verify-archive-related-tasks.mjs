@@ -46,10 +46,22 @@ try{
  for(const width of [1440,390]){
   const a=await v.call('create_archive',{type:'person',status:'个人接触',name:'快捷操作预览 '+width,request_id:randomUUID()});created.push(a.id);
   await page.setViewportSize({width,height:width===390?844:1000});await page.goto(v.base+'/?archive='+a.id);
-  for(const [label,status,count] of [['提交人事审核','人事审核',1],['确认加入待对接','已加入待对接',2],['确认已入伙','已入伙',2]]){
+  for(const [label,status,count] of [['提交人事审核','人事审核',1],['审核通过（创建入社对接任务）','已加入待对接',2],['确认已入伙','已入伙',2]]){
    await page.locator('.archive-primary-action').getByRole('button',{name:label,exact:true}).click();const confirm=page.getByRole('dialog',{name:label,exact:true});
    assert.ok(await confirm.evaluate(e=>e.scrollWidth<=e.clientWidth+1));await page.screenshot({path:`tmp/verification/archive-shortcut-${width}-${count}-${status}.png`});
-   await confirm.getByRole('button',{name:label,exact:true}).click();await confirm.waitFor({state:'detached'});await page.waitForFunction(expected=>document.querySelector('.entity-heading .state-badge')?.textContent===expected,status==='已入伙'?'可接工作':status);
+   await confirm.getByRole('button',{name:label,exact:true}).click();await confirm.waitFor({state:'detached'});await page.waitForFunction(expected=>document.querySelector('.entity-heading .state-badge')?.textContent===expected,status==='已入伙'?'可接工作':status==='已加入待对接'?'审核通过（待对接）':status);
+   if(status==='已加入待对接'){
+    assert.equal((await get(a.id)).person_role,'external');
+    await page.getByRole('button',{name:'编辑档案',exact:true}).click();
+    const editor=page.getByRole('dialog',{name:'编辑档案',exact:true});
+    await editor.getByRole('tab',{name:'状态与成员',exact:true}).click();
+    const approval=editor.getByRole('radio',{name:'审核通过（待对接）',exact:true});
+    assert.equal(await approval.isChecked(),true);assert.equal(await approval.inputValue(),'已加入待对接');
+    assert.equal(await editor.getByText('已加入待对接',{exact:true}).count(),0);
+    assert.ok(await editor.evaluate(e=>e.scrollWidth<=e.clientWidth+1));
+    await page.screenshot({path:`tmp/verification/archive-approval-${width}-editor.png`});
+    await editor.getByRole('button',{name:'关闭对话框',exact:true}).click();
+   }
    assert.equal((await get(a.id)).status,status);assert.equal((await v.call('list_work_tasks',{archive_id:a.id,state:'open'})).tasks.length,count);
   }
   assert.equal(new URL(page.url()).pathname,'/members');assert.equal(await page.locator('.archive-primary-action').count(),0);

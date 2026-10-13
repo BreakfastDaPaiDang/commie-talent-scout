@@ -1,5 +1,5 @@
 import React,{useState} from 'react';
-import {archivePrimaryAction} from '../rules/archive-states';
+import {archivePrimaryAction,archiveStateLabel} from '../rules/archive-states';
 import {DetailActions} from '../ui/TaskBook';
 import {Icon} from '../ui/icons';
 import {Modal,ModalActions} from './Modal';
@@ -15,5 +15,5 @@ export function ArchiveQuickAction({archive,openTaskCount,onChanged}:{archive:Ar
 function StateConfirmation({archive,action,openTaskCount,onClose,onChanged}:{archive:Archive;action:NonNullable<ReturnType<typeof archivePrimaryAction>>;openTaskCount:number;onClose:()=>void;onChanged:()=>void}){
  const[busy,setBusy]=useState(false),[error,setError]=useState(''),[requestId]=useState(()=>crypto.randomUUID());
  async function submit(){setBusy(true);setError('');try{await api('/archives/state',{id:archive.id,expected_version:archive.version,status:action.status,member_ids:(archive.bindings[action.status]??[]).map(m=>m.id),request_id:requestId});onClose();onChanged();}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
- return <Modal title={action.label} busy={busy} onClose={onClose}><p>{archive.name}</p><div className="archive-state-change"><span>{archive.status}</span><Icon name="arrow"/><strong>{action.status}</strong></div><p>{action.effect}</p>{openTaskCount>0&&<p className="secondary-copy">现有 {openTaskCount} 项开启任务会保留，需由负责人单独交付。</p>}<PageError error={error} retry={()=>{onClose();onChanged();}} retryLabel="重新读取档案"/><ModalActions><button className="button primary" disabled={busy} onClick={()=>void submit()}>{busy?'正在保存…':action.label}</button></ModalActions></Modal>;
+ return <Modal title={action.label} busy={busy} onClose={onClose}><p>{archive.name}</p><div className="archive-state-change"><span>{archiveStateLabel(archive.status)}</span><Icon name="arrow"/><strong>{archiveStateLabel(action.status)}</strong></div><p>{action.effect}</p>{openTaskCount>0&&<p className="secondary-copy">现有 {openTaskCount} 项开启任务会保留，需由负责人单独交付。</p>}<PageError error={error} retry={()=>{onClose();onChanged();}} retryLabel="重新读取档案"/><ModalActions><button className="button primary" disabled={busy} onClick={()=>void submit()}>{busy?'正在保存…':action.label}</button></ModalActions></Modal>;
 }

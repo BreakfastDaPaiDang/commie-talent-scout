@@ -1,3 +1,4 @@
+import {archiveStateLabel} from '../rules/archive-states';
 import {ComposerFrame,ObservationFrame,RecordBody,TimelineTabs} from '../ui/Workspace';
 import {ActivityStream} from './ActivityStream';
 import {ReadBoundary,Highlight} from './Reading';
@@ -22,7 +23,7 @@ const time=(value:string)=>new Date(value).toLocaleString('zh-CN',{timeZone:'Asi
 const kinds:Record<string,string>={'material.uploaded':'上传材料','material.updated':'修改材料','material.deleted':'删除材料','material.restored':'恢复材料','material.purged':'清除材料','material.capacity_changed':'调整材料容量','archive.deleted':'删除档案','archive.restored':'恢复档案','observation.deleted':'删除观察','observation.restored':'恢复观察','archive.avatar_changed':'修改头像','archive.tags_changed':'整理标签','archive.created':'创建档案','archive.profile_changed':'修改基础资料','archive.member_status_changed':'变更社员状态','archive.state_changed':'变更业务状态','archive.members_changed':'调整关联成员','archive.closed':'已关闭','archive.reopened':'已重新开启','observation.created':'发布观察','observation.edited':'编辑观察'};
 const fields:Record<string,string>={name:'名称',contacts:'联系方式',links:'资料链接',status:'人事状态',member_status:'社员基本状态',person_role:'人物身份',members:'当前成员',content_version:'内容版本',deleted:'已删除'};
 function readingPosition(key:string){try{const value=JSON.parse(sessionStorage.getItem(key)??'null');return {top:typeof value==='number'?value:Number(value?.top??0),pages:Math.max(1,Math.min(100,Number(value?.pages??1))),mode:value?.mode==='deleted'?'deleted' as const:value?.mode==='observations'?'observations' as const:'all' as const};}catch{return {top:0,pages:1,mode:'all' as const};}}
-function value(v:unknown):string{if(typeof v==='boolean')return v?'是':'否';if(v===null||v===undefined||v==='')return '未填写';if(Array.isArray(v))return v.length?v.map(x=>x.name?x.name+(x.frozen?'（已冻结）':''):x.url?`${x.label||'链接'} ${x.url}`:`${x.type} ${x.value}${x.note?'（'+x.note+'）':''}`).join('、'):'未填写';return v==='member'?'社员':v==='external'?'外部人物':String(v);}
+function value(v:unknown,key?:string):string{if(key==='status'&&typeof v==='string')return archiveStateLabel(v);if(typeof v==='boolean')return v?'是':'否';if(v===null||v===undefined||v==='')return '未填写';if(Array.isArray(v))return v.length?v.map(x=>x.name?x.name+(x.frozen?'（已冻结）':''):x.url?`${x.label||'链接'} ${x.url}`:`${x.type} ${x.value}${x.note?'（'+x.note+'）':''}`).join('、'):'未填写';return v==='member'?'社员':v==='external'?'外部人物':String(v);}
 export function ObservationSection({actor,archive,onChanged,focus}:{actor:Member;archive:Archive;onChanged:()=>void;focus?:ObservationFocus}){
  const [materialsOpen,setMaterialsOpen]=useState(()=>{const p=new URLSearchParams(location.search);return p.get('archive')===archive.id&&p.has('material');}),[materialCount,setMaterialCount]=useState(0),[materialsVisited,setMaterialsVisited]=useState(false);
  const paneScroll=useRef({timeline:0,materials:0});
@@ -107,7 +108,7 @@ function ObservationState({record,busy,setBusy,onSaved,onReload}:{record:Observa
 
 function EventCard({event:e,expanded=false}:{event:TimelineEvent;expanded?:boolean}){
  const[open,setOpen]=useState(expanded);
- const change=e.kind==='archive.tags_changed'?<TagEventChange before={(e.before??[]) as unknown as TagBinding[]} after={(e.after??[]) as unknown as TagBinding[]}/>:<ul>{Object.keys(e.after??{}).filter(k=>k!=='id'&&JSON.stringify(e.before?.[k])!==JSON.stringify(e.after?.[k])).map(k=><li key={k}>{fields[k]??k}：{e.before?value(e.before[k])+' → ':''}{value(e.after?.[k])}</li>)}</ul>;
+ const change=e.kind==='archive.tags_changed'?<TagEventChange before={(e.before??[]) as unknown as TagBinding[]} after={(e.after??[]) as unknown as TagBinding[]}/>:<ul>{Object.keys(e.after??{}).filter(k=>k!=='id'&&JSON.stringify(e.before?.[k])!==JSON.stringify(e.after?.[k])).map(k=><li key={k}>{fields[k]??k}：{e.before?value(e.before[k],k)+' → ':''}{value(e.after?.[k],k)}</li>)}</ul>;
  const hasChange=!e.kind.startsWith('material.')&&(e.kind==='archive.tags_changed'||Object.keys(e.after??{}).some(k=>k!=='id'));
  return <article className="system-event compact-event" id={'event-'+e.id}><span className="event-node" aria-hidden="true"/><div><div className={'event-overview '+(!hasChange?'reading-content':'')}>{!hasChange&&<ReadBoundary reading={e.reading}/>}<strong>{kinds[e.kind]??'档案更新'}</strong><small>{e.actor_name} · {time(e.created_at)}</small></div>{hasChange&&<details open={open} onToggle={event=>setOpen(event.currentTarget.open)}><summary>查看{e.before?'变化':'内容'}</summary>{open&&<div className="reading-content"><ReadBoundary reading={e.reading}/>{change}</div>}</details>}</div></article>;
 

@@ -9,7 +9,7 @@ import {ArchiveHead,ArchiveRow,DetailFrame,EntityHeader,IconButton,ScopeToolbar,
 import {Icon} from '../ui/icons';
 import {ArchiveRead,ArchiveReadingScope,Highlight} from './Reading';
 import type {ArchiveReadDelivery} from '../server/archive-reading';
-import {statesFor,memberBasicStates,isMemberArchive,archiveDisplayStatus,archivePath,type PersonScope} from '../rules/archive-states';
+import {archiveStateLabel,statesFor,memberBasicStates,isMemberArchive,archiveDisplayStatus,archivePath,type PersonScope} from '../rules/archive-states';
 import type {ObservationFocus} from './ObservationSection';
 import {AvatarEditor,avatarUrl} from './AvatarEditor';
 import React,{useEffect,useLayoutEffect,useRef,useState,type FormEvent} from 'react';
@@ -79,7 +79,7 @@ export function ArchivesPage({actor,type,personScope='all',linked,detailOnly=fal
  return <><WorkspaceFrame selected={!!pref.selected} expanded={expanded} detailOnly={detailOnly} list={<>
   <ArchiveHead label={trash?'已删除档案':label} count={String(items.length).padStart(2,'0')+(cursor?'＋':'')} query={query} onQuery={setQuery} onCreate={trash?undefined:()=>{setEditTab('profile');setDialog('create');}} searchRef={searchRef}/>
   <ScopeToolbar resetLabel="重置筛选" filterSummary={!trash&&personScope!=='members'&&<button type="button" className="text-button" onClick={()=>setFiltersOpen(true)}>已关闭档案：{closedHistoryLabel(pref.closed_history)}</button>} scopeItems={trash?[['person','人物'],['org','组织']]:undefined} counts={trash?undefined:counts} scope={trash?type:pref.scope} onScope={scope=>trash?onTypeChange?.(scope as Kind):setPref(p=>({...p,scope:scope as Preference['scope']}))} filtersOpen={filtersOpen} onFilters={()=>setFiltersOpen(v=>!v)} activeFilters={activeFilters} onReset={!trash||query||activeFilters||pref.scope!=='all'?()=>{setQuery('');setPref(p=>({...defaults,selected:p.selected,status:initialStatus}));}:undefined} filters={<>
-   {!statusLocked&&<select aria-label={personScope==='members'?'筛选基本状态':'筛选业务状态'} value={pref.status} onChange={e=>setPref(p=>({...p,status:e.target.value}))}><option value="">全部状态</option>{(personScope==='members'?[...memberBasicStates]:statesFor(type)).map(v=><option key={v}>{v}</option>)}</select>}
+   {!statusLocked&&<select aria-label={personScope==='members'?'筛选基本状态':'筛选业务状态'} value={pref.status} onChange={e=>setPref(p=>({...p,status:e.target.value}))}><option value="">全部状态</option>{(personScope==='members'?[...memberBasicStates]:statesFor(type)).map(v=><option key={v} value={v}>{archiveStateLabel(v)}</option>)}</select>}
    <DirectoryPicker label="筛选绑定成员" placeholder="全部成员" multiple={false} members={directory} value={pref.member_id?[pref.member_id]:[]} onChange={ids=>setPref(p=>({...p,member_id:ids[0]??''}))} renderAvatar={m=><Avatar name={m.name} src={avatarUrl('member',m.id,0)} size="tiny"/>}/>
 
    <TagFilter type={type} ids={pref.tag_ids} onChange={tag_ids=>setPref(p=>({...p,tag_ids}))}/>{personScope!=='members'&&<><select aria-label="筛选开启关闭" value={pref.closed} onChange={e=>setPref(p=>({...p,closed:e.target.value as Preference['closed']}))}><option value="all">全部档案</option><option value="open">开启中</option><option value="closed">已关闭</option></select>{!trash&&<ClosedHistoryFilter value={pref.closed_history} onChange={closed_history=>setPref(p=>({...p,closed_history}))}/>}</>}<PageError error={directoryError} retry={()=>setDirectoryRetry(n=>n+1)}/>
