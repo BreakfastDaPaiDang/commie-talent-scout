@@ -9,6 +9,9 @@ export function RelatedTasksFrame({history,onHistory,count,children}:{history:bo
  return <section className="related-tasks" aria-label="关联任务"><header><h3>{history?'已关闭任务':'关联任务'}{!history&&count!==undefined&&<small>{count} 项开启</small>}</h3><button className="text-button" onClick={()=>onHistory(!history)}>{history?'返回开启任务':'查看已关闭任务'}</button></header>{children}</section>;
 }
 export function DetailActions({children}:{children:ReactNode}){return <div className="task-scene-actions">{children}</div>;}
+export function ObservationReferenceOption({id,author,time,preview,checked,onChange}:{id:string;author:string;time:string;preview:string;checked:boolean;onChange:()=>void}){
+ return <label className={`task-observation-option${checked?' is-selected':''}`} data-observation-id={id}><input type="checkbox" checked={checked} onChange={onChange} aria-label={`引用 ${author} ${time} 的观察`}/><span className="task-reference-copy"><span className="task-reference-heading"><span><strong>{author}</strong><time>{time}</time></span><span className="task-reference-state" aria-hidden="true">{checked?'已引用':'选择'}</span></span><span className="task-reference-preview">{preview}</span></span></label>;
+}
 export function TaskMark({stage}: {stage:TaskStage}) {
  return <span className={`task-mark task-mark-${stage}`} aria-hidden="true">{stage==='closed'?'✓':stage==='ready'||stage==='active'?'?':'!'}</span>;
 }

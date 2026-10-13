@@ -1,0 +1,23 @@
+import assert from 'node:assert/strict';
+import {randomUUID} from 'node:crypto';
+import {chromium} from 'playwright-core';
+import {verificationClient} from './verification-client.mjs';
+const v=await verificationClient('task-reference-picker'),checks=[],archives=[],tasks=[];let browser;
+try{
+ const archive=await v.call('create_archive',{type:'person',name:'虚构交付引用验收 '+randomUUID().slice(0,8),request_id:randomUUID()});archives.push(archive.id);
+ const observations=[];for(let i=0;i<3;i++)observations.push(await v.call('create_observation',{archive_id:archive.id,body:`观察 ${i+1}：目前在整理项目资料，计划下周完成；希望获得设计与技术协助。`+'这是一段用于检查长文字是否挤压选择框的虚构观察。'.repeat(12),request_id:randomUUID()}));
+ browser=await chromium.launch({channel:'msedge',headless:true});const context=await browser.newContext({timezoneId:'Asia/Shanghai'}),[name,...value]=v.sessionCookie.split('=');await context.addCookies([{name,value:value.join('='),url:v.base}]);const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
+ for(const width of [1440,390]){
+  const task=await v.call('create_work_task',{archive_id:archive.id,kind:'custom',title:'虚构引用选择 '+width,purpose:'核对引用选择',delivery:'保留观察版本',deadline_at:new Date(Date.now()+86400000).toISOString(),request_id:randomUUID()});tasks.push(task.id);await v.call('claim_work_task',{id:task.id,expected_version:task.version,request_id:randomUUID()});
+  await page.setViewportSize({width,height:1000});await page.goto(v.base+'/tasks?task='+task.id);await page.getByRole('button',{name:'提交交付',exact:true}).click();const dialog=page.getByRole('dialog',{name:'提交交付',exact:true}),boxes=dialog.getByRole('checkbox');await boxes.first().waitFor();
+  const dimensions=await boxes.first().boundingBox();assert.ok(dimensions.width>=20&&dimensions.height>=20,`checkbox must stay at least 20px, actual ${dimensions.width}×${dimensions.height}`);
+  const rows=dialog.locator('.task-observation-option');const unselected=await rows.first().evaluate(e=>getComputedStyle(e).backgroundColor);
+  await rows.first().locator('.task-reference-preview').click();assert.equal(await boxes.first().isChecked(),true);assert.ok(await rows.first().getByText('已引用',{exact:true}).isVisible());assert.notEqual(await rows.first().evaluate(e=>getComputedStyle(e).backgroundColor),unselected);
+  await rows.first().locator('.task-reference-preview').click();assert.equal(await boxes.first().isChecked(),false);await boxes.first().focus();await page.keyboard.press('Space');assert.equal(await boxes.first().isChecked(),true);assert.notEqual(await rows.first().evaluate(e=>getComputedStyle(e).outlineStyle),'none');
+  await rows.nth(1).click();assert.equal(await boxes.nth(1).isChecked(),true);await dialog.getByText('已选 2 条',{exact:true}).waitFor();await dialog.getByRole('textbox',{name:'结果说明',exact:true}).fill('已核对两条观察，留存版本引用。');
+  assert.ok(await dialog.evaluate(e=>e.scrollWidth<=e.clientWidth+1));assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.screenshot({path:`tmp/verification/task-reference-picker-${width}.png`,fullPage:true});
+  const selectedIds=await rows.evaluateAll(nodes=>nodes.filter(e=>e.querySelector('input').checked).map(e=>e.dataset.observationId));
+  await dialog.getByRole('button',{name:'提交结果并结束任务',exact:true}).scrollIntoViewIfNeeded();await page.screenshot({path:`tmp/verification/task-reference-picker-${width}-submit.png`,fullPage:true});await dialog.getByRole('button',{name:'提交结果并结束任务',exact:true}).click();await dialog.waitFor({state:'detached'});const detail=await v.call('get_work_task',{id:task.id});assert.equal(detail.task.status,'completed');assert.deepEqual(detail.task.result_references.map(r=>r.observation_id).sort(),selectedIds.sort());assert.ok(detail.task.result_references.every(r=>r.content_version===1));checks.push(width+'px full completion dialog, fixed checkbox, whole-row select/deselect, keyboard focus, selection feedback and persisted version references');
+ }
+ assert.deepEqual(errors,[]);checks.push('no browser runtime errors');
+}finally{if(browser)await browser.close();try{for(const id of tasks){let t=(await v.call('get_work_task',{id})).task;if(t.status==='completed')t=await v.call('reopen_work_task',{id,expected_version:t.version,owner_mode:'keep',deadline_at:new Date(Date.now()+86400000).toISOString(),request_id:randomUUID()});if(t.status==='open')await v.call('cancel_work_task',{id,expected_version:t.version,reason:'结束虚构交付引用验收',request_id:randomUUID()});}for(const id of archives){const a=(await v.call('get_archive',{id})).archive;await v.call('delete_archive',{id,expected_version:a.version,request_id:randomUUID()});}}finally{await v.close(checks);}}
