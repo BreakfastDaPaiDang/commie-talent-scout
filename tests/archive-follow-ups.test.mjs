@@ -1,3 +1,4 @@
+import {Observations} from '../app/server/observations.ts';
 import {zaojiSubject} from '../app/rules/service-subjects.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -53,9 +54,10 @@ test('closing the archive leaves the follow-up open for explicit delivery and st
  const f=setup(t),id=await subject(f),s=new WorkTasks(f.env,f.actor,'web'),archives=new Archives(f.env,f.actor,'web');
  const generated=await generateScheduledArchiveFollowUps(f.env),taskId=generated.tasks[0].id;
  await s.claim({id:taskId,expected_version:1,request_id:uuid()});
+ const observation=await new Observations(f.env,f.actor,'web').create({archive_id:id,body:'核对后决定不再跟进，保留本次接触结论。',request_id:uuid()});
  const a=await archives.get(id);await archives.setState({id,expected_version:a.version,status:'已弃用',member_ids:[],request_id:uuid()});
  const current=(await s.detail(taskId)).task;assert.equal(current.status,'open');
- await s.complete({id:taskId,expected_version:current.version,result_kind:'discarded',result_text:'已核对并决定不再跟进，档案已关闭',request_id:uuid()});
+ await s.complete({id:taskId,expected_version:current.version,result_kind:'discarded',result_text:'已核对并决定不再跟进，档案已关闭',references:[{observation_id:observation.id,content_version:observation.content_version}],request_id:uuid()});
  assert.equal((await s.detail(taskId)).task.status,'completed');assert.equal((await generateScheduledArchiveFollowUps(f.env)).created_count,0);
 });
 test('transaction rechecks archive changes and competing generators; failed event rolls task back',async t=>{

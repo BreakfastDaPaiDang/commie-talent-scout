@@ -15,6 +15,13 @@ function addMember(f,name){
  return {...f.sqlite.prepare('SELECT * FROM members WHERE id=?').get(id),credential_id:credential,credential_kind:'mcp'};
 }
 
+function resultReference(f,archive_id){
+ const id=uuid(),at=new Date().toISOString();
+ f.sqlite.prepare('INSERT INTO observations(id,archive_id,author_id,created_at,updated_at) VALUES(?,?,?,?,?)').run(id,archive_id,f.actor.id,at,at);
+ f.sqlite.prepare('INSERT INTO observation_versions(observation_id,version,body,editor_id,created_at) VALUES(?,?,?,?,?)').run(id,1,'虚构审核结论',f.actor.id,at);
+ return {observation_id:id,content_version:1};
+}
+
 function taskInput(request_id=uuid()){
  return {kind:'custom',title:'跨入口任务',purpose:'验证网页与 MCP 共享任务数据',delivery:'留下可回查的工作结果',deadline_at:'2099-01-01T00:00:00.000Z',request_id};
 }
@@ -190,7 +197,7 @@ test('task creators can cancel an unclaimed task and the reason remains in histo
 test('referral creates an unowned audit task and explicit membership creates onboarding on the same archive',async t=>{
  const f=fixture();t.after(f.close);const archives=new Archives(f.env,f.actor,'web'),archive=await archives.create({type:'person',name:'虚构流程对象',status:'个人接触',request_id:uuid()});const service=new WorkTasks(f.env,f.actor,'mcp');
  const referral=await service.refer({archive_id:archive.id,expected_version:archive.version,deadline_at:'2099-01-01T00:00:00.000Z',request_id:uuid()});assert.equal(referral.archive_status,'人事审核');assert.equal(f.sqlite.prepare("SELECT owner_id FROM work_tasks WHERE id=?").get(referral.task_id).owner_id,null);
- const claimed=await service.claim({id:referral.task_id,expected_version:1,request_id:uuid()});await service.complete({id:referral.task_id,expected_version:claimed.version,result_kind:'continue',result_text:'对方愿意继续了解组织。',request_id:uuid()});
+ const claimed=await service.claim({id:referral.task_id,expected_version:1,request_id:uuid()});await service.complete({id:referral.task_id,expected_version:claimed.version,result_kind:'continue',result_text:'对方愿意继续了解组织。',references:[resultReference(f,archive.id)],request_id:uuid()});
  const membership=await service.confirmMembership({archive_id:archive.id,expected_version:2,deadline_at:'2099-01-01T00:00:00.000Z',request_id:uuid()});assert.equal(membership.archive_status,'已加入待对接');
  const current=await archives.get(archive.id);assert.equal(current.status,'已加入待对接');assert.equal(current.closed,false);assert.equal(f.sqlite.prepare("SELECT count(*) n FROM work_tasks WHERE archive_id=? AND kind='onboarding' AND status='open'").get(archive.id).n,1);
  const membershipEvent=f.sqlite.prepare("SELECT before_json,after_json FROM archive_events WHERE archive_id=? AND kind='archive.state_changed' ORDER BY seq DESC LIMIT 1").get(archive.id);assert.equal(JSON.parse(membershipEvent.before_json).status,'人事审核');assert.equal(JSON.parse(membershipEvent.after_json).task_id,membership.task_id);
@@ -232,7 +239,7 @@ test('audit withdrawal failure rolls back the archive, tasks, history and receip
  assert.equal((await archives.get(archive.id)).status,'人事审核');assert.equal((await archives.get(archive.id)).version,2);assert.equal((await tasks.detail(referral.task_id)).task.status,'open');
  assert.equal(f.sqlite.prepare("SELECT count(*) n FROM work_task_events WHERE kind='task.cancelled'").get().n,0);assert.equal(f.sqlite.prepare('SELECT count(*) n FROM commands WHERE request_id=?').get(input.request_id).n,0);assert.equal(f.sqlite.prepare('SELECT count(*) n FROM mutation_guards').get().n,0);
  f.sqlite.exec('DROP TRIGGER reject_audit_cancel');
- const claimed=await tasks.claim({id:referral.task_id,expected_version:1,request_id:uuid()});await tasks.complete({id:referral.task_id,expected_version:claimed.version,result_kind:'continue',result_text:'虚构审核结果已完成',request_id:uuid()});
+ const claimed=await tasks.claim({id:referral.task_id,expected_version:1,request_id:uuid()});await tasks.complete({id:referral.task_id,expected_version:claimed.version,result_kind:'continue',result_text:'虚构审核结果已完成',references:[resultReference(f,archive.id)],request_id:uuid()});
  assert.equal((await archives.setState(input)).status,'个人接触');assert.equal((await tasks.detail(referral.task_id)).task.status,'completed');assert.equal(f.sqlite.prepare("SELECT count(*) n FROM work_task_events WHERE kind='task.cancelled'").get().n,0);
 });
 
