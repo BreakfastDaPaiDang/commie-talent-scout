@@ -1,6 +1,6 @@
 {
   "format": 1,
-  "count": 35,
+  "count": 36,
   "migrations": {
     "0001_identity.sql": {
       "sha256": "ceb732997de6972d3f88ae3a15b52b4df0def3418cc4b0834cd289ce55daff6a",
@@ -176,6 +176,11 @@
       "sha256": "41226837dd668759aec541e10648d150ecf0cb0caed705088c00015ca78890d8",
       "backwards_compatible": true,
       "reason": "Adds an independent label catalog and imports label names without changing existing task rows; imported labels require visible usage for discovery. Old code can ignore the catalog."
+    },
+    "0036_archive_resources.sql": {
+      "sha256": "5ebdaea61aa00fdc91838d4c4cf755bf0ee7de53e7e14f86d1bd54c62b1e31d8",
+      "backwards_compatible": true,
+      "reason": "Adds an optional structured archive resources field. Legacy clients preserve omitted resources and existing identities, states, tasks and histories are unchanged."
     }
   }
 }

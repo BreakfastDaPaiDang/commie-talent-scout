@@ -17,6 +17,7 @@ export function EntityForm({
     [avatar, setAvatar] = useState(entity?.avatar ?? "");
   const [state, setState] = useState(entity?.state ?? "视奸观察"),
     [owners, setOwners] = useState(entity?.owners?.[entity.state] ?? []);
+  const [resources,setResources]=useState(entity?.resources??[]),[currentNeed,setCurrentNeed]=useState(entity?.current_need??'');
   const [contacts,setContacts]=useState((entity?.contacts??[]).map(c=>({...c,note:c.note??''}))),[links,setLinks]=useState(entity?.links??[]);
   const work = isWorkState(type, state);
   return (
@@ -39,7 +40,7 @@ export function EntityForm({
           notify("QQ 号需为 5–12 位数字", "error");
           return;
         }
-        onSave({ name: name.trim(), avatar, contacts, links, state, owners });
+        onSave({ name: name.trim(), avatar, contacts, links, resources, current_need:currentNeed, state, owners });
       }}
     >
       <AvatarEditor
@@ -51,7 +52,7 @@ export function EntityForm({
         notify={notify}
         label={type === "org" ? "组织头像" : "人物头像"}
       />
-      <ProfileFields type={type} name={name} setName={setName} contacts={contacts} setContacts={setContacts} links={links} setLinks={setLinks}/>
+      <ProfileFields type={type} name={name} setName={setName} currentNeed={currentNeed} setCurrentNeed={setCurrentNeed} resources={resources} setResources={setResources} contacts={contacts} setContacts={setContacts} links={links} setLinks={setLinks}/>
       {!entity&&<StateChoices value={state} onChange={value=>{setState(value);setOwners([]);}} choices={(type==='org'?orgStates:personStates).filter(s=>!isClosed(s))}/>}
       <div className="form-field">
         <label>
