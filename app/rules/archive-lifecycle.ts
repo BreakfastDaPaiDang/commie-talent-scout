@@ -119,7 +119,7 @@ export function personnelTaskStatements(c:Pick<Effects,'stageTask'|'old'|'at'|'a
  const task=c.stageTask;if(!task?.created)return [];
  const title=task.kind==='audit'?'人事审核':'入社对接';
  const purpose=task.kind==='audit'?'了解对方情况、意愿以及可能参与的方向，形成有依据的审核结论。':'向新社员介绍组织与参与方式，落实后续联系和参与安排。';
- const delivery=task.kind==='audit'?'将审核观察与结论写入关联档案，按实际决定调整人事状态。':'将对接结果与后续安排写入关联档案，对接完成后将人事状态切为已入伙。';
+ const delivery=task.kind==='audit'?'将审核观察与结论写入关联档案；交付时选择审核通过，系统将推进到待对接并创建入社对接任务。':'将对接结果与后续安排写入关联档案；交付时选择对接完成，系统将同一档案转入社员。';
  const result={id:task.id,archive_id:c.old.id,kind:task.kind,title:`${c.old.name} · ${title}`,purpose,delivery,status:'open',owner_id:null,initiator_kind:'member',initiator_id:c.actorId,deadline_at:task.deadline};
  return [c.stmt("INSERT INTO work_tasks(id,archive_id,kind,labels_json,priority,initiator_kind,initiator_id,title,purpose,delivery,source,status,deadline_at,created_by,created_at,updated_at) VALUES(?,?,?,?,'P1','member',?,?,?,?,'rule','open',?,?,?,?)",task.id,c.old.id,task.kind,JSON.stringify([task.kind]),c.actorId,result.title,purpose,delivery,task.deadline,c.actorId,c.at,c.at),
  c.stmt("INSERT INTO work_task_events(id,task_id,actor_id,source,kind,after_json,created_at) VALUES(?,?,?,?,'task.created',?,?)",uid(),task.id,c.actorId,c.source,JSON.stringify(result),c.at)];
@@ -145,12 +145,12 @@ export const archiveTransitionRules=[
 
 export const archiveLifecycleModule:RuleModule<Effects,D1PreparedStatement>={
  id:'archive-lifecycle',source:'app/rules/archive-lifecycle.ts',
- triggers:[{file:'app/server/archives.ts',entry:'transition'},{file:'app/server/work-tasks.ts',entry:'restoreCancelledAudit'}],
+ triggers:[{file:'app/server/archives.ts',entry:'transition'},{file:'app/server/work-tasks.ts',entry:'restoreCancelledAudit'},{file:'app/server/work-tasks.ts',entry:'completePersonnelStage'}],
  rules:archiveTransitionRules,
  verification:{
   transaction:{file:'app/server/commands.ts',entry:'command'},
   guard:{file:'app/server/archives.ts',entry:'guard'},
-  tests:['tests/archive-lifecycle.test.mjs','tests/member-archives.test.mjs','tests/monthly-work-tasks.test.mjs','tests/work-tasks.test.mjs','tests/business-rule-view.test.mjs','tests/rule-contract.test.ts'],
+  tests:['tests/archive-lifecycle.test.mjs','tests/member-archives.test.mjs','tests/monthly-work-tasks.test.mjs','tests/work-tasks.test.mjs','tests/personnel-delivery.test.mjs','tests/business-rule-view.test.mjs','tests/rule-contract.test.ts'],
   idempotency:'command 请求收据；transitionChanged 排除无变化操作；档案版本事务校验；任务取消仅匹配 open，消息沿用现有唯一约束。',
   failure:'预校验失败不提交；事务内权限或版本冲突、SQL 失败整体回滚。保留现有行为，不新增任务轮次语义。',
  },
