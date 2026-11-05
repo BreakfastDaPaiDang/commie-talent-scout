@@ -1,3 +1,4 @@
+import PersonnelMapPreview from './PersonnelMapPreview.tsx';
 import React from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App.jsx";
@@ -42,5 +43,5 @@ function ResponsivePreview() {
   );
 }
 createRoot(document.getElementById("root")).render(
-  new URLSearchParams(location.search).has('rules') ? <InteractionRulesPreview /> : new URLSearchParams(location.search).has('flow') ? <FlowPreview /> : sizes[preview] ? <ResponsivePreview /> : <App />,
+  new URLSearchParams(location.search).has('personnel') ? <PersonnelMapPreview /> : new URLSearchParams(location.search).has('rules') ? <InteractionRulesPreview /> : new URLSearchParams(location.search).has('flow') ? <FlowPreview /> : sizes[preview] ? <ResponsivePreview /> : <App />,
 );
