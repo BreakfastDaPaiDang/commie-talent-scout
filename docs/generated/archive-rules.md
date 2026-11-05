@@ -24,7 +24,7 @@
 
 模块：`archive-lifecycle`；计划器：[planRules](../../app/rules/contract.ts#L29)。计划按规则顺序返回 steps 和 statements，不执行提交。
 
-触发入口：[transition](../../app/server/archives.ts#L125)、[restoreCancelledAudit](../../app/server/work-tasks.ts#L343)。
+触发入口：[transition](../../app/server/archives.ts#L125)、[restoreCancelledAudit](../../app/server/work-tasks.ts#L364)、[completePersonnelStage](../../app/server/work-tasks.ts#L343)。
 事务提交：[command](../../app/server/commands.ts#L21)；版本保护：[guard](../../app/server/archives.ts#L51)。
 幂等边界：command 请求收据；transitionChanged 排除无变化操作；档案版本事务校验；任务取消仅匹配 open，消息沿用现有唯一约束。
 失败边界：预校验失败不提交；事务内权限或版本冲突、SQL 失败整体回滚。保留现有行为，不新增任务轮次语义。
@@ -33,6 +33,7 @@
 - 验证：[tests/member-archives.test.mjs](../../tests/member-archives.test.mjs)
 - 验证：[tests/monthly-work-tasks.test.mjs](../../tests/monthly-work-tasks.test.mjs)
 - 验证：[tests/work-tasks.test.mjs](../../tests/work-tasks.test.mjs)
+- 验证：[tests/personnel-delivery.test.mjs](../../tests/personnel-delivery.test.mjs)
 - 验证：[tests/business-rule-view.test.mjs](../../tests/business-rule-view.test.mjs)
 - 验证：[tests/rule-contract.test.ts](../../tests/rule-contract.test.ts)
 
@@ -47,7 +48,15 @@
 - 档案事务条件：[guard](../../app/server/archives.ts#L51)。
 - 授权、原子提交与重试收据：[command](../../app/server/commands.ts#L21)。
 - 重开时词义差异、历史与权限：由上述 transition 调用 [TagState](../../app/server/tag-state.ts) 读取；不在生成器中解释 SQL 或任意函数。
-- 取消自动审核任务：[cancel](../../app/server/work-tasks.ts#L261) 通过 [restoreCancelledAudit](../../app/server/work-tasks.ts#L343) 调用 [auditCancellationTarget](../../app/rules/archive-lifecycle.ts#L35) 取得本次引荐前的外部关系，复用同一 planArchiveEffects 并在任务事务中提交。历史无法确认或档案已变更身份时不猜测退回状态。
+- 取消自动审核任务：[cancel](../../app/server/work-tasks.ts#L261) 通过 [restoreCancelledAudit](../../app/server/work-tasks.ts#L364) 调用 [auditCancellationTarget](../../app/rules/archive-lifecycle.ts#L35) 取得本次引荐前的外部关系，复用同一 planArchiveEffects 并在任务事务中提交。历史无法确认或档案已变更身份时不猜测退回状态。
+- 人事交付：[complete](../../app/server/work-tasks.ts#L243) 通过 [completePersonnelStage](../../app/server/work-tasks.ts#L343) 在同一事务复用档案生命周期计划。显式审核通过创建待领取的七天对接任务，显式对接完成转社员；已推进不回退，过时阶段拒绝。
+
+### 人事交付结论（读取实际执行定义）
+
+| 交付值 | 任务来源 / kind | 原阶段 | 目标阶段 |
+| --- | --- | --- | --- |
+| audit_passed | rule / audit | 人事审核 | 已加入待对接 |
+| onboarding_completed | rule / onboarding | 已加入待对接 | 已入伙 |
 
 以下条件和结果来自实际参与执行的函数引用及函数体。源码链接供追溯，不把人工说明作为规则来源。
 
@@ -227,7 +236,7 @@ function personnelTaskStatements(c) {
     if (!task?.created) return [];
     const title = task.kind === 'audit' ? '人事审核' : '入社对接';
     const purpose = task.kind === 'audit' ? '了解对方情况、意愿以及可能参与的方向，形成有依据的审核结论。' : '向新社员介绍组织与参与方式，落实后续联系和参与安排。';
-    const delivery = task.kind === 'audit' ? '将审核观察与结论写入关联档案，按实际决定调整人事状态。' : '将对接结果与后续安排写入关联档案，对接完成后将人事状态切为已入伙。';
+    const delivery = task.kind === 'audit' ? '将审核观察与结论写入关联档案；交付时选择审核通过，系统将推进到待对接并创建入社对接任务。' : '将对接结果与后续安排写入关联档案；交付时选择对接完成，系统将同一档案转入社员。';
     const result = {
         id: task.id,
         archive_id: c.old.id,

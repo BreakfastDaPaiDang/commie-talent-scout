@@ -10,9 +10,9 @@ import {Failure,now,uid,type Actor,type Env} from './types.ts';
 import {pushCandidates,pushStage,preferenceMatchesSql,type PushableTaskKind} from '../rules/task-preferences.ts';
 import {TagState,type TagLabel} from './tag-state.ts';
 import {isMemberArchive,archiveDisplayStatus,archivePath} from '../rules/archive-states.ts';
-import {taskDeliveryReady,taskRequiresObservation,observationRequiredMessage} from '../rules/task-delivery.ts';
+import {taskDeliveryReady,taskRequiresObservation,observationRequiredMessage,personnelDeliveryKind,personnelDeliveryResults,isPersonnelDeliveryResult} from '../rules/task-delivery.ts';
 import {Archives} from './archives.ts';
-import {auditCancellationTarget,planArchiveEffects} from '../rules/archive-lifecycle.ts';
+import {auditCancellationTarget,planArchiveEffects,preparePersonnelTask} from '../rules/archive-lifecycle.ts';
 
 
 export const workTaskCommentReferenceInput=z.object({observation_id:z.uuid(),content_version:z.number().int().min(1)}).strict();
@@ -20,7 +20,7 @@ const monthlyKeyInput=z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/,'月份必须�
 export const workTaskCreateInput=z.object({archive_id:z.uuid().nullable().default(null),kind:z.enum(taskKinds).default('custom'),labels:z.array(z.string().trim().min(1).max(80)).max(8).default([]),priority:z.enum(taskPriorities).optional(),title:z.string().trim().min(1).max(160),purpose:z.string().trim().min(1).max(4000),delivery:z.string().trim().min(1).max(4000),deadline_at:z.string().datetime(),source:z.enum(['manual','rule']).default('manual'),period_key:monthlyKeyInput.optional(),request_id:requestId}).strict();
 export const workTaskClaimInput=z.object({id:z.uuid(),expected_version:expectedVersion,request_id:requestId}).strict();
 export const workTaskAssignInput=z.object({id:z.uuid(),member_id:z.uuid(),expected_version:expectedVersion,reason:z.string().trim().min(1).max(500),request_id:requestId}).strict();
-export const workTaskCompleteInput=z.object({id:z.uuid(),expected_version:expectedVersion,result_kind:z.enum(['completed','continue','not_suitable','unable_to_contact','joined','discarded']),result_text:z.string().trim().min(1).max(5000),references:z.array(workTaskCommentReferenceInput).max(20).default([]),request_id:requestId}).strict();
+export const workTaskCompleteInput=z.object({id:z.uuid(),expected_version:expectedVersion,result_kind:z.enum(['completed','continue','not_suitable','unable_to_contact','joined','discarded','audit_passed','onboarding_completed']),result_text:z.string().trim().min(1).max(5000),references:z.array(workTaskCommentReferenceInput).max(20).default([]),request_id:requestId}).strict();
 export const workTaskReleaseInput=z.object({id:z.uuid(),expected_version:expectedVersion,deadline_at:z.string().datetime(),reason:z.string().trim().max(500).default('主动交还，重新等待接取'),request_id:requestId}).strict();
 export const workTaskCancelInput=z.object({id:z.uuid(),expected_version:expectedVersion,reason:z.string().trim().min(1).max(500),request_id:requestId}).strict();
 export const workTaskExtendInput=z.object({id:z.uuid(),expected_version:expectedVersion,deadline_at:z.string().datetime(),reason:z.string().trim().max(500).default('延期任务期限'),request_id:requestId}).strict();
@@ -246,8 +246,8 @@ export class WorkTasks {
       const task=await this.get(a.id,a.expected_version);this.assertOpenTask(task);if(task.owner_id!==this.actor.id)throw new Failure(403,'TASK_OWNER_REQUIRED','只有当前负责人可以提交完成结果');
       if(taskRequiresObservation(task)&&!a.references.length)throw new Failure(400,'OBSERVATION_REFERENCE_REQUIRED',observationRequiredMessage);
       await this.validateReferences(task,a.references);
-      const key=uid(),at=now(),result={id:a.id,status:'completed',result_kind:a.result_kind,result_text:a.result_text,references:a.references,version:task.version+1,changed:true},refGuard=this.referenceGuard(key+':references',task,a.references);
-      return {result,statements:[this.stmt("INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(SELECT 1 FROM work_tasks WHERE id=? AND version=? AND status='open' AND owner_id=?) THEN 1 ELSE 0 END)",key,a.id,a.expected_version,this.actor.id),...(refGuard?[refGuard]:[]),this.stmt("UPDATE work_tasks SET status='completed',result_kind=?,result_text=?,result_references_json=?,completed_at=?,updated_at=?,version=version+1 WHERE id=? AND version=? AND status='open' AND owner_id=?",a.result_kind,a.result_text,JSON.stringify(a.references),at,at,a.id,a.expected_version,this.actor.id),this.event(a.id,'task.completed',{status:task.status,owner_id:task.owner_id,version:task.version},{status:'completed',owner_id:task.owner_id,result_kind:a.result_kind,result_text:a.result_text,reference_count:a.references.length,result_references:a.references,version:task.version+1}),this.stmt('DELETE FROM mutation_guards WHERE id IN (?,?)',key,key+':references')]};
+      const key=uid(),at=now(),progress=await this.completePersonnelStage(task,a.result_kind,at),result={id:a.id,status:'completed',result_kind:a.result_kind,result_text:a.result_text,references:a.references,version:task.version+1,changed:true,...progress.result},refGuard=this.referenceGuard(key+':references',task,a.references);
+      return {result,statements:[this.stmt("INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(SELECT 1 FROM work_tasks WHERE id=? AND version=? AND status='open' AND owner_id=?) THEN 1 ELSE 0 END)",key,a.id,a.expected_version,this.actor.id),...(refGuard?[refGuard]:[]),...progress.statements,this.stmt("UPDATE work_tasks SET status='completed',result_kind=?,result_text=?,result_references_json=?,completed_at=?,updated_at=?,version=version+1 WHERE id=? AND version=? AND status='open' AND owner_id=?",a.result_kind,a.result_text,JSON.stringify(a.references),at,at,a.id,a.expected_version,this.actor.id),this.event(a.id,'task.completed',{status:task.status,owner_id:task.owner_id,version:task.version},{status:'completed',owner_id:task.owner_id,result_kind:a.result_kind,result_text:a.result_text,reference_count:a.references.length,result_references:a.references,version:task.version+1,...progress.result}),this.stmt('DELETE FROM mutation_guards WHERE id IN (?,?)',key,key+':references')]};
     });
   }
   async release(input:unknown){
@@ -339,6 +339,27 @@ export class WorkTasks {
       const key=uid(),at=now(),result={id:row.id,task_id:row.task_id,deleted:false,version:row.version+1,changed:true};
       return {result,statements:[this.stmt("INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(SELECT 1 FROM work_task_comments c JOIN work_tasks t ON t.id=c.task_id WHERE c.id=? AND c.version=? AND c.deleted_at IS NOT NULL AND t.status='open' AND (c.author_id=? OR ?='admin')) THEN 1 ELSE 0 END)",key,a.id,a.expected_version,this.actor.id,this.actor.role),this.stmt('UPDATE work_task_comments SET deleted_at=NULL,updated_at=?,version=version+1 WHERE id=? AND version=? AND deleted_at IS NOT NULL',at,a.id,a.expected_version),this.stmt('INSERT INTO work_task_comment_versions(comment_id,task_id,version,actor_id,source,body,references_json,deleted_at,created_at) VALUES(?,?,?,?,?,?,?,?,?)',row.id,task.id,row.version+1,this.actor.id,this.source,row.body,row.references_json,null,at),this.event(task.id,'task.comment_restored',{comment_id:row.id,version:row.version},{comment_id:row.id,version:row.version+1}),this.stmt('DELETE FROM mutation_guards WHERE id=?',key)]};
     });
+  }
+  private async completePersonnelStage(task:Row,resultKind:string,at:string){
+    const unchanged={result:{},statements:[] as D1PreparedStatement[]};
+    if(!isPersonnelDeliveryResult(resultKind))return unchanged;
+    const rule=personnelDeliveryResults[resultKind];
+    if(personnelDeliveryKind(task)!==rule.kind)throw new Failure(400,'INVALID_PERSONNEL_RESULT','该结论只适用于对应的自动人事任务，不能通过标签或普通任务改变身份');
+    const archives=new Archives(this.env,this.actor,this.source),old=await archives.get(task.archive_id!,undefined,true),key=uid();
+    if(old.type!=='person')throw new Failure(409,'PERSONNEL_STAGE_CHANGED','关联档案不是人物档案，请核对后重新交付');
+    const advanced=old.status===rule.to||isMemberArchive(old);
+    if(!advanced&&old.status!==rule.from)throw new Failure(409,'PERSONNEL_STAGE_CHANGED','档案已离开此人事阶段，请核对当前状态后重新交付');
+    // A reopened earlier task must not take over a later referral at the same stage.
+    if(!advanced){
+      const event=await this.stmt("SELECT after_json FROM archive_events WHERE archive_id=? AND kind='archive.state_changed' ORDER BY seq DESC LIMIT 1",old.id).first<{after_json:string}>();
+      const current=event?JSON.parse(event.after_json):null;
+      if(current?.status===rule.from&&current.task_id&&current.task_id!==task.id)throw new Failure(409,'PERSONNEL_STAGE_CHANGED','该任务不属于当前人事轮次，请使用当前关联任务');
+    }
+    const statements=[archives.guard(old.id,old.version,key)];
+    const stageTask=!advanced?await preparePersonnelTask(this.stmt.bind(this),old.id,rule.to,new Date(Date.parse(at)+7*86400000).toISOString()):null;
+    if(!advanced)statements.push(...planArchiveEffects({old,status:rule.to,memberIds:[],reopen:false,stageTask,at,actorId:this.actor.id,source:this.source,members:[],bindings:[],tags:new TagState(this.env,this.actor),stmt:this.stmt.bind(this),event:archives.event.bind(archives)}));
+    statements.push(this.stmt('DELETE FROM mutation_guards WHERE id=?',key));
+    return {result:{archive_id:old.id,archive_status:advanced?old.status:rule.to,archive_version:old.version+(advanced?0:1),archive_advanced:!advanced,next_task_id:stageTask?.id??null},statements};
   }
   private async restoreCancelledAudit(task:Row,at:string){
     const unchanged={result:{},statements:[] as D1PreparedStatement[]};if(!task.archive_id||task.kind!=='audit'||task.source!=='rule')return unchanged;
