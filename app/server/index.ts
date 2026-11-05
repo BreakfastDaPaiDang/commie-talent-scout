@@ -1,5 +1,6 @@
 import {WorkTaskLabels} from './work-task-labels.ts';
 import {personnelMap} from './personnel-map.ts';
+import {InternalResources} from './internal-resources.ts';
 import {generateMemberMonthlyFollowUps,generateScheduledMemberMonthlyFollowUps} from './member-monthly-follow-ups.ts';
 import {runTaskNotifications} from './task-notifications.ts';
 import {generateArchiveFollowUps,generateScheduledArchiveFollowUps} from './archive-follow-ups.ts';
@@ -85,6 +86,10 @@ app.post('/api/auth/logout',async c=>{
 });
 app.get('/api/workspace',async c=>{const actor=await authenticate(c.req.raw,c.env);return c.json({member:publicMember(actor)});});
 app.get('/api/personnel-map',async c=>c.json(await personnelMap(c.env,await authenticate(c.req.raw,c.env),c.req.query())));
+app.get('/api/internal-resources',async c=>c.json(await new InternalResources(c.env,await authenticate(c.req.raw,c.env),'web').list(c.req.query())));
+app.post('/api/internal-resources/save',async c=>c.json(await new InternalResources(c.env,await authenticate(c.req.raw,c.env),'web').save(await c.req.json())));
+app.get('/api/internal-resources/:id/history',async c=>c.json(await new InternalResources(c.env,await authenticate(c.req.raw,c.env),'web').history({...c.req.query(),id:c.req.param('id')})));
+app.get('/api/internal-resources/:id',async c=>c.json({resource:await new InternalResources(c.env,await authenticate(c.req.raw,c.env),'web').get(c.req.param('id'))}));
 app.get('/api/statistics',async c=>c.json(await statistics(c.env,await authenticate(c.req.raw,c.env),c.req.query())));
 app.get('/api/statistics/link',async c=>{await authenticate(c.req.raw,c.env);return c.json({url:c.env.APP_ORIGIN+'/statistics'});});
 app.get('/api/connections',async c=>c.json(await listCredentials(c.env,await authenticate(c.req.raw,c.env))));
