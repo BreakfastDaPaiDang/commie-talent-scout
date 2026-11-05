@@ -13,6 +13,7 @@ export function StatisticsWorkspace({actor,path,onNavigate}:{actor:Member;path:s
  useEffect(()=>{const change=()=>setView(selectedView());window.addEventListener('popstate',change);return()=>window.removeEventListener('popstate',change);},[]);
  useEffect(()=>setView(selectedView()),[path]);
  function withinNavigate(next:string){const u=new URL(canonicalStatisticsPath(next),location.origin);if(u.pathname==='/statistics/flow'){const v=u.searchParams.get('view');setView(v==='resources'||v==='rules'?v:'people');}onNavigate(next);}
- function choose(value:GraphView){setView(value);onNavigate('/statistics/flow?view='+value);}
- return <><StatisticsNavigation graph={graph} onOverview={()=>onNavigate('/statistics')} onGraph={()=>choose('people')} view={view} onView={choose}/>{!graph?<StatisticsPage/>:view==='resources'?<InternalResources adapter={internalResourceAdapter}/>:view==='rules'?<InteractionRulesPage memberId={actor.id} onNavigate={withinNavigate}/>:<PersonnelMapPage actor={actor} onNavigate={withinNavigate}/>}</>;
+ function route(path:string,value?:GraphView){const params=new URLSearchParams(location.search);if(value)params.set('view',value);return path+'?'+params;}
+ function choose(value:GraphView){setView(value);onNavigate(route('/statistics/flow',value));}
+ return <><StatisticsNavigation graph={graph} onOverview={()=>onNavigate(route('/statistics'))} onGraph={()=>choose('people')} view={view} onView={choose}/>{!graph?<StatisticsPage/>:view==='resources'?<InternalResources adapter={internalResourceAdapter} urlState/>:view==='rules'?<InteractionRulesPage memberId={actor.id} onNavigate={withinNavigate}/>:<PersonnelMapPage actor={actor} onNavigate={withinNavigate}/>}</>;
 }
