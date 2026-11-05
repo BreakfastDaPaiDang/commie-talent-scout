@@ -15,6 +15,7 @@ try{
   let writes=0;
   await page.route('**/api/observations/create',async route=>{writes++;const response=await route.fetch();if(writes===1)await route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:{code:'SIMULATED_LOST_RESPONSE',message:'本次响应丢失，请重试核对'}})});else await route.fulfill({response});});
   await page.setViewportSize({width,height:1000});await page.goto(v.base+'/tasks?task='+task.id);await page.getByRole('button',{name:'提交交付',exact:true}).click();const dialog=page.getByRole('dialog',{name:'提交交付',exact:true});await staleCaptured;
+  const entryBounds=await dialog.getByRole('button',{name:'记录本次观察',exact:true}).boundingBox(),summaryBounds=await dialog.getByRole('textbox',{name:'结果说明',exact:true}).boundingBox();assert.ok(entryBounds.y<summaryBounds.y,'留档入口必须位于结果说明上方');
   const summary='虚构本次沟通：已联系并了解近期进展，需要下周继续确认。';await dialog.getByRole('textbox',{name:'结果说明',exact:true}).fill(summary);
   await dialog.getByRole('button',{name:'记录本次观察',exact:true}).click();const editor=dialog.getByRole('textbox',{name:'本次观察',exact:true});assert.equal(await editor.inputValue(),summary);
   const body=summary+' 本次观察直接在交付弹窗保存。';await editor.fill(body);await dialog.getByRole('button',{name:'保存到档案并引用',exact:true}).click();await dialog.getByText('本次响应丢失，请重试核对',{exact:true}).waitFor();
