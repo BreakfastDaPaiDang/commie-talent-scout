@@ -23,3 +23,13 @@ test('copied handoff supplies usable HTTP credentials without making persistence
  assert.ok(prompt.includes('平台权限明确阻止请求'));
  assert.ok(prompt.includes('连接授权、修改草稿均不等于发布确认'));
 });
+
+test('handoff upgrades remote HTTP configuration but keeps local development usable',()=>{
+ const template=readFileSync('app/shared/bootstrap-prompt.txt','utf8');
+ for(const [origin,expected] of [['http://scout.example.invalid','https://scout.example.invalid'],['http://127.0.0.1:8790','http://127.0.0.1:8790'],['http://localhost:8790','http://localhost:8790'],['http://[::1]:8790','http://[::1]:8790']]){
+  const p=bootstrapPrompt(template,origin,{secret:'fixture-only',expires_at:'2099-01-01T00:00:00Z'}).replace(/\r\n/g,'\n');
+  const config=JSON.parse(p.split('认证配置：\n')[1].split('\n凭据到期：')[0]).mcpServers.commie_talent_scout;
+  assert.equal(config.url,expected+'/mcp');assert.ok(p.includes('服务地址：'+expected+'/mcp'));
+  assert.ok(p.includes(expected+'/account/connections'));
+ }
+});
