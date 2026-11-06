@@ -1,4 +1,3 @@
-import {StatisticsNavigation} from '../../../app/ui/StatisticsNavigation';
 import {UnreadNav} from '../../../app/ui/UnreadNav';
 import {TopBar,ArchiveHead,AuxiliaryToolsNav} from '../../../app/ui/Workspace';
 import {AuxiliaryTools} from '../../../app/ui/AuxiliaryTools';
@@ -121,7 +120,7 @@ export default function App() {
           </Button>
         </div>
       )}
-      {w.page === "statistics" ? <><StatisticsNavigation graph={false} onOverview={()=>w.navigate("statistics")} onGraph={()=>{location.href="/?personnel";}}/><StatisticsPreview/></> : w.page === "tools" ? <AuxiliaryTools/> : <div
+      {w.page === "statistics" ? <StatisticsPreview/> : w.page === "tools" ? <AuxiliaryTools/> : <div
         className={`workspace ${["accounts", "agent"].includes(w.page) ? "support-workspace" : ""}`}
       >
         <main

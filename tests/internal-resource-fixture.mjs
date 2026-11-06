@@ -1,5 +1,0 @@
-import {randomUUID as uuid} from 'node:crypto';
-import {InternalResources} from '../app/server/internal-resources.ts';
-export async function makeResource(f,name='真实社内资源',extra={}){return new InternalResources(f.env,f.actor,'web').save({id:null,expected_version:0,name,type:'群聊',note:'社内拥有，可支持新人',stage_ids:['视奸观察','个人接触','人事审核','已加入待对接','已入伙'],status:'accepting',capacity:3,member_ids:[],...extra,request_id:uuid()});}
-export const allocation=(resource,extra={})=>({id:uuid(),name:'提交时的名称',type:'群聊',note:'实际安排说明',archive_id:null,internal_resource_id:resource.id,usage:'active',...extra});
-export function seedLegacy(f,id,resources){f.sqlite.prepare('UPDATE archives SET resources_json=? WHERE id=?').run(JSON.stringify(resources),id);const event=f.sqlite.prepare("SELECT id,after_json FROM archive_events WHERE archive_id=? AND kind='archive.created'").get(id),after=JSON.parse(event.after_json);after.resources=resources;f.sqlite.prepare('UPDATE archive_events SET after_json=? WHERE id=?').run(JSON.stringify(after),event.id);}

@@ -1,6 +1,6 @@
 {
   "format": 1,
-  "count": 37,
+  "count": 36,
   "migrations": {
     "0001_identity.sql": {
       "sha256": "ceb732997de6972d3f88ae3a15b52b4df0def3418cc4b0834cd289ce55daff6a",
@@ -181,11 +181,6 @@
       "sha256": "5ebdaea61aa00fdc91838d4c4cf755bf0ee7de53e7e14f86d1bd54c62b1e31d8",
       "backwards_compatible": true,
       "reason": "Adds an optional structured archive resources field. Legacy clients preserve omitted resources and existing identities, states, tasks and histories are unchanged."
-    },
-    "0037_internal_resources.sql": {
-      "sha256": "d1572f624ae56530192725f89f56ac333419007311b3674961f1ea08421b32ef",
-      "backwards_compatible": true,
-      "reason": "Adds an explicit internal resource catalog and maintenance history. Existing archive resources are not reclassified or rewritten; prior clients preserve omitted fields."
     }
   }
 }

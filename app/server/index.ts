@@ -1,6 +1,5 @@
 import {WorkTaskLabels} from './work-task-labels.ts';
 import {personnelMap} from './personnel-map.ts';
-import {InternalResources} from './internal-resources.ts';
 import {generateMemberMonthlyFollowUps,generateScheduledMemberMonthlyFollowUps} from './member-monthly-follow-ups.ts';
 import {runTaskNotifications} from './task-notifications.ts';
 import {generateArchiveFollowUps,generateScheduledArchiveFollowUps} from './archive-follow-ups.ts';
@@ -86,10 +85,6 @@ app.post('/api/auth/logout',async c=>{
 });
 app.get('/api/workspace',async c=>{const actor=await authenticate(c.req.raw,c.env);return c.json({member:publicMember(actor)});});
 app.get('/api/personnel-map',async c=>c.json(await personnelMap(c.env,await authenticate(c.req.raw,c.env),c.req.query())));
-app.get('/api/internal-resources',async c=>c.json(await new InternalResources(c.env,await authenticate(c.req.raw,c.env),'web').list(c.req.query())));
-app.post('/api/internal-resources/save',async c=>c.json(await new InternalResources(c.env,await authenticate(c.req.raw,c.env),'web').save(await c.req.json())));
-app.get('/api/internal-resources/:id/history',async c=>c.json(await new InternalResources(c.env,await authenticate(c.req.raw,c.env),'web').history({...c.req.query(),id:c.req.param('id')})));
-app.get('/api/internal-resources/:id',async c=>c.json({resource:await new InternalResources(c.env,await authenticate(c.req.raw,c.env),'web').get(c.req.param('id'))}));
 app.get('/api/statistics',async c=>c.json(await statistics(c.env,await authenticate(c.req.raw,c.env),c.req.query())));
 app.get('/api/statistics/link',async c=>{await authenticate(c.req.raw,c.env);return c.json({url:c.env.APP_ORIGIN+'/statistics'});});
 app.get('/api/connections',async c=>c.json(await listCredentials(c.env,await authenticate(c.req.raw,c.env))));
@@ -116,7 +111,6 @@ app.post('/api/archives/restore',async c=>c.json(await new Archives(c.env,await 
 app.post('/api/archives/state',async c=>c.json(await new Archives(c.env,await authenticate(c.req.raw,c.env),'web').setState(await c.req.json())));
 app.post('/api/archives/reopen',async c=>c.json(await new Archives(c.env,await authenticate(c.req.raw,c.env),'web').reopen(await c.req.json())));
 app.post('/api/archives/create',async c=>c.json(await new Archives(c.env,await authenticate(c.req.raw,c.env),'web').create(await c.req.json())));
-app.post('/api/archives/resource-transfer',async c=>c.json(await new Archives(c.env,await authenticate(c.req.raw,c.env),'web').transferResource(await c.req.json())));
 app.post('/api/archives/update',async c=>c.json(await new Archives(c.env,await authenticate(c.req.raw,c.env),'web').update(await c.req.json())));
 app.get('/api/archives/:id/events',async c=>c.json(await new Archives(c.env,await authenticate(c.req.raw,c.env),'web').events({...c.req.query(),id:c.req.param('id')})));
 app.get('/api/archives/:id',async c=>{const actor=await authenticate(c.req.raw,c.env),id=c.req.param('id'),result=await new Archives(c.env,actor,'web').detail(id);return c.json({...result,archive_reading:await new ArchiveReading(c.env,actor).deliver(id)});});

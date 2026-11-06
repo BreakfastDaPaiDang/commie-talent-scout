@@ -3,20 +3,35 @@ import assert from 'node:assert/strict';
 import {randomUUID as uuid} from 'node:crypto';
 import {fixture} from './d1-fixture.mjs';
 import {Archives} from '../app/server/archives.ts';
-import {InternalResources} from '../app/server/internal-resources.ts';
-import {personnelMap as detailedMap} from '../app/server/personnel-map.ts';
-const personnelMap=(env,actor,input)=>detailedMap(env,actor,{group_by:'status',...input});
-import {makeResource,allocation,seedLegacy} from './internal-resource-fixture.mjs';
-const cell=(map,stage,title)=>map.layers.find(l=>l.id===stage).cells.find(c=>c.title===title);
-test('owned internal resources appear without occupants and external archives/legacy links do not become assets',async t=>{
- const f=fixture();t.after(f.close);const s=new Archives(f.env,f.actor,'web');await makeResource(f,'真实社内资源',{stage_ids:['已入伙']});const org=await s.create({type:'org',name:'外部接触组织',request_id:uuid()}),p=await s.create({type:'person',name:'观察人员',request_id:uuid()});seedLegacy(f,p.id,[{id:uuid(),name:'外部接触群',type:'群聊',note:'旧接触记录',archive_id:org.id,usage:'active'}]);const map=await personnelMap(f.env,f.actor,{});assert.equal(cell(map,'已入伙','真实社内资源').people.length,0);assert.equal(map.layers.find(l=>l.id==='已入伙').resources,1);assert.equal(map.layers.find(l=>l.id==='视奸观察').resources,0);const legacy=map.layers.flatMap(l=>l.cells).find(c=>c.title==='外部接触组织');assert.ok(legacy);assert.equal(legacy.resource_id,null,'contact containers are not internal assets');assert.equal(legacy.type,'原有关联容器');assert.ok(map.archives.every(a=>a.type==='person'));assert.equal(map.links.length,0);assert.equal((await personnelMap(f.env,f.actor,{query:'外部接触组织'})).archives.length,1);f.sqlite.prepare('UPDATE archives SET deleted=1 WHERE id=?').run(org.id);assert.equal((await personnelMap(f.env,f.actor,{query:'外部接触群'})).archives.length,0);
+import {personnelMap} from '../app/server/personnel-map.ts';
+const res=(name,archive_id,usage='active')=>({id:uuid(),name,type:'社群',archive_id,usage,note:'实际登记'});
+const getCell=(map,stage,name)=>map.layers.find(l=>l.id===stage).cells.find(c=>c.title===name);
+test('unlinked entries are scoped to their source archive, even when copied IDs and names match',async t=>{
+ const f=fixture();t.after(f.close);const s=new Archives(f.env,f.actor,'web'),r=res('同名未关联资源',null);
+ await s.create({type:'person',name:'甲',resources:[r],request_id:uuid()});await s.create({type:'person',name:'乙',resources:[r],request_id:uuid()});
+ const map=await personnelMap(f.env,f.actor,{}),layer=map.layers.find(l=>l.id==='视奸观察');assert.equal(layer.cells.length,2);assert.equal(layer.resources,2);assert.ok(layer.cells.every(c=>c.people.length===1));assert.equal(map.links.length,0);
 });
-test('people and capacities deduplicate per internal resource while planned and actual assignments remain separate',async t=>{
- const f=fixture();t.after(f.close);const s=new Archives(f.env,f.actor,'web'),r=await makeResource(f,'社内资源甲'),other=await makeResource(f,'社内资源乙');const p=await s.create({type:'person',name:'新人',resources:[allocation(r),allocation(r),allocation(other),allocation(other,{usage:'planned'})],request_id:uuid()});const map=await personnelMap(f.env,f.actor,{});assert.equal(map.layers.find(l=>l.id==='视奸观察').people,1);assert.equal(cell(map,'视奸观察','社内资源甲').people.length,1);assert.equal(map.internal_resources.find(x=>x.id===r.id).remaining,2);assert.equal(map.links.filter(e=>e.kind==='shared').length,1);assert.deepEqual(map.links.find(e=>e.kind==='shared').people,[p.id]);assert.equal((await personnelMap(f.env,f.actor,{query:'社内资源甲'})).archives.length,1);
+test('layered containers reuse real archive names, deduplicate people and distinguish planned from actual',async t=>{
+ const f=fixture();t.after(f.close);const s=new Archives(f.env,f.actor,'web'),group=await s.create({type:'org',name:'现有组织甲',request_id:uuid()}),other=await s.create({type:'org',name:'现有组织乙',request_id:uuid()});
+ const p=await s.create({type:'person',name:'虚构参与者',resources:[res('别称甲',group.id),res('别称乙',other.id),res('计划别称',group.id,'planned')],request_id:uuid()});
+ await s.create({type:'person',name:'未填写归属',request_id:uuid()});
+ const map=await personnelMap(f.env,f.actor,{}),layer=map.layers.find(l=>l.id==='视奸观察');assert.equal(layer.people,2);assert.equal(layer.unplaced,1);assert.equal(getCell(map,'视奸观察','现有组织甲').people.length,1);assert.equal(getCell(map,'视奸观察','现有组织甲').planned.length,1);assert.equal(map.links.filter(e=>e.kind==='shared').length,1);assert.deepEqual(map.links.find(e=>e.kind==='shared').people,[p.id]);assert.equal(map.links.filter(e=>e.kind==='transfer').length,0);assert.equal(map.complete,true);assert.equal(layer.resources,2);
+ const searched=await personnelMap(f.env,f.actor,{query:'现有组织甲'});assert.equal(getCell(searched,'视奸观察','现有组织甲').people.length,1,'searching a container retains its recorded people');
 });
-test('historical phase changes keep their then-current internal resource identity and task bottlenecks',async t=>{
- const f=fixture();t.after(f.close);const s=new Archives(f.env,f.actor,'web'),a=await makeResource(f,'当时社内资源'),b=await makeResource(f,'后来社内资源'),p=await s.create({type:'person',name:'人员',resources:[allocation(a)],request_id:uuid()});await s.setState({id:p.id,expected_version:1,status:'人事审核',member_ids:[],request_id:uuid()});const current=await s.get(p.id);await s.update({id:p.id,expected_version:current.version,name:current.name,contacts:[],links:[],resources:[allocation(b)],request_id:uuid()});const map=await personnelMap(f.env,f.actor,{}),edge=map.links.find(e=>e.kind==='transfer'),cells=map.layers.flatMap(l=>l.cells);assert.equal(cells.find(c=>c.id===edge.from).resource_id,a.id);assert.equal(cells.find(c=>c.id===edge.to).resource_id,a.id);assert.equal(cell(map,'人事审核','后来社内资源').people.length,1);assert.equal(map.archives[0].unassigned_tasks,1);
+
+test('recorded stage transfers use their historical resource snapshots and existing task bottlenecks',async t=>{
+ const f=fixture();t.after(f.close);const s=new Archives(f.env,f.actor,'web'),a=await s.create({type:'org',name:'旧社群',request_id:uuid()}),b=await s.create({type:'org',name:'后来项目',request_id:uuid()}),p=await s.create({type:'person',name:'人员',resources:[res('原记录',a.id)],request_id:uuid()});
+ await s.setState({id:p.id,expected_version:1,status:'人事审核',member_ids:[f.actor.id],request_id:uuid()});
+ const current=await s.get(p.id);await s.update({id:p.id,expected_version:current.version,name:current.name,contacts:current.contacts,links:current.links,resources:[res('新记录',b.id)],request_id:uuid()});
+ const map=await personnelMap(f.env,f.actor,{}),link=map.links.find(e=>e.kind==='transfer'),cells=map.layers.flatMap(l=>l.cells);
+ assert.equal(cells.find(c=>c.id===link.from).title,'旧社群');assert.equal(cells.find(c=>c.id===link.to).title,'旧社群');assert.equal(getCell(map,'人事审核','后来项目').people.length,1);assert.equal(map.archives.find(a=>a.id===p.id).unassigned_tasks,1);assert.equal(map.layers.find(l=>l.id==='人事审核').attention,1);assert.equal(map.layers.find(l=>l.id==='人事审核').people,1);
 });
-test('catalog changes propagate by stable ID and closed/deleted people do not occupy resources',async t=>{
- const f=fixture();t.after(f.close);const s=new Archives(f.env,f.actor,'web'),catalog=new InternalResources(f.env,f.actor,'web'),r=await makeResource(f),p=await s.create({type:'person',name:'人员',resources:[allocation(r)],request_id:uuid()}),current=await catalog.get(r.id);await catalog.save({id:r.id,expected_version:1,name:'统一更名后资源',type:current.type,note:current.note,stage_ids:current.stage_ids,status:'paused',capacity:3,member_ids:[],request_id:uuid()});assert.ok(cell(await personnelMap(f.env,f.actor,{}),'视奸观察','统一更名后资源'));await s.setState({id:p.id,expected_version:1,status:'已弃用',member_ids:[],request_id:uuid()});const map=await personnelMap(f.env,f.actor,{});assert.equal(map.archives.length,0);assert.equal(map.internal_resources[0].used,0);assert.ok(cell(map,'视奸观察','统一更名后资源'));
+
+test('deleted resource targets, deleted/closed source archives and their private names never leak into graph',async t=>{
+ const f=fixture();t.after(f.close);f.sqlite.prepare("UPDATE members SET role='admin' WHERE id=?").run(f.actor.id);f.actor.role='admin';const s=new Archives(f.env,f.actor,'web');
+ const target=await s.create({type:'org',name:'不可见目标',request_id:uuid()}),p=await s.create({type:'person',name:'可见人员',resources:[res('不可见资源别称',target.id)],request_id:uuid()});
+ await s.setState({id:p.id,expected_version:1,status:'个人接触',member_ids:[],request_id:uuid()});await s.setDeleted({id:target.id,expected_version:1,request_id:uuid()},true);
+ const map=await personnelMap(f.env,f.actor,{}),serialized=JSON.stringify(map);assert.ok(!serialized.includes('不可见'));assert.ok(!serialized.includes(target.id));assert.equal(map.layers.find(l=>l.id==='个人接触').unplaced,1);
+ assert.equal((await personnelMap(f.env,f.actor,{query:'不可见资源别称'})).archives.length,0,'search does not disclose hidden resource names');
+ await s.setState({id:p.id,expected_version:2,status:'已弃用',member_ids:[],request_id:uuid()});const empty=await personnelMap(f.env,f.actor,{});assert.equal(empty.archives.length,0);assert.equal(empty.links.length,0);
 });

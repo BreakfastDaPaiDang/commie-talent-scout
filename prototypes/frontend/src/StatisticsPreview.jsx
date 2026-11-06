@@ -19,7 +19,6 @@ export async function loadStatisticsPreview(query) {
     }
   }
   const series=[...grouped.values()].sort((a,b)=>b.total-a.total||a.name.localeCompare(b.name));
-  const work=query.archive_type==='org'?undefined:{current:{people:18,members:8,waiting:2,planned:1,placed:6,unavailable:1},period:{created:4,phase_changes:6,audit_passed:2,joined:1,arrivals:3,departures:1,resource_transfers:1,closed:1,completed_deliveries:8},tags:[{id:'prototype-tag',name:'原型技能：资料整理',people:3}],tag_groups:1};
-  return {work,query,dates,series,total:counted.size,members:members.size,archives:archives.size,groups:series.length};
+  return {query,dates,series,total:counted.size,members:members.size,archives:archives.size,groups:series.length};
 }
 export function StatisticsPreview(){return <StatisticsDashboard load={loadStatisticsPreview} getLink={async()=>location.origin+'/statistics'}/>;}

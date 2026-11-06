@@ -35,7 +35,7 @@ export class Members{
     const where=['1=1'],args:unknown[]=[];
     if(a.query){where.push('instr(lower(name),lower(?))>0');args.push(a.query);}
     if(a.before){where.push('id>?');args.push(a.before);}
-    const r=await this.stmt(`SELECT id,name,frozen,avatar_id,qq,identity_kind FROM members WHERE ${where.join(' AND ')} ORDER BY id LIMIT ?`,...args,a.limit+1).all<Record<string,unknown>>();
+    const r=await this.stmt(`SELECT id,name,frozen,avatar_id,qq FROM members WHERE ${where.join(' AND ')} ORDER BY id LIMIT ?`,...args,a.limit+1).all<Record<string,unknown>>();
     const members=r.results.slice(0,a.limit).map(m=>({...m,frozen:!!m.frozen}));return {members,next_cursor:r.results.length>a.limit?String(r.results[a.limit-1].id):null};
   }
   private versionGuard(id:string,version:number,key:string){return this.stmt('INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(SELECT 1 FROM members WHERE id=? AND version=?) THEN 1 ELSE 0 END)',key,id,version);}
