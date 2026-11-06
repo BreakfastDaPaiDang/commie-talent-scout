@@ -1,4 +1,7 @@
 export function bootstrapPrompt(template:string,origin:string,credential:{secret:string;expires_at:string}){
+ const url=new URL(origin);
+ if(url.protocol==='http:'&&!['localhost','127.0.0.1','[::1]'].includes(url.hostname))url.protocol='https:';
+ origin=url.origin;
  return template.replace('{{MCP_SERVER_URL}}',origin+'/mcp')
   .replace('{{AUTH_CONFIGURATION}}',JSON.stringify({mcpServers:{commie_talent_scout:{url:origin+'/mcp',headers:{Authorization:'Bearer '+credential.secret}}}},null,2))
   .replace('{{CREDENTIAL_EXPIRES}}',credential.expires_at)
