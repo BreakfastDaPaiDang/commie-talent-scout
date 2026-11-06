@@ -1,9 +1,0 @@
-export const resourceUsages={available:'可供安排',planned:'计划安排',active:'已落实'} as const;
-export type ResourceUsage=keyof typeof resourceUsages;
-export type ResourceValue={id:string;name:string;type:string;note:string;archive_id:string|null;usage:ResourceUsage;internal_resource_id?:string|null};
-export type ResourceReference={id:string;name:string;type:'person'|'org';status:string;person_role:'member'|'external'|null;closed:boolean};
-export type InternalResourceReference={id:string;name:string;type:string;status:'accepting'|'paused'|'archived';stage_ids:string[];capacity:number|null};
-export type ArchiveResource=ResourceValue&{internal_resource?:InternalResourceReference|null;legacy?:boolean;linked_archive?:ResourceReference|null;restricted?:false};
-export type HiddenResource={id:string;restricted:true};
-export type ResourceEntry=ArchiveResource|HiddenResource;
-export function resourceInput(value:ResourceEntry){if(value.restricted)return {id:value.id,restricted:true as const};const {id,name,type,note,archive_id,usage,internal_resource_id}=value;return {id,name,type,note,archive_id,usage,...(internal_resource_id?{internal_resource_id}:{})};}

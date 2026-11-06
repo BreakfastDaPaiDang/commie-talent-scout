@@ -1,28 +1,23 @@
-import {useUrlView} from './use-url-view';
 import React,{useEffect,useMemo,useState} from 'react';
-import {readStatisticsView,writeStatisticsView,statisticsViewQuery,shanghaiDate,shiftDate,type StatisticsQuery,type StatisticsResult,type StatisticsGroup} from '../shared/statistics';
+import {defaultStatisticsQuery,shanghaiDate,shiftDate,type StatisticsQuery,type StatisticsResult,type StatisticsGroup} from '../shared/statistics';
 import './statistics.css';
 
 const groups: [StatisticsGroup,string][] = [['user','用户优先'],['tag','标签优先'],['type','人物／组织优先']];
 const colors = ['#9b482f','#326a83','#58834c','#8662a1','#b38025','#287f79','#c0507a','#4c6fb0','#d07a30','#6f9b46','#7b5ba6','#b05555'];
-type Props = {urlState?:boolean;load:(query:StatisticsQuery)=>Promise<StatisticsResult>;getLink?:()=>Promise<string>};
+type Props = {load:(query:StatisticsQuery)=>Promise<StatisticsResult>;getLink?:()=>Promise<string>};
 
-export function StatisticsDashboard({load,getLink,urlState=false}:Props) {
-  const [view,setView]=useUrlView('s_',readStatisticsView,writeStatisticsView,urlState),query=useMemo(()=>statisticsViewQuery(view),[view.from,view.to,view.group,view.interval,view.archive_type,view.search]);
-  const [draft,setDraft]=useState(query);useEffect(()=>setDraft(query),[query]);
+export function StatisticsDashboard({load,getLink}:Props) {
+  const [draft,setDraft]=useState(defaultStatisticsQuery),[query,setQuery]=useState(defaultStatisticsQuery);
   const [data,setData]=useState<StatisticsResult|null>(null),[loading,setLoading]=useState(true),[error,setError]=useState('');
-  const [revision,setRevision]=useState(0),[hover,setHover]=useState<number|null>(null),[lineHover,setLineHover]=useState<string|null>(null),[copied,setCopied]=useState(false);
-  const selected=view.selected??[],cumulative=view.cumulative;
-  const setSelected=(value:string[]|((old:string[])=>string[]))=>setView(old=>({...old,selected:typeof value==='function'?value(old.selected??[]):value}),true);
-  const setCumulative=(value:boolean)=>setView(old=>({...old,cumulative:value}));
+  const [revision,setRevision]=useState(0),[selected,setSelected]=useState<string[]>([]),[cumulative,setCumulative]=useState(false),[hover,setHover]=useState<number|null>(null),[lineHover,setLineHover]=useState<string|null>(null),[copied,setCopied]=useState(false);
   useEffect(()=>{
     let active=true;setLoading(true);setData(null);setError('');setHover(null);setLineHover(null);
-    load(query).then(result=>{if(active){setData(result);setView(old=>old.selected===null?{...old,selected:result.series.slice(0,5).map(s=>s.id)}:old,true);}})
+    load(query).then(result=>{if(active){setData(result);setSelected(result.series.slice(0,5).map(s=>s.id));}})
       .catch(e=>{if(active)setError(e instanceof Error?e.message:'统计加载失败');})
       .finally(()=>{if(active)setLoading(false);});
     return()=>{active=false;};
   },[query,revision,load]);
-  function apply(next:StatisticsQuery){setDraft(next);setView(old=>({...old,...next,selected:null}));}
+  function apply(next:StatisticsQuery){setDraft(next);setQuery(next);}
   async function copyLink(){if(!getLink)return;try{await navigator.clipboard.writeText(await getLink());setCopied(true);setTimeout(()=>setCopied(false),2000);}catch{/* clipboard unavailable */}}
   const lines=useMemo(()=>data?.series.filter(s=>selected.includes(s.id)).map(s=>{
     let sum=0;return {...s,points:s.points.map(n=>cumulative?(sum+=n):n)};
@@ -48,7 +43,6 @@ export function StatisticsDashboard({load,getLink,urlState=false}:Props) {
     {loading&&<p role="status" className="statistics-empty">正在汇总提交记录…</p>}
     {error&&<div role="alert" className="statistics-empty"><p>{error}</p><button className="button" onClick={()=>setRevision(v=>v+1)}>重试</button></div>}
     {data&&<>
-      {data.work&&<WorkSummary work={data.work} query={query}/>}
       <section className="statistics-summary" aria-label="统计概览">{[[data.total,'观察记录'],[data.members,'提交成员'],[data.archives,'涉及档案'],[data.groups,'统计分组']].map(([value,label])=><div key={label}><strong>{Number(value).toLocaleString('zh-CN')}</strong><span>{label}</span></div>)}</section>
       <section className="statistics-chart-card" aria-label="提交趋势">
         <header><div><h2>提交趋势</h2><p>{query.from} — {query.to} · 东八区</p></div><div className="statistics-cumulative" role="group" aria-label="折线模式"><button type="button" aria-pressed={!cumulative} onClick={()=>setCumulative(false)}>新增</button><button type="button" aria-pressed={cumulative} onClick={()=>setCumulative(true)}>累计</button></div></header>
@@ -74,10 +68,4 @@ export function StatisticsDashboard({load,getLink,urlState=false}:Props) {
     </>}
     <p className="statistics-note">按观察记录的首次提交时间统计，编辑、草稿和已删除内容不计入。标签及类别按档案当前可见绑定归类，关闭档案使用关闭时的标签；同组内去重，跨组可能重复，总记录数单独去重。周从星期一开始，累计值仅计算所选区间。</p>
   </main>;
-}
-
-function WorkSummary({work,query}:{work:NonNullable<StatisticsResult['work']>;query:StatisticsQuery}){
- const currentLabels:Record<string,string>={people:'当前人物',members:'社员',waiting:'可接工作 · 待安排',planned:'可接工作 · 计划待落实',placed:'已落实社内承接',unavailable:'暂不安排工作'},periodLabels:Record<string,string>={created:'新登记人物',phase_changes:'阶段变更人数',audit_passed:'登记审核通过',joined:'登记转入社员',arrivals:'新增落实人数',departures:'移出资源人数',resource_transfers:'实际调动人数',closed:'关闭／退出人数',completed_deliveries:'关联人物任务交付'};
- const primary=['audit_passed','joined','arrivals','completed_deliveries'],cards=(keys:string[])=>keys.map(key=><div key={key}><strong>{work.period[key]??0}</strong><span>{periodLabels[key]??key}</span></div>);
- return <section className="statistics-work" aria-label="人员建设统计"><h2>人员与建设</h2><p>当前全体开启人物 · 独立于下方观察记录的分组与搜索</p><div className="statistics-work-grid current">{Object.entries(work.current).map(([key,value])=><div key={key}><strong>{value}</strong><span>{currentLabels[key]??key}</span></div>)}</div><h3>本期登记变化</h3><p>{query.from} — {query.to} · 按登记时间统计人数；任务按交付次数统计</p><div className="statistics-work-grid primary">{cards(primary)}</div><details><summary>查看其余登记变化</summary><div className="statistics-work-grid secondary">{cards(Object.keys(work.period).filter(key=>!primary.includes(key)))}</div></details><details><summary>当前人员标签分布 · {work.tag_groups} 组</summary><p>当前开启人物按档案去重；同一人物可有多个标签。下方标签趋势仍按观察条数统计，不代表历史当时的人员技能。</p>{work.tag_groups>50&&<p>显示人数最多的前 50 组。</p>}<div className="statistics-table-scroll"><table><thead><tr><th>当前标签</th><th>去重人数</th></tr></thead><tbody>{work.tags.map(t=><tr key={t.id}><th scope="row">{t.name}</th><td>{t.people}</td></tr>)}</tbody></table></div></details></section>;
 }
