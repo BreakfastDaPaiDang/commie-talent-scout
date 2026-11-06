@@ -1,6 +1,6 @@
 {
   "format": 1,
-  "count": 37,
+  "count": 38,
   "migrations": {
     "0001_identity.sql": {
       "sha256": "ceb732997de6972d3f88ae3a15b52b4df0def3418cc4b0834cd289ce55daff6a",
@@ -186,6 +186,11 @@
       "sha256": "d1572f624ae56530192725f89f56ac333419007311b3674961f1ea08421b32ef",
       "backwards_compatible": true,
       "reason": "Adds an explicit internal resource catalog and maintenance history. Existing archive resources are not reclassified or rewritten; prior clients preserve omitted fields."
+    },
+    "0038_work_overview.sql": {
+      "sha256": "979bd080f190d70a04d0c343f0863d7dc250be110875d186d05c6a3f423e6946",
+      "backwards_compatible": true,
+      "reason": "Adds independent work overview resources, gaps, experience placements and history; no reuse or conversion of retired graph data, no changes to existing archives or task lifecycle."
     }
   }
 }

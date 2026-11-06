@@ -11,11 +11,11 @@ import {statesFor,isClosedState,isWorkState,memberLabel,isMemberArchive,memberBa
 
 
 
-export function MemberPicker({value,onChange,label}:{value:BoundMember[];onChange:(items:BoundMember[])=>void;label:string}){
+export function MemberPicker({value,onChange,label,multiple=true}:{value:BoundMember[];onChange:(items:BoundMember[])=>void;label:string;multiple?:boolean}){
  const[items,setItems]=useState<BoundMember[]>([]),[error,setError]=useState(''),[loading,setLoading]=useState(true),[retry,setRetry]=useState(0);
  useEffect(()=>{let cancelled=false;setLoading(true);setError('');void(async()=>{let before:string|null=null,all:BoundMember[]=[];do{const r:{members:BoundMember[];next_cursor:string|null}=await api('/members?'+new URLSearchParams({limit:'100',...(before?{before}:{})}));all.push(...r.members);before=r.next_cursor;}while(before&&!cancelled);if(!cancelled)setItems(all);})().catch(e=>{if(!cancelled)setError(e.message);}).finally(()=>{if(!cancelled)setLoading(false);});return()=>{cancelled=true;};},[retry]);
  const available=[...items,...value.filter(m=>!items.some(other=>other.id===m.id))];
- return <div className="form-field"><label>{label}</label><DirectoryPicker label={label} members={available} value={value.map(m=>m.id)} onChange={ids=>onChange(ids.map(id=>available.find(m=>m.id===id)!))} disabled={loading||!!error} renderAvatar={m=><Avatar name={m.name} src={avatarUrl('member',m.id,0)} size="tiny"/>}/>{loading&&<p role="status">正在读取成员…</p>}<PageError error={error} retry={()=>setRetry(n=>n+1)}/></div>;
+ return <div className="form-field"><label>{label}</label><DirectoryPicker multiple={multiple} label={label} members={available} value={value.map(m=>m.id)} onChange={ids=>onChange(ids.map(id=>available.find(m=>m.id===id)!))} disabled={loading||!!error} renderAvatar={m=><Avatar name={m.name} src={avatarUrl('member',m.id,0)} size="tiny"/>}/>{loading&&<p role="status">正在读取成员…</p>}<PageError error={error} retry={()=>setRetry(n=>n+1)}/></div>;
 }
 export function StateFields({type,status,onStatus,members,onMembers,reopen=false}:{type:'person'|'org';status:string;onStatus:(s:string)=>void;members:BoundMember[];onMembers:(m:BoundMember[])=>void;reopen?:boolean}){
  return <section className="archive-state-fields"><StateChoices value={status} onChange={onStatus} choices={statesFor(type).filter(s=>s!=='引荐中（待人事组接触）').filter(s=>!reopen||!isClosedState(s))}/><MemberPicker label={memberLabel(type,status)+(isWorkState(type,status)?' · 至少一人':' · 可选')} value={members} onChange={onMembers}/>{isWorkState(type,status)&&members.length===0&&<p className="responsible-hint">请明确选择至少一名负责成员。</p>}{isClosedState(status)&&<p className="archive-readonly">保存后会关闭档案，基础资料与观察内容将变为只读。</p>}</section>;
