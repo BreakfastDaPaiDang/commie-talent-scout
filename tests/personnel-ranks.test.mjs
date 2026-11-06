@@ -20,3 +20,9 @@ test('external organizations keep relationship states and separate counts; recor
  map=await personnelMap(f.env,f.actor,{query:'联系人员'});assert.equal(map.organizations.length,1,'a filtered person retains their visible recorded organization context');f.sqlite.prepare('UPDATE archives SET deleted=1 WHERE id=?').run(org.id);map=await personnelMap(f.env,f.actor,{});assert.equal(map.organizations.length,1);assert.ok(!map.links.some(e=>e.kind==='organization_contact'));assert.ok(!JSON.stringify(map).includes('组织甲'));
  await s.setState({id:watched.id,expected_version:1,status:'已弃用',member_ids:[],request_id:uuid()});map=await personnelMap(f.env,f.actor,{});assert.equal(map.organizations.length,0);
 });
+
+test('historical resource passage remains inspectable without counting as a current resource at that rank',async t=>{
+ const f=fixture();t.after(f.close);const s=new Archives(f.env,f.actor,'web'),r=await makeResource(f,'社员承接',{stage_ids:['已入伙']});
+ const p=await s.create({type:'person',name:'已转社员',status:'个人接触',resources:[allocation(r)],request_id:uuid()});await s.setState({id:p.id,expected_version:1,status:'已入伙',member_ids:[],request_id:uuid()});
+ const map=await personnelMap(f.env,f.actor,{});assert.equal(rank(map,'pending').resources,0);assert.equal(rank(map,'member').resources,1);assert.equal(rank(map,'pending').cells.find(c=>c.resource_id===r.id).historical,true);assert.equal(map.links.filter(e=>e.kind==='transfer').length,1);
+});

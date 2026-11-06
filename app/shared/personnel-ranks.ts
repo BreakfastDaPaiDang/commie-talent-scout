@@ -34,7 +34,7 @@ export function rankPersonnelMap(data:PersonnelMap):PersonnelMap{
  }
  const layers:MapLayer[]=personnelRanks.map(rank=>{
   const oldLayers=data.layers.filter(l=>(rankForStatus(l.id)??l.id)===rank.id),current=data.archives.filter(a=>rankForPerson(a)===rank.id),items=[...cells.values()].filter(c=>c.stage===rank.id).sort((a,b)=>Number(!!a.organization_ids)-Number(!!b.organization_ids)||(b.people.length+b.planned.length)-(a.people.length+a.planned.length)||a.title.localeCompare(b.title,'zh-CN'));
-  return {id:rank.id,title:rank.title,people:current.length,unplaced:oldLayers.reduce((n,l)=>n+l.unplaced,0),attention:oldLayers.reduce((n,l)=>n+l.attention,0),resources:new Set(items.filter(c=>c.resource_id&&data.internal_resources.find(r=>r.id===c.resource_id)?.status!=='archived').map(c=>c.resource_id)).size,materials:current.reduce((n,a)=>n+a.materials,0),observations:current.reduce((n,a)=>n+a.observations,0),organizations:rank.id==='friend'?orgs.length:0,cells:items};
+  return {id:rank.id,title:rank.title,people:current.length,unplaced:oldLayers.reduce((n,l)=>n+l.unplaced,0),attention:oldLayers.reduce((n,l)=>n+l.attention,0),resources:new Set(items.filter(c=>!c.historical&&c.resource_id&&data.internal_resources.find(r=>r.id===c.resource_id)?.status!=='archived').map(c=>c.resource_id)).size,materials:current.reduce((n,a)=>n+a.materials,0),observations:current.reduce((n,a)=>n+a.observations,0),organizations:rank.id==='friend'?orgs.length:0,cells:items};
  });
  return {...data,layers,links:[...edges.values()],group_by:'rank'};
 }
