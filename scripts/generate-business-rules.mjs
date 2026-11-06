@@ -5,7 +5,6 @@ import {fileURLToPath} from 'node:url';
 import {resolve} from 'node:path';
 import {archiveStatePolicy} from '../app/rules/archive-states.ts';
 import {personnelDeliveryResults} from '../app/rules/task-delivery.ts';
-import {buildInteractionGraph} from '../app/rules/interaction-graph.ts';
 import {archiveLifecycleModule,archiveTransitionRules,assertReopenAllowed,assertStateAndResponsibility,transitionChanged,planArchiveEffects,auditCancellationTarget,preparePersonnelTask} from '../app/rules/archive-lifecycle.ts';
 import {planRules} from '../app/rules/contract.ts';
 
@@ -66,10 +65,9 @@ export function renderBusinessRules(){
  return lines.join('\n');
 }
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
- const expected=renderBusinessRules(),graphOutput=new URL('app/shared/interaction-graph.json',root),graph=JSON.stringify(await buildInteractionGraph(),null,2)+'\n';
+ const expected=renderBusinessRules();
  if(process.argv.includes('--check')){
   if(readFileSync(output,'utf8').replace(/\r\n/g,'\n')!==expected)throw new Error('规则视图已过期，请运行 npm run rules:generate 并提交结果');
-  if(readFileSync(graphOutput,'utf8').replace(/\r\n/g,'\n')!==graph)throw new Error('联动图数据已过期，请运行 npm run rules:generate 并提交结果');
   console.log('Executable business-rule view is current');
- }else{mkdirSync(new URL('docs/generated/',root),{recursive:true});writeFileSync(output,expected);writeFileSync(graphOutput,graph);console.log('Generated business-rule view and interaction graph');}
+ }else{mkdirSync(new URL('docs/generated/',root),{recursive:true});writeFileSync(output,expected);console.log('Generated docs/generated/archive-rules.md');}
 }
