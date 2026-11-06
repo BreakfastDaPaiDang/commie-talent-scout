@@ -25,6 +25,7 @@ try {
   };
   const tagged=await get('tag');
   assert.equal(tagged.total,3);assert.deepEqual(tagged.series.map(s=>s.total),[3,3]);
+  assert.ok(tagged.work.tags.filter(t=>tags.some(tag=>tag.id===t.id)).every(t=>t.people===1));
   assert.equal((await v.http('/statistics?from=2026-09-20&to=2026-09-01')).status,400);
   checks.push('authenticated HTTP aggregation, cross-tag deduplication and invalid dates');
   browser=await chromium.launch({channel:process.env.CTS_TEST_BROWSER??'msedge',headless:true});

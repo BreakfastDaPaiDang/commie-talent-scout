@@ -55,6 +55,30 @@ export async function statistics(env: Env, actor: Actor, input: Record<string, s
   const row = await env.DB.prepare(sql).bind(...args).first<{total:number;members:number;archives:number;groups:number;series:string}>();
   const dates = statisticsDates(q.from,q.to,q.interval);
   const series = JSON.parse(row?.series ?? '[]') as {id:string;name:string;total:number;points:Record<string,number>}[];
-  return {query:q,dates,total:row?.total??0,members:row?.members??0,archives:row?.archives??0,groups:row?.groups??0,
+  const work=q.archive_type==='org'?undefined:await personnelWork(env,actor,q.from,q.to,labels);
+  return {work,query:q,dates,total:row?.total??0,members:row?.members??0,archives:row?.archives??0,groups:row?.groups??0,
     series:series.map(s=>({...s,points:dates.map(d=>s.points[d]??0)}))};
+}
+
+async function personnelWork(env:Env,actor:Actor,from:string,to:string,labels:string):Promise<NonNullable<StatisticsResult['work']>>{
+ const start=new Date(from+'T00:00:00+08:00').toISOString(),end=new Date(shiftDate(to,1)+'T00:00:00+08:00').toISOString();
+ const active=`EXISTS(SELECT 1 FROM json_each(a.resources_json) r JOIN internal_resources ir ON ir.id=json_extract(r.value,'$.internal_resource_id') WHERE json_extract(r.value,'$.usage')='active')`,planned=`EXISTS(SELECT 1 FROM json_each(a.resources_json) r JOIN internal_resources ir ON ir.id=json_extract(r.value,'$.internal_resource_id') WHERE json_extract(r.value,'$.usage')='planned')`,member="(a.person_role='member' OR (a.person_role IS NULL AND a.status='已入伙'))",available="(COALESCE(a.member_status,'可接工作')='可接工作' AND a.member_work_paused=0)";
+ const current=await env.DB.prepare(`SELECT count(*) people,coalesce(sum(${member}),0) members,
+ coalesce(sum(${member} AND ${available} AND NOT ${active} AND NOT ${planned}),0) waiting,
+ coalesce(sum(${member} AND ${available} AND NOT ${active} AND ${planned}),0) planned,
+ coalesce(sum(${active}),0) placed,coalesce(sum(${member} AND NOT ${available}),0) unavailable
+ FROM archives a WHERE a.type='person' AND a.deleted=0 AND a.closed=0`).bind().first<Record<string,number>>();
+ const period=await env.DB.prepare(`WITH events AS (SELECT e.* FROM archive_events e JOIN archives a ON a.id=e.archive_id WHERE a.type='person' AND a.deleted=0 AND e.created_at>=? AND e.created_at<?),
+ changed AS (SELECT * FROM events WHERE kind='archive.state_changed' AND json_extract(before_json,'$.status') IS NOT json_extract(after_json,'$.status'))
+ SELECT (SELECT count(DISTINCT archive_id) FROM events WHERE kind='archive.created') created,
+ (SELECT count(DISTINCT archive_id) FROM changed) phase_changes,
+ (SELECT count(DISTINCT archive_id) FROM changed WHERE json_extract(after_json,'$.status')='已加入待对接') audit_passed,
+ (SELECT count(DISTINCT archive_id) FROM changed WHERE json_extract(after_json,'$.status')='已入伙') joined,
+ (SELECT count(DISTINCT archive_id) FROM events e WHERE e.kind IN('archive.profile_changed','archive.resource_transferred') AND EXISTS(SELECT 1 FROM json_each(e.after_json,'$.resources') r WHERE json_extract(r.value,'$.internal_resource_id') IS NOT NULL AND json_extract(r.value,'$.usage')='active' AND NOT EXISTS(SELECT 1 FROM json_each(e.before_json,'$.resources') old WHERE json_extract(old.value,'$.internal_resource_id')=json_extract(r.value,'$.internal_resource_id') AND json_extract(old.value,'$.usage')='active'))) arrivals,
+ (SELECT count(DISTINCT archive_id) FROM events e WHERE e.kind IN('archive.profile_changed','archive.resource_transferred') AND EXISTS(SELECT 1 FROM json_each(e.before_json,'$.resources') r WHERE json_extract(r.value,'$.internal_resource_id') IS NOT NULL AND json_extract(r.value,'$.usage')='active' AND NOT EXISTS(SELECT 1 FROM json_each(e.after_json,'$.resources') next WHERE json_extract(next.value,'$.internal_resource_id')=json_extract(r.value,'$.internal_resource_id') AND json_extract(next.value,'$.usage')='active'))) departures,
+ (SELECT count(DISTINCT archive_id) FROM events WHERE kind='archive.resource_transferred') resource_transfers,
+ (SELECT count(DISTINCT archive_id) FROM events WHERE kind='archive.closed') closed,
+ (SELECT count(*) FROM work_task_events e JOIN work_tasks t ON t.id=e.task_id JOIN archives a ON a.id=t.archive_id WHERE a.type='person' AND a.deleted=0 AND e.kind='task.completed' AND e.created_at>=? AND e.created_at<?) completed_deliveries`).bind(start,end,start,end).first<Record<string,number>>();
+ const tags=await env.DB.prepare(`WITH ${labels}, counts AS (SELECT l.tag_id id,max(l.category_name||'：'||l.tag_name) name,count(DISTINCT a.id) people FROM labels l JOIN archives a ON a.id=l.archive_id WHERE a.type='person' AND a.deleted=0 AND a.closed=0 GROUP BY l.tag_id),chosen AS (SELECT * FROM counts ORDER BY people DESC,name,id LIMIT 50) SELECT (SELECT count(*) FROM counts) groups,coalesce((SELECT json_group_array(json_object('id',id,'name',name,'people',people)) FROM chosen),'[]') items`).bind(actor.id,actor.role).first<{groups:number;items:string}>();
+ return {current:current??{},period:period??{},tags:JSON.parse(tags?.items??'[]'),tag_groups:tags?.groups??0};
 }

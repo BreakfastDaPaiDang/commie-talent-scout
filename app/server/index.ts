@@ -116,6 +116,7 @@ app.post('/api/archives/restore',async c=>c.json(await new Archives(c.env,await 
 app.post('/api/archives/state',async c=>c.json(await new Archives(c.env,await authenticate(c.req.raw,c.env),'web').setState(await c.req.json())));
 app.post('/api/archives/reopen',async c=>c.json(await new Archives(c.env,await authenticate(c.req.raw,c.env),'web').reopen(await c.req.json())));
 app.post('/api/archives/create',async c=>c.json(await new Archives(c.env,await authenticate(c.req.raw,c.env),'web').create(await c.req.json())));
+app.post('/api/archives/resource-transfer',async c=>c.json(await new Archives(c.env,await authenticate(c.req.raw,c.env),'web').transferResource(await c.req.json())));
 app.post('/api/archives/update',async c=>c.json(await new Archives(c.env,await authenticate(c.req.raw,c.env),'web').update(await c.req.json())));
 app.get('/api/archives/:id/events',async c=>c.json(await new Archives(c.env,await authenticate(c.req.raw,c.env),'web').events({...c.req.query(),id:c.req.param('id')})));
 app.get('/api/archives/:id',async c=>{const actor=await authenticate(c.req.raw,c.env),id=c.req.param('id'),result=await new Archives(c.env,actor,'web').detail(id);return c.json({...result,archive_reading:await new ArchiveReading(c.env,actor).deliver(id)});});

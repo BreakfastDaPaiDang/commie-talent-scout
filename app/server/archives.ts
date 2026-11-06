@@ -25,6 +25,7 @@ const memberIds=z.array(z.uuid()).max(50).transform(ids=>[...new Set(ids)].sort(
 const currentNeed=z.string().trim().max(5000);
 export const archiveCreateInput=z.object({type:archiveType,...profile,resources:archiveResourcesInput.default([]),linked_account_id:z.uuid().nullable().default(null),current_need:currentNeed.default(''),member_status:z.enum(memberBasicStates).optional(),status:statusInput.default('\u89c6\u5978\u89c2\u5bdf'),member_ids:memberIds.default([]),request_id:requestId}).strict();
 export const archiveUpdateInput=z.object({id:z.uuid(),expected_version:expectedVersion,...profile,resources:archiveResourcesInput.optional(),linked_account_id:z.uuid().nullable().optional(),current_need:currentNeed.optional(),contacts:z.array(contact).max(20),links:z.array(link).max(20),request_id:requestId}).strict();
+export const resourceTransferInput=z.object({id:z.uuid(),expected_version:expectedVersion,from_resource_id:z.uuid(),to_resource_id:z.uuid(),reason:z.string().trim().min(1).max(3000),request_id:requestId}).strict();
 export const archiveStateInput=z.object({id:z.uuid(),expected_version:expectedVersion,status:statusInput,member_status:z.enum(memberBasicStates).optional(),membership_action:z.enum(['leave','to_friend']).optional(),deadline_at:z.string().datetime().optional(),member_ids:memberIds,request_id:requestId}).strict();
 export const archiveDeletionInput=z.object({id:z.uuid(),expected_version:expectedVersion,request_id:requestId}).strict();
 export const archiveListInput=z.object({type:archiveType,person_scope:z.enum(['all','external','members']).default('all').describe('Person range: external excludes members; members includes joined people; all preserves existing queries.'),deleted:z.union([z.boolean(),z.enum(['true','false']).transform(v=>v==='true')]).default(false),query:z.string().trim().max(200).default(''),scope:z.enum(['all','mine','unread']).default('all').describe('mine 为关联我：当前状态关联成员包含调用者，不限工作或开启状态，仍遵循其他筛选和删除权限。'),status:z.string().max(80).default(''),member_status:z.enum([...memberBasicStates,'']).default(''),member_id:z.union([z.uuid(),z.literal('')]).default(''),closed:z.enum(['all','open','closed']).default('all'),closed_history:z.enum(['30','90','all']).default('all').describe('已关闭档案的关闭时间范围：最近30天、90天或全部。仅影响关闭档案；未传时保留全部历史，网页默认30天。'),tag_ids:z.array(z.uuid()).max(30).default([]).describe('按当前词库类别分组：同类别任一标签匹配、不同类别同时匹配。关闭档案按冻结绑定匹配稳定标签 ID；仅计入当前成员可见的来源。'),limit:z.coerce.number().int().min(1).max(100).default(30),before:z.string().max(150).optional()});
@@ -149,6 +150,23 @@ export class Archives{
   const statements=[this.guard(a.id,a.expected_version,key),...account.guards,...resources.guards];
   if(changed)statements.push(this.stmt('UPDATE archives SET name=?,contacts_json=?,links_json=?,current_need=?,linked_account_id=?,resources_json=?,version=version+1,updated_at=? WHERE id=?',account.name,JSON.stringify(a.contacts),JSON.stringify(a.links),current_need,linked_account_id,JSON.stringify(resources.values),at,a.id),this.event(a.id,'archive.profile_changed',before,after,at));
   statements.push(...account.cleanup,...resources.cleanup,this.stmt('DELETE FROM mutation_guards WHERE id=?',key));return {result:{id:a.id,version:old.version+(changed?1:0),changed,archive_url:this.url(old),contact_reminder:reminder},statements};
+ });}
+ async transferResource(input:unknown){const a=resourceTransferInput.parse(input);return command(this.env,this.actor,{requestId:a.request_id,operation:'archive.resource_transfer',parameters:{...a,request_id:undefined}},async()=>{
+  const old=await this.get(a.id,a.expected_version,true);
+  if(old.type!=='person'||a.from_resource_id===a.to_resource_id)throw new Failure(400,'INVALID_TRANSFER','请选择人物档案以及不同的转出、转入资源');
+  const raw=await this.stmt('SELECT resources_json FROM archives WHERE id=?',a.id).first<string>('resources_json'),before=JSON.parse(raw??'[]') as ResourceValue[];
+  if(!before.some(r=>r.internal_resource_id===a.from_resource_id&&r.usage==='active'))throw new Failure(409,'TRANSFER_SOURCE_CHANGED','人员已不在所选转出资源，请重新读取核对');
+  const retained=before.filter(r=>!(r.internal_resource_id===a.from_resource_id&&r.usage!=='available'));
+  const target=retained.find(r=>r.internal_resource_id===a.to_resource_id);
+  const inputResources:z.infer<typeof archiveResourcesInput>=retained.map(r=>r===target?{...r,usage:'active' as const,note:r.usage==='active'?r.note:a.reason}:{id:r.id,restricted:true as const});
+  if(!target)inputResources.push({id:uid(),name:'待核对资源',type:'社内资源',note:a.reason,archive_id:null,internal_resource_id:a.to_resource_id,usage:'active'});
+  const targetRow=await this.stmt('SELECT status FROM internal_resources WHERE id=?',a.to_resource_id).first<{status:string}>();
+  if(!targetRow||targetRow.status==='archived')throw new Failure(409,'INTERNAL_RESOURCE_UNAVAILABLE','转入资源不存在或已停用');
+  const prepared=await prepareResources(this.env,this.actor,inputResources,before),key=uid(),targetKey=uid(),at=now();
+  return {result:{id:a.id,version:old.version+1,changed:true,archive_url:this.url(old)},statements:[this.guard(a.id,a.expected_version,key),...prepared.guards,this.stmt("INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(SELECT 1 FROM internal_resources WHERE id=? AND status<>'archived') THEN 1 ELSE 0 END)",targetKey,a.to_resource_id),
+   this.stmt('UPDATE archives SET resources_json=?,version=version+1,updated_at=? WHERE id=?',JSON.stringify(prepared.values),at,a.id),
+   this.event(a.id,'archive.resource_transferred',{status:old.status,resources:before,from_resource_id:a.from_resource_id},{status:old.status,resources:prepared.values,from_resource_id:a.from_resource_id,to_resource_id:a.to_resource_id,reason:a.reason},at),
+   ...prepared.cleanup,this.stmt('DELETE FROM mutation_guards WHERE id IN(?,?)',key,targetKey)]};
  });}
  async events(input:unknown){
   const a=z.object({id:z.uuid(),before:z.coerce.number().int().positive().optional(),limit:z.coerce.number().int().min(1).max(100).default(30)}).parse(input);await this.get(a.id);

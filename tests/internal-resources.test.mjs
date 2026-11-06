@@ -9,7 +9,7 @@ test('internal inventory exists without people; capacities and repeated allocati
  const f=fixture();t.after(f.close);const catalog=new InternalResources(f.env,f.actor,'mcp'),r=await makeResource(f,'已确认社内资源',{capacity:0}),a=new Archives(f.env,f.actor,'web');
  assert.equal((await catalog.get(r.id)).used,0);assert.equal((await catalog.get(r.id)).remaining,0);
  const person=await a.create({type:'person',name:'虚构人员',resources:[allocation(r),allocation(r),allocation(r,{usage:'planned'})],request_id:uuid()});
- assert.equal((await catalog.get(r.id)).used,1);assert.equal((await catalog.get(r.id)).planned,1);assert.equal((await catalog.get(r.id)).remaining,0,'actual over-capacity facts are retained');
+ assert.equal((await catalog.get(r.id)).used,1);assert.equal((await catalog.get(r.id)).planned,0);assert.equal((await catalog.get(r.id)).remaining,0,'actual over-capacity facts are retained');
  const current=await catalog.get(r.id),{id,version,name,type,note,stage_ids,member_ids}=current;const input={id,expected_version:version,name,type,note,stage_ids,member_ids,status:'paused',capacity:null,request_id:uuid()};await catalog.save(input);assert.equal((await catalog.save(input)).replayed,true);assert.equal((await catalog.get(id)).remaining,null);assert.equal((await a.get(person.id)).resources[0].internal_resource.status,'paused');assert.equal((await catalog.history({id})).events.length,2);
  await assert.rejects(catalog.save({...input,request_id:uuid()}),{code:'VERSION_CONFLICT'});
 });
