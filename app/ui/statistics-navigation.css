@@ -1,2 +1,18 @@
-.statistics-navigation{padding:20px 32px 0;background:var(--page-bg);min-width:0}.statistics-navigation nav{display:flex;gap:22px;border-bottom:1px solid var(--line);min-width:0}.statistics-navigation button{background:none;border:0;border-bottom:3px solid transparent;cursor:pointer;padding:11px 2px;font:inherit;font-size:15px;color:var(--muted)}.statistics-navigation button.active{border-color:var(--red);color:var(--ink);font-weight:600}.statistics-navigation .statistics-graph-views{gap:24px;margin-top:8px}.statistics-graph-views button{font-size:14px}.statistics-navigation button:focus-visible{outline:2px solid var(--red);outline-offset:2px}.resource-legacy{margin:14px 0;font-size:13px;color:var(--muted)}.pm-cell-capacity{font-size:12px;color:#826014}.pm-detail-resource-actions{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}
-@media(max-width:700px){.statistics-navigation{padding:12px 12px 0}.statistics-navigation nav{gap:18px}.statistics-navigation button{font-size:14px}.statistics-navigation .statistics-graph-views{gap:16px}.statistics-graph-views button{font-size:13px}}
+.statistics-navigation{display:flex;align-items:center;gap:28px;padding:8px 32px 0;background:var(--page-bg);min-width:0;border-bottom:1px solid var(--line)}
+.statistics-navigation nav{display:flex;align-self:stretch;gap:20px;min-width:0}
+.statistics-navigation button{background:none;border:0;border-bottom:3px solid transparent;cursor:pointer;padding:14px 0;font:inherit;font-size:13px;color:var(--muted)}
+.statistics-navigation button.active{border-color:var(--red);color:var(--ink);font-weight:600}
+.statistics-navigation .statistics-graph-views{position:relative;padding-left:24px}
+.statistics-navigation .statistics-graph-views:before{content:'';position:absolute;left:0;top:14px;bottom:14px;width:1px;background:var(--line)}
+.statistics-navigation button:focus-visible{outline:2px solid var(--red);outline-offset:2px}
+.resource-legacy{margin:14px 0;font-size:13px;color:var(--muted)}
+.pm-cell-capacity{font-size:12px;color:#826014}
+.pm-detail-resource-actions{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}
+@media(max-width:700px){
+ .statistics-navigation{flex-direction:column;align-items:flex-start;gap:0;padding:4px 12px 0}
+ .statistics-navigation nav{gap:20px}
+ .statistics-navigation .statistics-graph-views{padding-left:0;gap:20px}
+ .statistics-navigation .statistics-graph-views:before{display:none}
+ .statistics-navigation button{font-size:12px;padding:10px 0}
+ .statistics-navigation .statistics-graph-views button{font-size:12px;padding:9px 0}
+}

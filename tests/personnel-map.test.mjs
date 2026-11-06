@@ -4,7 +4,8 @@ import {randomUUID as uuid} from 'node:crypto';
 import {fixture} from './d1-fixture.mjs';
 import {Archives} from '../app/server/archives.ts';
 import {InternalResources} from '../app/server/internal-resources.ts';
-import {personnelMap} from '../app/server/personnel-map.ts';
+import {personnelMap as detailedMap} from '../app/server/personnel-map.ts';
+const personnelMap=(env,actor,input)=>detailedMap(env,actor,{group_by:'status',...input});
 import {makeResource,allocation,seedLegacy} from './internal-resource-fixture.mjs';
 const cell=(map,stage,title)=>map.layers.find(l=>l.id===stage).cells.find(c=>c.title===title);
 test('owned internal resources appear without occupants and external archives/legacy links do not become assets',async t=>{
