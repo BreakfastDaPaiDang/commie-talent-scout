@@ -1,12 +1,13 @@
+import {rankPersonnelMap,type MapOrganization} from '../shared/personnel-ranks.ts';
 import {InternalResources} from './internal-resources.ts';
 import {z} from 'zod';
 import {buildPersonnelMap,type MapArchive,type MapTransfer,type MapMovement} from '../shared/personnel-map.ts';
 import {projectResources} from './archive-resources.ts';
 import type {ResourceValue} from '../shared/archive-resources.ts';
 import {archiveReminder} from '../rules/archive-reminders.ts';
-import {effectiveMemberStatus} from '../rules/archive-states.ts';
+import {effectiveMemberStatus,isMemberArchive} from '../rules/archive-states.ts';
 import type {Actor,Env} from './types.ts';
-export const personnelMapInput=z.object({days:z.coerce.number().int().min(1).max(365).default(30),query:z.string().trim().max(120).default('')});
+export const personnelMapInput=z.object({days:z.coerce.number().int().min(1).max(365).default(30),query:z.string().trim().max(120).default(''),group_by:z.enum(['rank','status']).default('rank')});
 // Search projected, readable resource identities; deleted contact targets stay opaque.
 function resourceMatch(json:string){return `EXISTS(SELECT 1 FROM json_each(${json}) entry LEFT JOIN internal_resources ir ON ir.id=json_extract(entry.value,'$.internal_resource_id') LEFT JOIN archives target ON target.id=json_extract(entry.value,'$.archive_id') WHERE (ir.id IS NOT NULL AND (ir.name LIKE ? ESCAPE '\\' OR ir.type LIKE ? ESCAPE '\\')) OR (json_extract(entry.value,'$.internal_resource_id') IS NULL AND (json_extract(entry.value,'$.archive_id') IS NULL OR target.deleted=0) AND (json_extract(entry.value,'$.name') LIKE ? ESCAPE '\\' OR target.name LIKE ? ESCAPE '\\' OR json_extract(entry.value,'$.type') LIKE ? ESCAPE '\\')))`;}
 const stageSince=`COALESCE((SELECT CASE WHEN json_extract(e.after_json,'$.status')=a.status THEN e.created_at END FROM archive_events e WHERE e.archive_id=a.id AND (e.kind IN('archive.created','archive.reopened') OR (e.kind='archive.state_changed' AND json_extract(e.before_json,'$.status') IS NOT json_extract(e.after_json,'$.status'))) ORDER BY e.seq DESC LIMIT 1),'')`;
@@ -24,7 +25,7 @@ export async function personnelMap(env:Env,actor:Actor,input:unknown){
   (SELECT json_group_array(json_object('id',m.id,'name',m.name)) FROM archive_bindings b JOIN members m ON m.id=b.member_id WHERE b.archive_id=a.id AND b.status=a.status) members_json FROM archives a`;
  const rows=await env.DB.prepare(`${select} WHERE ${filter} ORDER BY a.id LIMIT 1001`).bind(new Date(at).toISOString(),...filterArgs).all<Row>();
  const total=await env.DB.prepare(`SELECT count(*) n FROM archives a WHERE ${filter}`).bind(...filterArgs).first<number>('n');
- async function present(page:Row[]):Promise<MapArchive[]>{const resources=await projectResources(env,page.flatMap(r=>JSON.parse(r.resources_json) as ResourceValue[]));let offset=0;return page.map(r=>{const count=(JSON.parse(r.resources_json) as unknown[]).length,values=resources.slice(offset,offset+count);offset+=count;const {resources_json,members_json,updated_at,deleted,member_work_paused,...rest}=r;return {...rest,member_status:effectiveMemberStatus(r.member_status??null,member_work_paused),closed:!!r.closed,resources:values,members:JSON.parse(members_json??'[]'),overdue:archiveReminder({...r,closed:!!r.closed,deleted:!!r.deleted},at)?.overdue??false};});}
+ async function present(page:Row[]):Promise<MapArchive[]>{const resources=await projectResources(env,page.flatMap(r=>JSON.parse(r.resources_json) as ResourceValue[]));let offset=0;return page.map(r=>{const count=(JSON.parse(r.resources_json) as unknown[]).length,values=resources.slice(offset,offset+count);offset+=count;const {resources_json,members_json,updated_at,deleted,member_work_paused,...rest}=r;return {...rest,member_status:isMemberArchive(r)?effectiveMemberStatus(r.member_status??null,member_work_paused):null,closed:!!r.closed,resources:values,members:JSON.parse(members_json??'[]'),overdue:archiveReminder({...r,closed:!!r.closed,deleted:!!r.deleted},at)?.overdue??false};});}
  const archives=await present(rows.results.slice(0,1000));
  // History has its own scope: closed/exited people and former resource affiliations
  // remain visible. Never apply today's open/current-assignment filter to past events.
@@ -42,5 +43,10 @@ export async function personnelMap(env:Env,actor:Actor,input:unknown){
  const historyIds=[...new Set(page.map(r=>r.archive_id))].filter(id=>!archives.some(a=>a.id===id)),historyRows=historyIds.length?await env.DB.prepare(`${select} WHERE a.deleted=0 AND a.id IN(SELECT value FROM json_each(?))`).bind(new Date(at).toISOString(),JSON.stringify(historyIds)).all<Row>():{results:[]};
  const history_archives=await present(historyRows.results),transfers:MapTransfer[]=movements.flatMap<MapTransfer>((m,i)=>m.kind==='archive.state_changed'?[{archive_id:m.archive_id,at:m.at,before:m.before,after:m.after,resources:m.resources,resources_known:m.resources_known}]:m.kind==='archive.resource_transferred'?[{archive_id:m.archive_id,at:m.at,before:m.before,after:m.after,resources:m.resources,kind:'resource' as const,from_resource_id:page[i].from_resource_id,to_resource_id:page[i].to_resource_id}]:[]);
  const all=await new InternalResources(env,actor,'web').all(),linkedIds=new Set([...archives.flatMap(a=>a.resources),...movements.flatMap(t=>[...t.resources,...t.before_resources])].flatMap(r=>!r.restricted&&r.internal_resource_id?[r.internal_resource_id]:[])),term=a.query.toLowerCase(),inventory=all.filter(r=>!term||linkedIds.has(r.id)||(r.name+' '+r.type).toLowerCase().includes(term));
- return buildPersonnelMap(archives,transfers,{internal_resources:inventory,history_archives,movements,days:a.days,complete:rows.results.length<=1000,history_complete:history.results.length<=2000,total_archives:total??0});
+ const linkedOrgs=[...new Set(archives.flatMap(p=>p.resources.flatMap(r=>!r.restricted&&r.archive_id&&r.linked_archive?.type==='org'?[r.archive_id]:[])))];
+ const orgFilter="a.type='org' AND a.deleted=0 AND a.closed=0 AND (?='' OR a.name LIKE ? ESCAPE '\\' OR a.id IN(SELECT value FROM json_each(?)))",orgRows=await env.DB.prepare(`${select} WHERE ${orgFilter} ORDER BY a.name,a.id LIMIT 201`).bind(new Date(at).toISOString(),a.query,query,JSON.stringify(linkedOrgs)).all<Row>(),orgTotal=await env.DB.prepare(`SELECT count(*) n FROM archives a WHERE ${orgFilter}`).bind(a.query,query,JSON.stringify(linkedOrgs)).first<number>('n');
+ const organizations:MapOrganization[]=(await present(orgRows.results.slice(0,200))).map(({id,name,status,version,current_need,members,materials,observations})=>({id,name,status,version,current_need,members,materials,observations}));
+ const raw=buildPersonnelMap(archives,transfers,{internal_resources:inventory,history_archives,movements,days:a.days,complete:rows.results.length<=1000,history_complete:history.results.length<=2000,total_archives:total??0});
+ const result={...raw,organizations,organization_total:orgTotal??0,organizations_complete:orgRows.results.length<=200,group_by:'status' as const};
+ return a.group_by==='status'?result:rankPersonnelMap(result);
 }

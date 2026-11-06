@@ -1,3 +1,4 @@
+import type {MapOrganization} from './personnel-ranks.ts';
 import {reception,personnelAttention} from './personnel-signals.ts';
 import type {InternalResource} from './internal-resources.ts';
 import {isMemberArchive} from '../rules/archive-states.ts';
@@ -5,10 +6,10 @@ import type {ResourceEntry,ArchiveResource} from './archive-resources.ts';
 export type MapArchive={id:string;name:string;type:'person'|'org';status:string;person_role:'member'|'external'|null;member_status?:'可接工作'|'暂不接工作'|'请假'|'失联'|null;closed:boolean;version:number;resources:ResourceEntry[];current_need:string;stage_since:string;open_tasks:number;unassigned_tasks:number;overdue_tasks:number;overdue:boolean;members:{id:string;name:string}[];materials:number;observations:number};
 export type MapTransfer={archive_id:string;before:string;after:string;at:string;resources:ResourceEntry[];resources_known?:boolean;kind?:'stage'|'resource';from_resource_id?:string;to_resource_id?:string};
 export type MapMovement={id:string;archive_id:string;at:string;kind:string;before:string;after:string;resources:ResourceEntry[];before_resources:ResourceEntry[];reason:string;resources_known?:boolean};
-export type MapCell={id:string;key:string;stage:string;title:string;type:string;archive_id:string|null;people:string[];planned:string[];sources:string[];resources:{source_id:string;entry:ArchiveResource}[];historical:boolean;resource_id:string|null};
-export type MapLink={id:string;from:string;to:string;kind:'shared'|'transfer'|'resource_transfer';people:string[];sources:string[]};
-export type MapLayer={id:string;title:string;people:number;unplaced:number;attention:number;resources:number;materials:number;observations:number;cells:MapCell[]};
-export type PersonnelMap={layers:MapLayer[];links:MapLink[];archives:MapArchive[];days:number;complete:boolean;history_complete:boolean;total_archives:number;internal_resources:InternalResource[];history_archives?:MapArchive[];movements?:MapMovement[]};
+export type MapCell={id:string;key:string;stage:string;title:string;type:string;archive_id:string|null;people:string[];planned:string[];sources:string[];resources:{source_id:string;entry:ArchiveResource}[];historical:boolean;resource_id:string|null;organization_ids?:string[]};
+export type MapLink={id:string;from:string;to:string;kind:'shared'|'transfer'|'resource_transfer'|'organization_contact';people:string[];sources:string[]};
+export type MapLayer={id:string;title:string;people:number;unplaced:number;attention:number;resources:number;materials:number;observations:number;organizations?:number;cells:MapCell[]};
+export type PersonnelMap={layers:MapLayer[];links:MapLink[];archives:MapArchive[];days:number;complete:boolean;history_complete:boolean;total_archives:number;internal_resources:InternalResource[];history_archives?:MapArchive[];movements?:MapMovement[];organizations?:MapOrganization[];organization_total?:number;organizations_complete?:boolean;group_by?:'status'|'rank'};
 export const mapStages=[['视奸观察','观察'],['个人接触','个人接触'],['引荐中（待人事组接触）','引荐与承接'],['人事审核','人事审核'],['已加入待对接','审核通过 · 入社对接'],['已入伙','社员与建设'],['外部社友','外部社友'],['已弃用','关闭与退出（历史）']] as const;
 export const mapStage=(a:Pick<MapArchive,'type'|'status'|'person_role'>)=>a.type==='org'?'organizations':isMemberArchive(a)?'已入伙':a.status;
 
