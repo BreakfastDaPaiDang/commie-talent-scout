@@ -6,6 +6,7 @@ import './auxiliary-tools.css';
 export function AuxiliaryTools(){
   return <main className="auxiliary-tools">
     <header className="auxiliary-heading"><h1>辅助工具</h1></header>
+    <article className="auxiliary-card"><div className="auxiliary-intro"><h2>资源工具</h2><a className="button primary" href="/tools/resources">打开资源工具<Icon name="arrow"/></a></div></article>
     <article className="auxiliary-card" aria-labelledby="qce-title">
       <div className="auxiliary-intro">
         <span className="auxiliary-icon" aria-hidden="true"><Icon name="file" size={28}/></span>

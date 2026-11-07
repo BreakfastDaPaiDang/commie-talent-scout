@@ -1,9 +1,13 @@
+import {Resources} from './resources.ts';
+import {weeklyReport} from './weekly-report.ts';
+import {WorkRecommendations} from './work-recommendations.ts';
 import {WorkTaskLabels} from './work-task-labels.ts';
 import {generateMemberMonthlyFollowUps,generateScheduledMemberMonthlyFollowUps} from './member-monthly-follow-ups.ts';
 import {runTaskNotifications} from './task-notifications.ts';
 import {generateArchiveFollowUps,generateScheduledArchiveFollowUps} from './archive-follow-ups.ts';
 import {TagDeletion} from './tag-deletion.ts';
 import {statistics} from './statistics.ts';
+import {WorkOverview} from './work-overview.ts';
 import {TagMaintenance} from './tag-maintenance.ts';
 import {TagMigration} from './tag-migration.ts';
 import {Reading} from './reading.ts';
@@ -84,6 +88,12 @@ app.post('/api/auth/logout',async c=>{
 });
 app.get('/api/workspace',async c=>{const actor=await authenticate(c.req.raw,c.env);return c.json({member:publicMember(actor)});});
 app.get('/api/statistics',async c=>c.json(await statistics(c.env,await authenticate(c.req.raw,c.env),c.req.query())));
+app.get('/api/work-overview/recommendations',async c=>c.json(await new WorkRecommendations(c.env,await authenticate(c.req.raw,c.env)).read(c.req.query())));
+app.get('/api/resources',async c=>c.json(await new Resources(c.env,await authenticate(c.req.raw,c.env)).list(c.req.query())));
+app.post('/api/resources/save',async c=>c.json(await new Resources(c.env,await authenticate(c.req.raw,c.env)).save(await c.req.json())));
+app.get('/api/work-overview',async c=>c.json(await new WorkOverview(c.env,await authenticate(c.req.raw,c.env)).read(c.req.query())));
+app.post('/api/work-overview/save',async c=>c.json(await new WorkOverview(c.env,await authenticate(c.req.raw,c.env)).save(await c.req.json())));
+app.get('/api/statistics/weekly-report',async c=>c.json(await weeklyReport(c.env,await authenticate(c.req.raw,c.env),c.req.query())));
 app.get('/api/statistics/link',async c=>{await authenticate(c.req.raw,c.env);return c.json({url:c.env.APP_ORIGIN+'/statistics'});});
 app.get('/api/connections',async c=>c.json(await listCredentials(c.env,await authenticate(c.req.raw,c.env))));
 app.post('/api/connections',async c=>c.json(await createCredential(c.env,await authenticate(c.req.raw,c.env),await c.req.json())));

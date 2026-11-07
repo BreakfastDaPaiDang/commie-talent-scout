@@ -1,0 +1,3 @@
+import {api,ApiError} from './api';
+const attempts=new Map<string,string>();
+export async function mutate(path:string,input:object){const key=path+JSON.stringify(input),request_id=attempts.get(key)??crypto.randomUUID();attempts.set(key,request_id);try{const result=await api(path,{...input,request_id});attempts.delete(key);return result;}catch(error){const receipt=await api<{status:string;result:unknown}>('/commands/'+request_id).catch(()=>null);if(receipt?.status==='completed'){attempts.delete(key);return receipt.result;}if(error instanceof ApiError&&error.status<500){attempts.delete(key);throw error;}throw Object.assign(error instanceof Error?error:new Error(String(error)),{retryOnly:true});}}

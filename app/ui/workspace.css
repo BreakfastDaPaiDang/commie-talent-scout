@@ -1562,3 +1562,6 @@
 .closed-history-filter { display: flex; align-items: center; gap: 8px; grid-column: 1 / -1; min-width: 0; font-size: 14px; }
 .closed-history-filter > span { white-space: nowrap; }
 .closed-history-filter select { flex: 1; min-width: 0; }
+
+/* Shared, prominent Agent entry in desktop and mobile navigation. */
+.topbar-tools .agent-nav,.mobile-menu .agent-nav{display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:8px 12px;border:1px solid #ff8f7c;border-radius:5px;background:#c9362f;color:#fff;font-size:15px;font-weight:650;line-height:1.4;box-shadow:0 1px 0 #ffb19b inset;cursor:pointer}.topbar-tools .agent-nav:hover,.topbar-tools .agent-nav.active,.mobile-menu .agent-nav:hover,.mobile-menu .agent-nav.active{background:#eb4438;color:#fff;border-color:#ffbd99}.agent-nav:focus-visible{outline:2px solid #ffd76c;outline-offset:4px}.mobile-menu .agent-nav{min-height:44px}

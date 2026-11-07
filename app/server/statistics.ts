@@ -11,7 +11,7 @@ export const statisticsInput = z.object({
 }).refine(q => q.from <= q.to, '开始日期不能晚于结束日期')
   .refine(q => (Date.parse(q.to) - Date.parse(q.from)) / 86400000 < 366, '时间范围最多 366 天');
 
-export async function statistics(env: Env, actor: Actor, input: Record<string, string>): Promise<StatisticsResult> {
+export async function statistics(env: Env, actor: Actor, input: Record<string, string>,options:{asOf?:string}={}): Promise<StatisticsResult> {
   const q = statisticsInput.parse({...defaultStatisticsQuery(), ...input});
   // Closed archives use their frozen bindings, as in TagState.summaries. Hidden
   // evidence must not reveal the existence of a tag through aggregate counts.
@@ -37,11 +37,12 @@ export async function statistics(env: Env, actor: Actor, input: Record<string, s
     SELECT DISTINCT o.id,o.author_id,o.archive_id,${bucket} day,${id} group_id,${name} name
     FROM observations o JOIN archives a ON a.id=o.archive_id JOIN members m ON m.id=o.author_id
     ${groupedByLabel ? 'LEFT JOIN labels l ON l.archive_id=a.id' : ''}
-    WHERE o.deleted=0 AND a.deleted=0 AND o.created_at>=? AND o.created_at<?
+    WHERE o.deleted=0 AND a.deleted=0 AND o.created_at>=? AND o.created_at<? ${options.asOf?'AND o.created_at<=?':''}
       ${q.archive_type === 'all' ? '' : 'AND a.type=?'}
   ), filtered AS (SELECT * FROM records WHERE name LIKE ? ESCAPE '\\'),
-  totals AS (SELECT group_id,max(name) name,count(DISTINCT id) total FROM filtered GROUP BY group_id),
-  chosen AS (SELECT * FROM totals ORDER BY total DESC,name,group_id LIMIT 50),
+  record_totals AS (SELECT group_id,max(name) name,count(DISTINCT id) total FROM filtered GROUP BY group_id),
+  totals AS (SELECT * FROM record_totals ${q.group==='user'?`UNION ALL SELECT m.id,m.name||'（@'||m.username||'）',0 FROM members m WHERE m.identity_kind='human' AND m.frozen=0 AND NOT EXISTS(SELECT 1 FROM record_totals r WHERE r.group_id=m.id) AND (m.name||'（@'||m.username||'）') LIKE ? ESCAPE '\\'`:''}),
+  chosen AS (SELECT * FROM totals ORDER BY total DESC,name,group_id),
   daily AS (SELECT r.group_id,r.day,count(DISTINCT r.id) count FROM filtered r JOIN chosen c ON c.group_id=r.group_id GROUP BY r.group_id,r.day),
   lines AS (SELECT c.*, (SELECT json_group_object(day,count) FROM daily d WHERE d.group_id=c.group_id) points FROM chosen c)
   SELECT (SELECT count(DISTINCT id) FROM filtered) total,
@@ -51,10 +52,11 @@ export async function statistics(env: Env, actor: Actor, input: Record<string, s
     (SELECT json_group_array(json_object('id',group_id,'name',name,'total',total,'points',json(points))) FROM lines) series`;
   const args = [...(groupedByLabel ? [actor.id,actor.role] : []),
     new Date(q.from+'T00:00:00+08:00').toISOString(),new Date(shiftDate(q.to,1)+'T00:00:00+08:00').toISOString(),
-    ...(q.archive_type==='all'?[]:[q.archive_type]),'%'+q.search.replace(/[\\%_]/g,'\\$&')+'%'];
+    ...(options.asOf?[options.asOf]:[]),...(q.archive_type==='all'?[]:[q.archive_type]),'%'+q.search.replace(/[\\%_]/g,'\\$&')+'%'];
+  if(q.group==='user')args.push('%'+q.search.replace(/[\\%_]/g,'\\$&')+'%');
   const row = await env.DB.prepare(sql).bind(...args).first<{total:number;members:number;archives:number;groups:number;series:string}>();
   const dates = statisticsDates(q.from,q.to,q.interval);
   const series = JSON.parse(row?.series ?? '[]') as {id:string;name:string;total:number;points:Record<string,number>}[];
-  return {query:q,dates,total:row?.total??0,members:row?.members??0,archives:row?.archives??0,groups:row?.groups??0,
+  return {viewer_id:actor.id,query:q,dates,total:row?.total??0,members:row?.members??0,archives:row?.archives??0,groups:row?.groups??0,
     series:series.map(s=>({...s,points:dates.map(d=>s.points[d]??0)}))};
 }

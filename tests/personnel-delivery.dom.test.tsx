@@ -24,11 +24,11 @@ for(const [kind,result,label] of [['audit','audit_passed','审核通过'],['onbo
   const select=w.document.querySelector('.work-task-result select') as unknown as HTMLSelectElement;assert.equal(select.value,'');assert.equal(select.required,true);
   assert.ok([...select.options].some(o=>o.textContent===label));assert.equal([...select.options].some(o=>o.value==='completed'),false);
   await act(async()=>{select.value='unable_to_contact';select.dispatchEvent(new w.Event('change',{bubbles:true}));});
-  assert.ok(w.document.body.textContent!.includes('保留档案当前人事阶段'));
+  assert.ok(w.document.body.textContent!.includes('任务继续保持开启'));
   await act(async()=>{select.value=result;select.dispatchEvent(new w.Event('change',{bubbles:true}));});
   assert.ok(w.document.body.textContent!.includes(kind==='audit'?'默认期限 7 天':'保留原有资料与历史'));
   await act(async()=>w.document.querySelector<HTMLFormElement>('.work-task-result')!.dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true})));
-  assert.equal(submitted,undefined);assert.ok(w.document.body.textContent!.includes('请先在关联档案中记录观察'));
+  assert.equal(submitted,undefined);assert.ok(w.document.body.textContent!.includes('请引用本轮任务创建或重新开启后新增的观察'));
   await act(async()=>w.document.querySelector<HTMLInputElement>('.task-observation-option input')!.click());
   await act(async()=>w.document.querySelector<HTMLFormElement>('.work-task-result')!.dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true})));
   assert.equal(submitted!.result_kind,result);assert.deepEqual(submitted!.references,[{observation_id:'observation',content_version:3}]);assert.equal(saved,1);

@@ -1,6 +1,6 @@
 {
   "format": 1,
-  "count": 37,
+  "count": 41,
   "migrations": {
     "0001_identity.sql": {
       "sha256": "ceb732997de6972d3f88ae3a15b52b4df0def3418cc4b0834cd289ce55daff6a",
@@ -186,6 +186,26 @@
       "sha256": "d1572f624ae56530192725f89f56ac333419007311b3674961f1ea08421b32ef",
       "backwards_compatible": true,
       "reason": "Adds an explicit internal resource catalog and maintenance history. Existing archive resources are not reclassified or rewritten; prior clients preserve omitted fields."
+    },
+    "0038_work_overview.sql": {
+      "sha256": "979bd080f190d70a04d0c343f0863d7dc250be110875d186d05c6a3f423e6946",
+      "backwards_compatible": true,
+      "reason": "Adds independent work overview resources, gaps, experience placements and history; no reuse or conversion of retired graph data, no changes to existing archives or task lifecycle."
+    },
+    "0039_work_overview_resource_deletion.sql": {
+      "sha256": "9f87ceb7e95b0fa3b9376378971319e7913bb2faa2f0c6598abc2f2e946bd74b",
+      "backwards_compatible": true,
+      "reason": "Adds a nullable resource deletion marker; preserves existing resources and historical experience references."
+    },
+    "0040_work_overview_white_resources.sql": {
+      "sha256": "3a4e8bc4b96bf1e727c73aee7170002e4a4a7c6de99bdf3d3b1f26feefc137c8",
+      "backwards_compatible": true,
+      "reason": "Adds manually registered observation-backed resource placeholders and preserves resolved source links without changing existing resources."
+    },
+    "0041_work_recommendations.sql": {
+      "sha256": "7ffee9a9682601594bd213b2e03c9d6fc7f64e8ee2ac9bc7ca2d79fe6b48de02",
+      "backwards_compatible": true,
+      "reason": "Additive recommendation evidence and target links to existing tasks; no changes to existing data or lifecycle."
     }
   }
 }

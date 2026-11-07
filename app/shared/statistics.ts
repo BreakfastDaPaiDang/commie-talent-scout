@@ -6,7 +6,7 @@ export type StatisticsQuery = {
 };
 export type StatisticsSeries = {id: string; name: string; total: number; points: number[]};
 export type StatisticsResult = {
-  query: StatisticsQuery; dates: string[]; series: StatisticsSeries[];
+  viewer_id?: string; query: StatisticsQuery; dates: string[]; series: StatisticsSeries[];
   total: number; members: number; archives: number; groups: number;
 };
 export function shanghaiDate(date = new Date()) {return new Date(date.getTime() + 8 * 3600000).toISOString().slice(0, 10);}
@@ -25,3 +25,10 @@ export function defaultStatisticsQuery(): StatisticsQuery {
   const to = shanghaiDate();
   return {from: shiftDate(to, -29), to, group: 'user', interval: 'day', archive_type: 'all', search: ''};
 }
+
+export function defaultComparison(data:StatisticsResult):string[]{
+ if(data.query.group!=='user')return data.series.slice(0,3).map(s=>s.id);
+ const own=data.series.find(s=>s.id===data.viewer_id);
+ return [...(own?[own.id]:[]),...data.series.filter(s=>s.id!==data.viewer_id).slice(0,3).map(s=>s.id)];
+}
+export function ownFirst(data:StatisticsResult){return data.query.group==='user'?[...data.series].sort((a,b)=>Number(b.id===data.viewer_id)-Number(a.id===data.viewer_id)):data.series;}
