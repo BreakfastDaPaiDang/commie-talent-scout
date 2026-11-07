@@ -1,14 +1,14 @@
 import type {WeeklyReportFormat} from '../shared/weekly-report';
 import React,{useEffect,useMemo,useState,type ReactNode} from 'react';
-import {defaultComparison,ownFirst,defaultStatisticsQuery,shanghaiDate,shiftDate,type StatisticsQuery,type StatisticsResult,type StatisticsGroup} from '../shared/statistics';
+import {defaultComparison,ownFirst,defaultStatisticsQuery,type StatisticsQuery,type StatisticsResult} from '../shared/statistics';
 import './statistics.css';
 
-const groups: [StatisticsGroup,string][] = [['user','用户优先'],['tag','标签优先'],['type','人物／组织优先']];
+const groupLabels={user:'成员',tag:'标签',type:'人物／组织'};
 const colors = ['#9b482f','#326a83','#58834c','#8662a1','#b38025','#287f79','#c0507a','#4c6fb0','#d07a30','#6f9b46','#7b5ba6','#b05555'];
 type Props = {load:(query:StatisticsQuery)=>Promise<StatisticsResult>;getLink?:()=>Promise<string>;renderCharts?:(trend:ReactNode,state:{archiveType:StatisticsQuery['archive_type'];revision:number;refresh:()=>void})=>ReactNode;initialData?:StatisticsResult;initialQuery?:StatisticsQuery;report?:boolean;exportWeekly?:(query:StatisticsQuery,format:WeeklyReportFormat,target:Window|null)=>Promise<void>};
 
 export function StatisticsDashboard({load,getLink,renderCharts,initialData,initialQuery,report=false,exportWeekly}:Props) {
-  const [draft,setDraft]=useState(initialQuery??defaultStatisticsQuery),[query,setQuery]=useState(initialQuery??defaultStatisticsQuery);
+  const [query]=useState(initialQuery??defaultStatisticsQuery);
   const [data,setData]=useState<StatisticsResult|null>(initialData??null),[loading,setLoading]=useState(!initialData),[error,setError]=useState('');
   const [revision,setRevision]=useState(0),[selected,setSelected]=useState<string[]>(initialData?defaultComparison(initialData):[]),[cumulative,setCumulative]=useState(false),[hover,setHover]=useState<number|null>(null),[lineHover,setLineHover]=useState<string|null>(null),[copied,setCopied]=useState(false);
   const [exportFormat,setExportFormat]=useState<WeeklyReportFormat>('pdf');
@@ -21,7 +21,6 @@ export function StatisticsDashboard({load,getLink,renderCharts,initialData,initi
       .finally(()=>{if(active)setLoading(false);});
     return()=>{active=false;};
   },[query,revision,load,report]);
-  function apply(next:StatisticsQuery){setDraft(next);setQuery(next);}
   async function copyLink(){if(!getLink)return;try{const link=new URL(await getLink());Object.entries(query).forEach(([key,value])=>link.searchParams.set(key,value));await navigator.clipboard.writeText(link.toString());setCopied(true);setTimeout(()=>setCopied(false),2000);}catch{/* clipboard unavailable */}}
   const lines=useMemo(()=>data&&ownFirst(data).filter(s=>selected.includes(s.id)).map(s=>{
     let sum=0;return {...s,points:s.points.map(n=>cumulative?(sum+=n):n)};
@@ -32,12 +31,19 @@ export function StatisticsDashboard({load,getLink,renderCharts,initialData,initi
   const y=(n:number)=>270-n/ceiling*220;
   const focusDay=hover===null?null:data?.dates[hover];
   function toggle(id:string){setLineHover(null);setSelected(old=>old.includes(id)?old.filter(x=>x!==id):[...old,id]);}
+  const detailTables=data?<section className="statistics-all-members" aria-label="统计明细"><section className="statistics-details">
+
+        <div className="statistics-table-scroll"><table><thead><tr><th>对比</th><th>{groupLabels[query.group]}</th><th>记录数</th><th>占去重总数</th></tr></thead><tbody>{ownFirst(data).map(s=><tr key={s.id} className={s.id===data.viewer_id?'statistics-self':undefined}><td><input type="checkbox" aria-label={`对比 ${s.name}`} checked={selected.includes(s.id)} onChange={()=>toggle(s.id)}/></td><th scope="row">{s.name}{s.id===data.viewer_id&&<small>我</small>}</th><td>{s.total}</td><td>{data.total?(100*s.total/data.total).toFixed(1):'0.0'}%</td></tr>)}</tbody></table></div>
+        {!data.series.length&&<p className="statistics-empty">没有匹配的分组</p>}
+      </section>
+      {!!lines.length&&<details className="statistics-periods" open={report||undefined}><summary>查看逐期数据</summary><div className="statistics-table-scroll"><table><thead><tr><th>周期起始日</th>{lines.map(s=><th key={s.id}>{s.name}</th>)}</tr></thead><tbody>{data.dates.map((date,i)=><tr key={date}><th scope="row">{date}</th>{lines.map(s=><td key={s.id}>{s.points[i]}</td>)}</tr>)}</tbody></table></div></details>}
+</section>:null;
   const trend=data?<section className="statistics-trend" aria-label="提交趋势与明细">
       <section className="statistics-chart-card" aria-label="提交趋势">
-        <header><div><h2>提交趋势</h2><p>{query.from} — {query.to} · 东八区</p></div><div className="statistics-cumulative" role="group" aria-label="折线模式"><button type="button" aria-pressed={!cumulative} onClick={()=>setCumulative(false)}>新增</button><button type="button" aria-pressed={cumulative} onClick={()=>setCumulative(true)}>累计</button></div></header>
-        {!data.total?<p className="statistics-empty">此范围内暂无观察记录，试试扩大时间范围或清除搜索。</p>:<>
-          {!lines.length?<p className="statistics-empty">在下方明细中选择要对比的分组。</p>:<>
-            <div className="statistics-chart-scroll"><svg className="statistics-chart" viewBox="0 0 920 320" role="img" aria-label={`${cumulative?'累计':'新增'}观察记录折线图，精确值见下方逐期数据表`} onMouseLeave={()=>{setHover(null);setLineHover(null);}} onMouseMove={e=>{const svg=e.currentTarget;const point=svg.createSVGPoint();point.x=e.clientX;point.y=e.clientY;const local=point.matrixTransform(svg.getScreenCTM()!.inverse());setHover(Math.max(0,Math.min(data.dates.length-1,Math.round((local.x-60)/820*(data.dates.length-1)))));}}>
+        <header><div><h2>提交趋势</h2><p>{query.from} — {query.to}</p></div><div className="statistics-cumulative" role="group" aria-label="折线模式"><button type="button" aria-pressed={!cumulative} onClick={()=>setCumulative(false)}>新增</button><button type="button" aria-pressed={cumulative} onClick={()=>setCumulative(true)}>累计</button></div></header>
+        {!data.total?<p className="statistics-empty">暂无观察记录</p>:<>
+          {!lines.length?<p className="statistics-empty">请选择对比成员</p>:<>
+            <div className="statistics-chart-scroll"><svg className="statistics-chart" viewBox="0 0 920 320" role="img" aria-label={`${cumulative?'累计':'新增'}观察记录折线图`} onMouseLeave={()=>{setHover(null);setLineHover(null);}} onMouseMove={e=>{const svg=e.currentTarget;const point=svg.createSVGPoint();point.x=e.clientX;point.y=e.clientY;const local=point.matrixTransform(svg.getScreenCTM()!.inverse());setHover(Math.max(0,Math.min(data.dates.length-1,Math.round((local.x-60)/820*(data.dates.length-1)))));}}>
               {[0,1,2,3,4].map(i=><g key={i}><line x1="60" x2="880" y1={y(i*ceiling/4)} y2={y(i*ceiling/4)} stroke="#e6e5df"/><text x="45" y={y(i*ceiling/4)+4} textAnchor="end">{i*ceiling/4}</text></g>)}
               <text x="60" y="25">记录数（条）</text>
               {data.dates.map((date,i)=>(i===0||i===data.dates.length-1||i%Math.max(1,Math.ceil(data.dates.length/6))===0)&&<text key={date} x={x(i)} y="302" textAnchor="middle">{date.slice(5)}</text>)}
@@ -48,35 +54,17 @@ export function StatisticsDashboard({load,getLink,renderCharts,initialData,initi
           </>}
         </>}
       </section>
-</section>:<section className="statistics-trend" aria-label="提交趋势与明细"><h2>提交趋势</h2><p className="statistics-empty">{loading?'正在汇总…':'提交统计暂不可用'}</p></section>;
-  const detailTables=data?<section className="statistics-all-members" aria-label="统计明细">      <section className="statistics-details"><header className="statistics-members-heading"><h2>{query.group==='user'?'成员明细':'分组明细'}</h2></header>
-
-        <div className="statistics-table-scroll"><table><thead><tr><th>对比</th><th>{groups.find(g=>g[0]===query.group)?.[1].replace('优先','')}</th><th>记录数</th><th>占去重总数</th></tr></thead><tbody>{ownFirst(data).map(s=><tr key={s.id} className={s.id===data.viewer_id?'statistics-self':undefined}><td><input type="checkbox" aria-label={`对比 ${s.name}`} checked={selected.includes(s.id)} onChange={()=>toggle(s.id)}/></td><th scope="row">{s.name}{s.id===data.viewer_id&&<small>我</small>}</th><td>{s.total}</td><td>{data.total?(100*s.total/data.total).toFixed(1):'0.0'}%</td></tr>)}</tbody></table></div>
-        {!data.series.length&&<p className="statistics-empty">没有匹配的分组</p>}
-      </section>
-      {!!lines.length&&<details className="statistics-periods" open={report||undefined}><summary>查看逐期数据</summary><p className="statistics-note">{cumulative?'所选区间内累计记录数':'各期新增记录数'}</p><div className="statistics-table-scroll"><table><thead><tr><th>周期起始日</th>{lines.map(s=><th key={s.id}>{s.name}</th>)}</tr></thead><tbody>{data.dates.map((date,i)=><tr key={date}><th scope="row">{date}</th>{lines.map(s=><td key={s.id}>{s.points[i]}</td>)}</tr>)}</tbody></table></div></details>}
-<details className="statistics-method"><summary>统计口径</summary><p className="statistics-note">按观察首次提交时间统计，编辑、草稿和已删除内容不计入。同组内去重，跨标签可能重复，总数单独去重；周从星期一开始。</p></details></section>:null;
+{detailTables}</section>:<section className="statistics-trend" aria-label="提交趋势与明细"><h2>提交趋势</h2><p className="statistics-empty">{loading?'正在汇总…':'提交统计暂不可用'}</p></section>;
   async function download(){if(!exportWeekly)return;setExporting(true);setExportError('');let target:Window|null=null;try{if(exportFormat==='pdf'){target=window.open('','_blank');if(!target)throw new Error('请允许打开周报窗口，再另存为 PDF');target.document.body.textContent='正在准备本周周报…';}await exportWeekly(query,exportFormat,target);}catch(e){target?.close();setExportError((e as Error).message);}finally{setExporting(false);}}
   return <main className={`statistics-page ${renderCharts?'unified-statistics':''} ${report?'statistics-report':''}`}>
     {!report&&<header className="statistics-heading"><div><h1>统计仪表盘</h1></div><div className="statistics-heading-actions">{exportWeekly&&<><select aria-label="周报格式" value={exportFormat} onChange={e=>setExportFormat(e.target.value as WeeklyReportFormat)} disabled={exporting}><option value="pdf">PDF</option><option value="json">JSON</option></select><button className="button primary" onClick={()=>void download()} disabled={exporting}>{exporting?'正在导出…':'导出本周周报'}</button></>}{getLink&&<button className="button quiet" type="button" onClick={copyLink}>{copied?'已复制':'复制链接'}</button>}<button className="button" onClick={()=>setRevision(v=>v+1)} disabled={loading}>刷新统计</button></div></header>}
     {exportError&&<p className="form-error" role="alert">{exportError}</p>}
-    {!report&&<><div className="statistics-modes" aria-label="统计分组">{groups.map(([key,label])=><button key={key} aria-pressed={query.group===key} onClick={()=>apply({...draft,group:key,search:''})}>{label}</button>)}</div>
-    <form className="statistics-filters" onSubmit={e=>{e.preventDefault();apply({...draft});}}>
-      <label>开始日期<input type="date" required value={draft.from} onChange={e=>setDraft({...draft,from:e.target.value})}/></label>
-      <label>结束日期<input type="date" required min={draft.from} value={draft.to} onChange={e=>setDraft({...draft,to:e.target.value})}/></label>
-      <label>时间粒度<select aria-label="时间粒度" value={draft.interval} onChange={e=>setDraft({...draft,interval:e.target.value as StatisticsQuery['interval']})}><option value="day">按日</option><option value="week">按周</option><option value="month">按月</option></select></label>
-      <label>档案类型<select aria-label="档案类型" value={draft.archive_type} onChange={e=>setDraft({...draft,archive_type:e.target.value as StatisticsQuery['archive_type']})}><option value="all">全部档案</option><option value="person">人物</option><option value="org">组织</option></select></label>
-      <label className="statistics-search">搜索分组<input maxLength={100} placeholder="输入用户、标签或类别名称" value={draft.search} onChange={e=>setDraft({...draft,search:e.target.value})}/></label>
-      <button className="button primary" type="submit">应用筛选</button>
-      <div className="statistics-presets">{[7,30,90,365].map(days=><button className="button quiet" type="button" key={days} onClick={()=>{const to=shanghaiDate();apply({...draft,from:shiftDate(to,1-days),to});}}>近 {days} 天</button>)}</div>
-    </form></>}
     {loading&&<p role="status" className="statistics-empty">正在汇总提交记录…</p>}
     {error&&<div role="alert" className="statistics-empty"><p>{error}</p><button className="button" onClick={()=>setRevision(v=>v+1)}>重试</button></div>}
     {data&&<>
       <section className="statistics-summary" aria-label="统计概览">{[[data.total,'观察记录'],[data.members,'提交成员'],[data.archives,'涉及档案'],[data.groups,'统计分组']].map(([value,label])=><div key={label}><strong>{Number(value).toLocaleString('zh-CN')}</strong><span>{label}</span></div>)}</section>
     </>}
     {renderCharts?renderCharts(trend,{archiveType:query.archive_type,revision,refresh:()=>setRevision(v=>v+1)}):trend}
-    {detailTables}
-    {!renderCharts&&<p className="statistics-note">按观察记录的首次提交时间统计，编辑、草稿和已删除内容不计入。标签及类别按档案当前可见绑定归类，关闭档案使用关闭时的标签；同组内去重，跨组可能重复，总记录数单独去重。周从星期一开始，累计值仅计算所选区间。</p>}
+
   </main>;
 }
