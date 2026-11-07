@@ -1,0 +1,2 @@
+// Restore before the first paint; private/restricted storage must not block login.
+(()=>{let mode='light';try{const saved=localStorage.getItem('cts-display-mode');if(saved==='night'||saved==='care')mode=saved;}catch{}document.documentElement.dataset.theme=mode;document.documentElement.style.colorScheme=mode==='night'?'dark':'light';document.querySelector('meta[name="theme-color"]')?.setAttribute('content',mode==='night'?'#151719':mode==='care'?'#eee6d5':'#202020');})();

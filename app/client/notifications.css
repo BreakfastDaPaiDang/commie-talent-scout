@@ -6,7 +6,7 @@
 .inbox-heading>div{display:flex;align-items:center;gap:14px}
 .inbox-heading .button{font-size:14px;min-height:40px;padding:8px 12px;white-space:nowrap}
 .inbox-list .update-row{padding:22px 26px;gap:16px;border-bottom:1px solid var(--line);border-top:0}
-.inbox-list .update-row.selected{background:#fff3f1;box-shadow:inset 3px 0 var(--red)}
+.inbox-list .update-row.selected{background:var(--theme-soft,#fff3f1);box-shadow:inset 3px 0 var(--red)}
 .inbox-list .update-row h2{font-size:20px;line-height:1.5;margin:4px 0}
 .inbox-list .update-row p{font-size:15px;margin:5px 0}
 .inbox-list .update-row time,.inbox-list .kind-label{font-size:12px}

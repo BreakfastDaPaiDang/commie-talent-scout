@@ -1,3 +1,4 @@
+import {ThemePicker} from '../../../app/ui/ThemePicker';
 import {PasswordInput} from '../../../app/ui/PasswordInput';
 import {Modal as SharedModal} from '../../../app/ui/Modal';
 import React, {
@@ -130,7 +131,7 @@ export function TimelineEntry({children,id,highlighted}) {
 
 export function Login({ onLogin }) {
   return (
-    <div className="login-page">
+    <div className="login-page"><ThemePicker/>
       <section className="login-scene" aria-hidden="true">
         <img src="/art/login-observatory-v4.png" alt="" />
       </section>
