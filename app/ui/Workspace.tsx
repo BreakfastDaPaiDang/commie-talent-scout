@@ -7,6 +7,9 @@ import {Icon,Mark} from './icons';
 export function IconButton({name,label,...props}:{name:string;label:string}&React.ButtonHTMLAttributes<HTMLButtonElement>){
  return <button type="button" className="icon-button" aria-label={label} title={label} {...props}><Icon name={name}/></button>;
 }
+export function AgentNav({active=false,onClick}:{active?:boolean;onClick:()=>void}){
+ return <button type="button" className={'tool-link agent-nav '+(active?'active':'')} aria-current={active?'page':undefined} onClick={onClick}><Icon name="agent"/><span>Agent 接入</span></button>;
+}
 export function AuxiliaryToolsNav({active,onClick}:{active:boolean;onClick:()=>void}){
  return <button type="button" className={'tool-link '+(active?'active':'')} aria-label="辅助工具" title="辅助工具" aria-current={active?'page':undefined} onClick={onClick}><Icon name="folder"/><span>辅助工具</span></button>;
 }

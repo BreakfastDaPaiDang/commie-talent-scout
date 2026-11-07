@@ -1,5 +1,5 @@
 import {UnreadNav} from '../../../app/ui/UnreadNav';
-import {TopBar,ArchiveHead,AuxiliaryToolsNav} from '../../../app/ui/Workspace';
+import {TopBar,ArchiveHead,AuxiliaryToolsNav,AgentNav} from '../../../app/ui/Workspace';
 import {AuxiliaryTools} from '../../../app/ui/AuxiliaryTools';
 import {StatisticsPreview} from './StatisticsPreview';
 import React from "react";
@@ -59,13 +59,7 @@ export default function App() {
           ))}
 </>} tools={<>
           <AuxiliaryToolsNav active={w.page==='tools'} onClick={()=>w.navigate('tools')}/>
-          <button
-            className={`tool-link ${w.page === "agent" ? "active" : ""}`}
-            onClick={() => w.navigate("agent")}
-          >
-            <Icon name="agent" />
-            <span>Agent 接入</span>
-          </button>
+          <AgentNav active={w.page==='agent'} onClick={()=>w.navigate('agent')}/>
           <UnreadNav active={w.page==='unread'} onClick={()=>w.navigate('unread')}>{w.unreadEntities.length>0&&<span className="nav-unread">{w.unreadEntities.length}</span>}</UnreadNav>
           {w.actor.role === "admin" && (
             <IconButton
@@ -100,9 +94,7 @@ export default function App() {
       {w.menuOpen && (
         <div className="mobile-menu">
           <Button icon="bell" onClick={()=>w.navigate("unread")}>未读更新{w.unreadEntities.length>0&&<span> {w.unreadEntities.length}</span>}</Button>
-          <Button icon="agent" onClick={() => w.navigate("agent")}>
-            Agent 接入
-          </Button>
+          <AgentNav active={w.page==='agent'} onClick={()=>w.navigate('agent')}/>
           <Button onClick={() => w.navigate("tools")}>辅助工具</Button>
           <Button onClick={() => w.navigate("statistics")}>统计仪表盘</Button>
           {w.actor.role === "admin" && (
