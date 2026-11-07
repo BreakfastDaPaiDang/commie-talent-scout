@@ -13,7 +13,7 @@ export function WorkRecommendations({person,api,revision,openTask,onBusy,onDirty
  function choose(candidate:WorkRecommendation){setSelected(candidate);setBasis(data!.evidence);setTitle(`协助${person.name}对接${candidate.name}`);setPurpose(`联系并确认${candidate.name}是否适合，协调一次实际对接。`);setDeadline(localDate(new Date(Date.now()+7*86400000)));const current=person.tasks.find(t=>t.follow_up!==false&&t.owner_name===person.owner_name)?.owner_id;setOwner(data!.assignees.some(a=>a.id===current)?current!:data!.actor_id);setError('');setCreated(null);}
  async function accept(){
   if(!selected||!basis)return;
-  const input=attempt??{archive_id:person.id,title,purpose,delivery:'新增观察，记录本人意愿、接收方确认情况、实际对接结果及后续约定。',deadline_at:new Date(deadline).toISOString(),handoff:{observation_id:basis.id,content_version:basis.content_version,target_kind:selected.kind,target_id:selected.id,target_version:selected.version,owner_id:owner}};
+  const input=attempt??{archive_id:person.id,title,purpose,delivery:'新增观察，记录本人意愿、接收方确认情况、实际对接结果及后续约定。',deadline_at:new Date(deadline).toISOString(),handoff:{observation_id:basis.id,content_version:basis.content_version,target_kind:selected.kind,target_id:selected.id,target_version:selected.version,target_fingerprint:selected.fingerprint,owner_id:owner}};
   setBusy(true);onBusy(true);setError('');setAttempt(input);
   let unresolved=false;
   try{const result=await api.accept(input);setCreated(result);setSelected(null);setAttempt(null);setReload(v=>v+1);refresh();}

@@ -1,9 +1,9 @@
 export type RecommendationKind='resource'|'person'|'task';
 export type RecommendationTarget={kind:RecommendationKind;id:string;version:number;name:string;text:string;conditions:string[]};
-export type WorkRecommendation=RecommendationTarget&{matches:string[];reason:string};
+export type WorkRecommendation=RecommendationTarget&{matches:string[];reason:string;fingerprint:string};
 export type RecommendationEvidence={id:string;content_version:number;body:string;created_at:string};
-export type RecommendationData={evidence:RecommendationEvidence|null;candidates:WorkRecommendation[];assignees:{id:string;name:string}[];actor_id:string;accepted:{task_id:string;title:string;status:string;owner_name:string|null;result_text:string|null;target_name:string;target_kind:RecommendationKind;target_id:string;content_version:number;observation_id:string}[]};
-export type RecommendationAcceptance={archive_id:string;title:string;purpose:string;delivery:string;deadline_at:string;handoff:{observation_id:string;content_version:number;target_kind:RecommendationKind;target_id:string;target_version:number;owner_id:string}};
+export type RecommendationData={archive_version:number;evidence:RecommendationEvidence|null;candidates:WorkRecommendation[];assignees:{id:string;name:string}[];actor_id:string;accepted:{task_id:string;title:string;status:string;owner_name:string|null;result_text:string|null;target_name:string;target_kind:RecommendationKind;target_id:string;content_version:number;observation_id:string}[]};
+export type RecommendationAcceptance={archive_id:string;title:string;purpose:string;delivery:string;deadline_at:string;handoff:{observation_id:string;content_version:number;target_kind:RecommendationKind;target_id:string;target_version:number;target_fingerprint:string;owner_id:string}};
 export type RecommendationAPI={load:(archiveId:string,observationId?:string)=>Promise<RecommendationData>;accept:(input:RecommendationAcceptance)=>Promise<{id:string;reused?:boolean}>};
 
 // Deliberately lexical: a shared topic is a reason to investigate, not proof of suitability.
@@ -20,6 +20,7 @@ export function matchingTerms(body:string,text:string):string[]{
   return !/(?:不想|不愿|不再|拒绝|不需要|不考虑|不适合|暂不|无法|没兴趣|不感兴趣)[^，。；！？\n]{0,4}$/.test(before);
  }).slice(0,6);
 }
-export function recommendFromObservation(evidence:RecommendationEvidence,targets:RecommendationTarget[]):WorkRecommendation[]{
- return targets.map(t=>{const matches=matchingTerms(evidence.body,t.name+' '+t.text);return {...t,matches,reason:`观察与候选资料均提及「${matches.join('、')}」`};}).filter(t=>t.matches.length>0).sort((a,b)=>b.matches.length-a.matches.length||a.name.localeCompare(b.name,'zh-CN')||a.id.localeCompare(b.id));
+export async function recommendFromObservation(evidence:RecommendationEvidence,targets:RecommendationTarget[]):Promise<WorkRecommendation[]>{
+ const ranked=targets.map(t=>{const matches=matchingTerms(evidence.body,t.name+' '+t.text);return {...t,matches,reason:`观察与候选资料均提及「${matches.join('、')}」`};}).filter(t=>t.matches.length>0).sort((a,b)=>b.matches.length-a.matches.length||a.name.localeCompare(b.name,'zh-CN')||a.id.localeCompare(b.id));
+ return Promise.all(ranked.map(async candidate=>({...candidate,fingerprint:[...new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(candidate))))].map(b=>b.toString(16).padStart(2,'0')).join('')})));
 }
