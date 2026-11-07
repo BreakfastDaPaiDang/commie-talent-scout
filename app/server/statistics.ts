@@ -49,7 +49,7 @@ export async function statistics(env: Env, actor: Actor, input: Record<string, s
     (SELECT count(DISTINCT author_id) FROM filtered) members,
     (SELECT count(DISTINCT archive_id) FROM filtered) archives,
     (SELECT count(*) FROM totals) groups,
-    (SELECT json_group_array(json_object('id',group_id,'name',name,'total',total,'points',json(points))) FROM lines) series`;
+    (SELECT json_group_array(json_object('id',group_id,'name',name,'total',total,'points',json(points),'archive_path',${q.group==='user'?"(SELECT (CASE a.type WHEN 'org' THEN '/organizations' ELSE CASE a.person_role WHEN 'member' THEN '/members' ELSE '/' END END)||'?archive='||a.id FROM archives a WHERE a.linked_account_id=lines.group_id AND a.deleted=0)":'NULL'})) FROM lines) series`;
   const args = [...(groupedByLabel ? [actor.id,actor.role] : []),
     new Date(q.from+'T00:00:00+08:00').toISOString(),new Date(shiftDate(q.to,1)+'T00:00:00+08:00').toISOString(),
     ...(options.asOf?[options.asOf]:[]),...(q.archive_type==='all'?[]:[q.archive_type]),'%'+q.search.replace(/[\\%_]/g,'\\$&')+'%'];

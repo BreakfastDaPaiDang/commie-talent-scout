@@ -85,3 +85,17 @@ test('all active human members include zero submissions, self plus three default
   assert.equal((await statistics(env,actor,{...query,search:'zero54'})).series.length,1);
  }finally{db.close();}
 });
+
+
+test('member links use explicit account bindings, omit deleted archives and never guess by name',async()=>{
+ const {db,run,env,actor,query}=fixture();try{
+  run("UPDATE archives SET name='同名成员',linked_account_id='u1',person_role='member' WHERE id='a1'");
+  let result=await statistics(env,actor,query);
+  assert.equal(result.series.find(s=>s.id==='u1')?.archive_path,'/members?archive=a1');
+  assert.equal(result.series.find(s=>s.id==='u2')?.archive_path,null);
+  assert.ok((await statistics(env,actor,{...query,group:'tag'})).series.every(s=>s.archive_path===null));
+  run("UPDATE archives SET deleted=1 WHERE id='a1'");
+  result=await statistics(env,actor,query);
+  assert.equal(result.series.find(s=>s.id==='u1')?.archive_path,null);
+ }finally{db.close();}
+});
