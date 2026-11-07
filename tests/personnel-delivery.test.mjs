@@ -6,6 +6,7 @@ import {Archives} from '../app/server/archives.ts';
 import {Observations} from '../app/server/observations.ts';
 import {WorkTasks} from '../app/server/work-tasks.ts';
 
+async function fresh(f,id){const o=await new Observations(f.env,f.actor,'web').create({archive_id:id,body:'本轮新观察',request_id:uuid()});return [{observation_id:o.id,content_version:1}];}
 async function setup(f,source='web'){
  const archives=new Archives(f.env,f.actor,source),tasks=new WorkTasks(f.env,f.actor,source);
  const a=await archives.create({type:'person',name:'虚构人事交付闭环',request_id:uuid()});
@@ -29,12 +30,13 @@ for(const source of ['web','mcp'])test(`${source}: explicit personnel delivery a
  assert.equal(f.sqlite.prepare("SELECT count(*) n FROM work_tasks WHERE archive_id=? AND kind='onboarding'").get(s.id).n,1);
  const otherEntry=new WorkTasks(f.env,f.actor,source==='web'?'mcp':'web');
  const claimed=await otherEntry.claim({id:next.id,expected_version:next.version,request_id:uuid()});
- const finish=await otherEntry.complete({...s.input,id:next.id,expected_version:claimed.version,result_kind:'onboarding_completed',result_text:'对接完成',request_id:uuid()});
+ const nextRefs=await fresh(f,s.id);
+ const finish=await otherEntry.complete({...s.input,references:nextRefs,id:next.id,expected_version:claimed.version,result_kind:'onboarding_completed',result_text:'对接完成',request_id:uuid()});
  assert.equal(finish.archive_status,'已入伙');assert.equal(finish.next_task_id,null);
  const joined=await s.archives.get(s.id);assert.equal(joined.person_role,'member');assert.equal(joined.member_status,'可接工作');assert.equal(joined.closed,false);
  assert.equal((await s.archives.list({type:'person',person_scope:'external'})).archives.some(a=>a.id===s.id),false);
  assert.equal((await s.archives.list({type:'person',person_scope:'members'})).archives.some(a=>a.id===s.id),true);
- assert.deepEqual((await otherEntry.detail(next.id)).task.result_references,[{...s.input.references[0],archive_id:s.id}]);
+ assert.deepEqual((await otherEntry.detail(next.id)).task.result_references,[{...nextRefs[0],archive_id:s.id}]);
  const events=f.sqlite.prepare("SELECT after_json FROM archive_events WHERE archive_id=? AND kind='archive.state_changed' ORDER BY seq").all(s.id).map(e=>JSON.parse(e.after_json));
  assert.deepEqual(events.map(e=>e.status),['人事审核','已加入待对接','已入伙']);assert.equal(events[1].task_id,next.id);
  assert.equal(f.sqlite.prepare('SELECT count(*) n FROM mutation_guards').get().n,0);
@@ -42,7 +44,7 @@ for(const source of ['web','mcp'])test(`${source}: explicit personnel delivery a
 
 for(const result_kind of ['completed','continue','unable_to_contact','not_suitable','joined','discarded'])test(`legacy or non-approval result ${result_kind} does not infer approval`,async t=>{
  const f=fixture();t.after(f.close);const s=await setup(f),before=await s.archives.get(s.id);
- await s.tasks.complete({...s.input,result_kind});
+ await s.tasks.complete({...s.input,result_kind,...(result_kind==='unable_to_contact'?{next_contact_at:'2099-01-01T00:00:00.000Z'}:{})});
  const after=await s.archives.get(s.id);assert.equal(after.status,'人事审核');assert.equal(after.version,before.version);
  assert.equal(f.sqlite.prepare("SELECT count(*) n FROM work_tasks WHERE archive_id=? AND kind='onboarding'").get(s.id).n,0);
 });
@@ -52,7 +54,7 @@ test('labels and manual audit tasks cannot approve an archive, nor can an audit 
  for(const kind of ['audit','onboarding','custom']){
   const task=await s.tasks.create({archive_id:s.id,kind,labels:['人事审核'],title:'普通手动任务',purpose:'记录工作',delivery:'交付结果',deadline_at:'2099-01-01T00:00:00.000Z',request_id:uuid()});
   const claimed=await s.tasks.claim({id:task.id,expected_version:1,request_id:uuid()});
-  await assert.rejects(s.tasks.complete({...s.input,id:task.id,expected_version:claimed.version}),{code:'INVALID_PERSONNEL_RESULT'});
+  const currentRefs=await fresh(f,s.id);await assert.rejects(s.tasks.complete({...s.input,references:currentRefs,id:task.id,expected_version:claimed.version}),{code:'INVALID_PERSONNEL_RESULT'});
  }
  await assert.rejects(s.tasks.complete({...s.input,result_kind:'onboarding_completed'}),{code:'INVALID_PERSONNEL_RESULT'});
  await assert.rejects(s.tasks.complete({...s.input,references:[]}),{code:'OBSERVATION_REFERENCE_REQUIRED'});
@@ -65,7 +67,7 @@ test('pre-advanced and reopened deliveries do not regress archives, duplicate on
  const result=await s.tasks.complete(s.input);assert.equal(result.archive_advanced,false);assert.equal(result.archive_version,advanced.archive_version);
  archive=await s.archives.get(s.id);await s.archives.setState({id:s.id,expected_version:archive.version,status:'已入伙',member_status:'请假',member_ids:[],request_id:uuid()});
  const reopened=await s.tasks.reopen({id:s.task.id,expected_version:result.version,owner_mode:'keep',deadline_at:'2099-01-01T00:00:00.000Z',request_id:uuid()});
- const before=await s.archives.get(s.id);
+ s.input.references=await fresh(f,s.id);const before=await s.archives.get(s.id);
  const again=await s.tasks.complete({...s.input,expected_version:reopened.version,request_id:uuid()});
  assert.equal(again.archive_status,'已入伙');assert.equal(again.archive_advanced,false);assert.equal((await s.archives.get(s.id)).version,before.version);assert.equal((await s.archives.get(s.id)).member_status,'请假');
  assert.equal(f.sqlite.prepare("SELECT count(*) n FROM work_tasks WHERE archive_id=? AND kind='onboarding'").get(s.id).n,1);
@@ -76,12 +78,12 @@ test('withdrawn or earlier-round tasks cannot advance the current personnel stag
  const withdrawn=await s.archives.setState({id:s.id,expected_version:archive.version,status:'个人接触',member_ids:[],request_id:uuid()});
  const oldTask=(await s.tasks.detail(s.task.id)).task;
  const reopened=await s.tasks.reopen({id:oldTask.id,expected_version:oldTask.version,owner_mode:'keep',deadline_at:'2099-01-01T00:00:00.000Z',request_id:uuid()});
- await assert.rejects(s.tasks.complete({...s.input,expected_version:reopened.version,request_id:uuid()}),{code:'PERSONNEL_STAGE_CHANGED'});
+ s.input.references=await fresh(f,s.id);await assert.rejects(s.tasks.complete({...s.input,expected_version:reopened.version,request_id:uuid()}),{code:'PERSONNEL_STAGE_CHANGED'});
  await s.tasks.cancel({id:oldTask.id,expected_version:reopened.version,reason:'结束旧审核',request_id:uuid()});
- const current=await s.tasks.refer({archive_id:s.id,expected_version:withdrawn.version,deadline_at:'2099-01-01T00:00:00.000Z',request_id:uuid()});
+ const current=await s.tasks.refer({archive_id:s.id,expected_version:(await s.archives.get(s.id)).version,deadline_at:'2099-01-01T00:00:00.000Z',request_id:uuid()});
  const old=(await s.tasks.detail(oldTask.id)).task;
  const stale=await s.tasks.reopen({id:old.id,expected_version:old.version,owner_mode:'keep',deadline_at:'2099-01-01T00:00:00.000Z',request_id:uuid()});
- await assert.rejects(s.tasks.complete({...s.input,expected_version:stale.version,request_id:uuid()}),{code:'PERSONNEL_STAGE_CHANGED'});
+ s.input.references=await fresh(f,s.id);await assert.rejects(s.tasks.complete({...s.input,expected_version:stale.version,request_id:uuid()}),{code:'PERSONNEL_STAGE_CHANGED'});
  assert.equal((await s.tasks.detail(current.task_id)).task.status,'open');assert.equal((await s.archives.get(s.id)).status,'人事审核');
 });
 

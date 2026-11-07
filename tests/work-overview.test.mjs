@@ -24,7 +24,7 @@ test('only current task responsibility is used and multiple owners are not guess
  assert.equal(buildOverviewPerson(archive,events,[],[],[t],at).owner_name,'甲');assert.equal(buildOverviewPerson(archive,events,[],[],[t,{...t,id:'other',owner_id:'n',owner_name:'乙'}],at).assignment,'conflict');assert.equal(buildOverviewPerson(archive,events,[],[],[{...t,owner_frozen:true}],at).assignment,'unassigned');
 });
 test('resource count and capacity are separate and unknown capacity remains explicit',()=>{
- const rows=resourceDistribution([{id:'r',name:'群',kind:'群聊',version:1,purposes:['contact','review'],capacity:null,active:true,note:''},{id:'r2',name:'项目',kind:'项目',version:1,purposes:['contact'],capacity:8,active:true,note:''}]);assert.equal(rows[0].count,2);assert.equal(rows[0].capacity,8);assert.equal(rows[0].unknown,1);assert.equal(rows[1].count,1);
+ const rows=resourceDistribution([{id:'r',name:'群',kind:'群聊',version:1,purposes:['contact','review'],capacity:null,active:true,note:''},{id:'r2',name:'项目',kind:'项目',version:1,purposes:['contact'],capacity:8,active:true,note:''}]);assert.equal(rows.find(r=>r.id==='contact+review').count,1);assert.equal(rows.find(r=>r.id==='contact').capacity,8);assert.equal(rows[0].unknown,1);assert.equal(rows.reduce((n,r)=>n+r.count,0),2);
 });
 
 const resource=()=>({entity:'resource',id:randomUUID(),expected_version:0,request_id:randomUUID(),name:'虚构资源',kind:'群聊',purposes:['contact'],capacity:null,active:true,note:''});
@@ -53,8 +53,8 @@ test('explicit follow-up tasks appear in overview, claim determines owner, close
  const a=await new Archives(f.env,f.actor,'web').create({type:'person',name:'测试跟进',request_id:randomUUID()});
  const work=new WorkTasks(f.env,f.actor,'web'),overview=new WorkOverview(f.env,f.actor);
  const input={archive_id:a.id,title:'联系',purpose:'了解近况',delivery:'新增观察',deadline_at:new Date(Date.now()+7*dayMs).toISOString(),request_id:randomUUID()};
- await work.create(input);assert.equal((await overview.read({})).people[0].tasks.length,0);
- const follow=await work.create({...input,follow_up:true,request_id:randomUUID()});assert.equal((await overview.read({})).people[0].tasks[0].id,follow.id);
+ await work.create(input);assert.equal((await overview.read({})).people[0].tasks.length,1);assert.equal((await overview.read({})).people[0].assignment,'unassigned');
+ const follow=await work.create({...input,follow_up:true,request_id:randomUUID()});assert.equal((await overview.read({})).people[0].tasks.find(t=>t.follow_up).id,follow.id);
  const reused=await work.create({...input,follow_up:true,request_id:randomUUID()});assert.equal(reused.id,follow.id);assert.equal(reused.reused,true);
  await work.claim({id:follow.id,expected_version:1,request_id:randomUUID()});assert.equal((await overview.read({})).people[0].assignment,'assigned');
  f.sqlite.prepare("UPDATE work_tasks SET status='completed' WHERE id=?").run(follow.id);assert.equal((await overview.read({})).people[0].assignment,'unassigned');
@@ -68,7 +68,7 @@ test('independent resources allow no purpose; deleting removes supply without er
  const a=await new Archives(f.env,f.actor,'web').create({type:'person',name:'保留经历',request_id:randomUUID()});const event=f.sqlite.prepare("SELECT id FROM archive_events WHERE archive_id=? AND kind='archive.created'").get(a.id);
  const placement={entity:'placement',id:randomUUID(),expected_version:0,archive_id:a.id,event_id:event.id,resource_ids:[r.id],note:'真实使用过',usage:'active',request_id:randomUUID()};await w.save(placement);
  const deletion={entity:'resource_delete',id:r.id,expected_version:2,request_id:randomUUID()};await w.save(deletion);assert.equal((await w.save(deletion)).replayed,true);
- const data=await w.read({});assert.equal(data.resources[0].deleted,true);assert.equal(resourceDistribution(data.resources)[0].count,0);assert.equal(data.people[0].segments[0].placements[0].resource_ids[0],r.id);assert.equal(data.people[0].segments[0].placements[0].note,'真实使用过');
+ const data=await w.read({});assert.equal(data.resources[0].deleted,true);assert.equal(resourceDistribution(data.resources).length,0);assert.equal(data.people[0].segments[0].placements[0].resource_ids[0],r.id);assert.equal(data.people[0].segments[0].placements[0].note,'真实使用过');
  await assert.rejects(()=>w.save({...r,expected_version:3,request_id:randomUUID()}),e=>e.code==='RESOURCE_DELETED');
  await w.save({...placement,expected_version:1,note:'补充原记录',request_id:randomUUID()});
  await w.save({...placement,expected_version:2,resource_ids:[],request_id:randomUUID()});

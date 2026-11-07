@@ -1,6 +1,6 @@
 import {isMemberArchive,type PersonIdentity} from './archive-states.ts';
 
-type DeliveryTask={archive_id?:unknown;source?:unknown;kind?:unknown};
+type DeliveryTask={archive_id?:unknown;source?:unknown;kind?:unknown;requires_observation_reference?:boolean};
 export function personnelDeliveryKind(task:DeliveryTask){
  return task.archive_id&&task.source==='rule'&&(task.kind==='audit'||task.kind==='onboarding')?task.kind:null;
 }
@@ -16,6 +16,7 @@ export function taskCompletionOptions(task:DeliveryTask){
   {value:'continue',label:'建议继续'},{value:'unable_to_contact',label:'暂未联系到'},{value:'not_suitable',label:'不再继续'}];
 }
 export function taskCompletionEffect(task:DeliveryTask,result:string){
+ if(task.requires_observation_reference&&result==='unable_to_contact')return '记录本次尝试并设置下一次联系时间，任务继续保持开启。';
  if(isPersonnelDeliveryResult(result)&&personnelDeliveryKind(task)===personnelDeliveryResults[result].kind)return personnelDeliveryResults[result].effect;
  return personnelDeliveryKind(task)&&result?'仅结束本次任务，保留档案当前人事阶段。':null;
 }
@@ -24,10 +25,10 @@ export function taskResultLabel(result:string){
 }
 
 // Business provenance, not editable labels, determines whether delivery must leave an archive observation.
-export function taskRequiresObservation(task:{archive_id?:unknown;kind?:unknown;automation_rule?:unknown}){
- return !!task.archive_id&&(['audit','onboarding','monthly'].includes(String(task.kind))||task.automation_rule==='archive.follow_up');
+export function taskRequiresObservation(task:{archive_id?:unknown;kind?:unknown;automation_rule?:unknown;follow_up?:unknown}){
+ return !!task.archive_id&&(['audit','onboarding','monthly'].includes(String(task.kind))||task.automation_rule==='archive.follow_up'||!!task.follow_up);
 }
-export const observationRequiredMessage='请先在关联档案中记录观察，再选择至少一条观察提交交付；暂未联系到也可如实记录。';
+export const observationRequiredMessage='请引用本轮任务创建或重新开启后新增的观察。';
 
 // Read-time hint only. Neither changing personnel state nor satisfying this condition completes a task.
 export function taskDeliveryReady(task:{status?:unknown;kind?:unknown;owner_id?:unknown;source?:unknown},archive:(PersonIdentity&{closed?:boolean;deleted?:boolean})|null){

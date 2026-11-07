@@ -32,8 +32,9 @@ for(const source of ['web','mcp'])test(`${source}: personnel deliveries require 
    await assert.rejects(service.complete({...input,references:[{observation_id:correct.id,content_version:999}]}),{code:'REFERENCE_NOT_VISIBLE'});
    input.references=[{observation_id:correct.id,content_version:1}];
   }
-  const completed=await service.complete(input);assert.equal(completed.status,'completed');
-  assert.equal((await service.detail(task.id)).task.result_references.length,required?1:0);
+  if(required){const fresh=await observations.create({archive_id:archive.id,body:'本轮尝试未联系到，约定继续联系',request_id:uuid()});input.references=[{observation_id:fresh.id,content_version:1}];input.next_contact_at='2099-01-01T00:00:00.000Z';}
+  const completed=await service.complete(input);assert.equal(completed.status,required?'open':'completed');
+  assert.equal((await service.detail(task.id)).task.result_references.length,0);
   assert.equal((await service.complete(input)).replayed,true);
  }
 });

@@ -64,8 +64,8 @@ test('all member states preserve historical followup; default creation and legac
  const unreachable=(await tasks.list({archive_id:ids[2]})).tasks[0];
  const observation=await new Observations(f.env,f.actor,'web').create({archive_id:ids[2],body:'本月暂时联系不到，保留后续关注。',request_id:uuid()});
  const claimed=await tasks.claim({id:unreachable.id,expected_version:unreachable.version,request_id:uuid()});
- const completed=await tasks.complete({id:unreachable.id,expected_version:claimed.version,result_kind:'unable_to_contact',result_text:'已如实留档，后续继续联系。',references:[{observation_id:observation.id,content_version:observation.content_version}],request_id:uuid()});
- assert.equal(completed.result_kind,'unable_to_contact');assert.equal((await s.get(ids[2])).member_status,'失联');
+ const completed=await tasks.complete({id:unreachable.id,expected_version:claimed.version,result_kind:'unable_to_contact',next_contact_at:'2099-01-01T00:00:00.000Z',result_text:'已如实留档，后续继续联系。',references:[{observation_id:observation.id,content_version:observation.content_version}],request_id:uuid()});
+ assert.equal(completed.status,'open');assert.equal((await s.get(ids[2])).member_status,'失联');
  let a=await s.get(ids[0]);await s.setState(change(a,'已入伙',{member_status:'请假'}));
  assert.equal((await tasks.list({archive_id:a.id})).tasks[0].status,'open');
  assert.equal((await tasks.list({archive_id:a.id})).tasks.length,1);
