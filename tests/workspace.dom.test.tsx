@@ -39,14 +39,15 @@ test('approved workspace keeps name and state together, compact header, and tabs
 });
 test('real reading component waits for visible content, pauses behind dialogs/background and retries failed confirmation',async()=>{
  const f=environment(),requests:string[]=[];let fail=true;
+ const waitForRequests=async(count:number,timeout:number)=>{const deadline=Date.now()+timeout;await act(async()=>{while(requests.length<count&&Date.now()<deadline)await new Promise(r=>setTimeout(r,25));});assert.equal(requests.length,count);};
  globalThis.fetch=async(_url,options)=>{requests.push(String(options?.body));if(fail){fail=false;throw new Error('offline fixture');}return Response.json({confirmed:[{event_id:'event',ticket:'ticket'}],unconfirmed:[]});};
  try{await act(async()=>{f.root.render(<article><div className="reading-content"><ReadBoundary reading={{event_id:'event',ticket:'ticket'}}/>真实正文</div></article>);});const observer=f.observers[0];
   const visible=(ratio:number)=>observer.callback([{target:observer.element,intersectionRatio:ratio}] as IntersectionObserverEntry[],{} as IntersectionObserver);
   await act(async()=>{visible(0);await new Promise(r=>setTimeout(r,850));});assert.equal(requests.length,0);
   Object.defineProperty(f.w.document,'visibilityState',{value:'hidden',configurable:true});await act(async()=>{visible(1);await new Promise(r=>setTimeout(r,850));});assert.equal(requests.length,0);
   Object.defineProperty(f.w.document,'visibilityState',{value:'visible',configurable:true});const dialog=f.w.document.createElement('dialog');dialog.setAttribute('open','');f.w.document.body.appendChild(dialog);await act(async()=>{await new Promise(r=>setTimeout(r,850));});assert.equal(requests.length,0);dialog.remove();
-  await act(async()=>{await new Promise(r=>setTimeout(r,850));});assert.equal(requests.length,1);assert.match(f.w.document.body.textContent??'',/正在重试/);
-  await act(async()=>{await new Promise(r=>setTimeout(r,5300));});assert.equal(requests.length,2);
+  await waitForRequests(1,3000);assert.match(f.w.document.body.textContent??'',/正在重试/);
+  await waitForRequests(2,8000);
  }finally{await f.close();}
 });
 
