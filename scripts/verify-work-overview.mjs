@@ -34,13 +34,14 @@ const context=await browser.newContext({viewport:{width:1440,height:1080}});cons
 await context.addCookies([{name:'cts_session',value:token,url:base}]);
 async function assertFitted(){
  const layout=await page.evaluate(()=>{const tracks=[...document.querySelectorAll('.wo-track')];return {overflow:document.querySelector('.wo-timeline-scroll').scrollWidth>document.querySelector('.wo-timeline-scroll').clientWidth+1,ratios:tracks.map(el=>({width:el.getBoundingClientRect().width,sum:[...el.querySelectorAll('.wo-segment')].reduce((n,s)=>n+s.getBoundingClientRect().width,0),overflow:el.scrollWidth>el.clientWidth+1}))};});
- assert.equal(layout.overflow,false);assert.ok(layout.ratios.every(r=>!r.overflow&&r.sum<=r.width+1));assert.ok(layout.ratios.some(r=>Math.abs(r.sum-r.width)<1));
+ assert.equal(layout.overflow,false);assert.ok(layout.ratios.every(r=>!r.overflow&&r.sum<=r.width*.875+1));assert.ok(layout.ratios.some(r=>Math.abs(r.sum-r.width*.875)<1));
 }
 
 try{
  await page.goto(base+'/statistics/work');await page.getByRole('heading',{name:'工作总览',exact:true}).waitFor();await page.getByRole('button',{name:'林晓',exact:true}).waitFor();
  assert.equal(await page.locator('.wo-row').count(),4);assert.equal(await page.getByRole('button',{name:'苏青',exact:true}).count(),0);
  await assertFitted();
+ assert.ok((await page.locator('.wo-ruler span').allTextContents()).every(s=>/^\d+天$/.test(s)));assert.ok((await page.locator('.wo-segment-head em').allTextContents()).every(s=>/^(\d+天|不足 1 天)$/.test(s)));
  await page.screenshot({path:out+'/desktop-4x3.png',fullPage:true});
  await page.getByRole('button',{name:'可接收人数',exact:true}).click();assert.equal(await page.getByRole('button',{name:'可接收人数',exact:true}).getAttribute('aria-pressed'),'true');await page.locator('.wo-charts').screenshot({path:out+'/capacity-and-forecast.png'});
  await page.getByRole('button',{name:'维护资源',exact:true}).click();await page.getByRole('button',{name:'＋ 新建资源',exact:true}).click();
