@@ -7,3 +7,19 @@
 @media(min-width:1001px){.wo-page{padding-top:18px}.wo-heading{margin-bottom:12px}.wo-panel-head{padding:12px 20px}.wo-row{min-height:66px}.wo-track{padding:5px 0}.wo-segment{height:54px}.wo-timeline-scroll{max-height:374px}.wo-resource-chart svg{max-height:180px}.wo-resource-chart td{padding:7px 3px}.wo-gaps{max-height:108px;overflow:auto}.wo-forecast{max-height:210px;margin-top:6px}}
 
 @media(max-width:520px){.wo-search{min-width:160px}.wo-toolbar .wo-check{margin-left:0}.wo-toolbar select{flex:1}}
+
+/* One proportional time scale fits the available track width at every viewport. */
+.wo-ruler,.wo-row{display:grid;grid-template-columns:174px minmax(0,1fr)}
+.wo-timeline-scroll{overflow-x:hidden}.wo-ruler>div:last-child,.wo-track{width:auto;min-width:0}
+.wo-ruler span:last-child{transform:translateX(-100%);padding-right:4px;padding-left:0;border-left:0}
+.wo-ruler span:not(:first-child):not(:last-child){transform:translateX(-50%)}
+.wo-segment,.wo-segment:first-child{padding:0;min-width:0;container-type:inline-size;container-name:experience}
+.wo-segment{clip-path:polygon(0 0,calc(100% - min(7px,15%)) 0,100% 50%,calc(100% - min(7px,15%)) 100%,0 100%,min(7px,15%) 50%)}
+.wo-segment:first-child{clip-path:polygon(0 0,calc(100% - min(7px,15%)) 0,100% 50%,calc(100% - min(7px,15%)) 100%,0 100%)}
+.wo-segment-content{display:block;padding:7px 13px;box-sizing:border-box;width:100%;overflow:hidden}
+.wo-segment-head{min-width:0}.wo-history-warning{margin-left:0;white-space:normal}
+.wo-segment-picker{display:flex;gap:6px;flex-wrap:wrap}.wo-segment-picker button{border:1px solid #e4dcd6;background:white;padding:7px;border-radius:5px;cursor:pointer;font-size:12px}.wo-segment-picker button[aria-pressed=true]{background:#fff0ee;border-color:#d45149}
+.wo-delete-resource{padding:10px 28px;border-top:1px solid #eee3dc;font-size:13px}.wo-delete-resource>button{margin-right:8px}.wo-delete-resource .text-button,.wo-delete-resource .danger{color:#ae302b}
+@container experience (max-width:110px){.wo-segment-content{padding:7px 6px}.wo-segment-head{display:block}.wo-segment-head b{display:block;font-size:10px}.wo-segment-note{display:none}}
+@container experience (max-width:44px){.wo-segment-content,.wo-current-dot{display:none}}
+@media(max-width:520px){.wo-ruler,.wo-row{grid-template-columns:108px minmax(0,1fr)}.wo-person,.wo-ruler>div:first-child{width:108px}.wo-delete-resource{padding:10px 18px}.wo-ruler{font-size:9px}}

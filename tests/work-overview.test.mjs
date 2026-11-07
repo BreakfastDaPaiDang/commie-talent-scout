@@ -59,3 +59,19 @@ test('explicit follow-up tasks appear in overview, claim determines owner, close
  await work.claim({id:follow.id,expected_version:1,request_id:randomUUID()});assert.equal((await overview.read({})).people[0].assignment,'assigned');
  f.sqlite.prepare("UPDATE work_tasks SET status='completed' WHERE id=?").run(follow.id);assert.equal((await overview.read({})).people[0].assignment,'unassigned');
 });
+
+
+test('independent resources allow no purpose; deleting removes supply without erasing experience references',async t=>{
+ const f=fixture();t.after(f.close);const w=new WorkOverview(f.env,f.actor),r={...resource(),purposes:[]};await w.save(r);
+ assert.equal((await w.read({})).resources[0].purposes.length,0);
+ await w.save({...r,expected_version:1,purposes:['contact'],request_id:randomUUID()});
+ const a=await new Archives(f.env,f.actor,'web').create({type:'person',name:'保留经历',request_id:randomUUID()});const event=f.sqlite.prepare("SELECT id FROM archive_events WHERE archive_id=? AND kind='archive.created'").get(a.id);
+ const placement={entity:'placement',id:randomUUID(),expected_version:0,archive_id:a.id,event_id:event.id,resource_ids:[r.id],note:'真实使用过',usage:'active',request_id:randomUUID()};await w.save(placement);
+ const deletion={entity:'resource_delete',id:r.id,expected_version:2,request_id:randomUUID()};await w.save(deletion);assert.equal((await w.save(deletion)).replayed,true);
+ const data=await w.read({});assert.equal(data.resources[0].deleted,true);assert.equal(resourceDistribution(data.resources)[0].count,0);assert.equal(data.people[0].segments[0].placements[0].resource_ids[0],r.id);assert.equal(data.people[0].segments[0].placements[0].note,'真实使用过');
+ await assert.rejects(()=>w.save({...r,expected_version:3,request_id:randomUUID()}),e=>e.code==='RESOURCE_DELETED');
+ await w.save({...placement,expected_version:1,note:'补充原记录',request_id:randomUUID()});
+ await w.save({...placement,expected_version:2,resource_ids:[],request_id:randomUUID()});
+ await assert.rejects(()=>w.save({...placement,expected_version:3,request_id:randomUUID()}),e=>e.code==='RESOURCE_UNAVAILABLE');
+ const history=f.sqlite.prepare("SELECT after_json FROM work_overview_history WHERE entity_type='resource_delete'").get();assert.equal(JSON.parse(history.after_json).deleted,true);
+});

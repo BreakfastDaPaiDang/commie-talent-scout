@@ -9,7 +9,7 @@ export type ExperienceType=typeof experienceTypes[number]['id'];
 export const dayMs=86400000;
 export function experienceType(status:string):ExperienceType{return status==='人事审核'||status==='引荐中（待人事组接触）'?'review':status==='已加入待对接'?'onboarding':status==='已入伙'?'member':status==='外部社友'||status==='组织交流'?'friend':'contact';}
 export function experienceLabel(status:string){return status==='已加入待对接'?'审核通过 · 对接':status==='已入伙'?'社员':status;}
-export type OverviewResource={id:string;version:number;name:string;kind:string;purposes:ExperienceType[];capacity:number|null;active:boolean;note:string};
+export type OverviewResource={id:string;version:number;name:string;kind:string;purposes:ExperienceType[];capacity:number|null;active:boolean;deleted?:boolean;note:string};
 export type OverviewGap={id:string;version:number;purpose:ExperienceType;work:string;missing:string;resolved:boolean};
 export type OverviewPlacement={id:string;version:number;archive_id:string;event_id:string;resource_ids:string[];note:string;usage:'planned'|'active'};
 export type ExperienceEvent={id:string;archive_id:string;seq:number;created_at:string;kind:string;after:{status?:string}|null};
@@ -33,4 +33,4 @@ export function buildOverviewPerson(a:OverviewArchive,events:ExperienceEvent[],o
  return {...a,segments,last_observation_at:last,due_at:new Date(Date.parse(last??a.created_at)+30*dayMs).toISOString(),tasks:work,owner_name:owners.length===1?work.find(t=>t.owner_id===owners[0])!.owner_name:null,assignment:owners.length>1?'conflict':owners.length===1?'assigned':'unassigned',history_complete:!!segments.length&&segments.at(-1)!.status===a.status};
 }
 export function backlogForecast(people:OverviewPerson[],asOf:string,days=30){return Array.from({length:days+1},(_,day)=>{const at=Date.parse(asOf)+day*dayMs;const counts=Object.fromEntries(experienceTypes.map(t=>[t.id,0])) as Record<ExperienceType,number>;for(const p of people)if(Date.parse(p.due_at)<=at)counts[experienceType(p.status)]++;return {day,counts,total:Object.values(counts).reduce((a,b)=>a+b,0)};});}
-export function resourceDistribution(resources:OverviewResource[]){return experienceTypes.map(t=>{const items=resources.filter(r=>r.active&&r.purposes.includes(t.id));return {...t,count:items.length,capacity:items.reduce((n,r)=>n+(r.capacity??0),0),unknown:items.filter(r=>r.capacity===null).length};});}
+export function resourceDistribution(resources:OverviewResource[]){return experienceTypes.map(t=>{const items=resources.filter(r=>r.active&&!r.deleted&&r.purposes.includes(t.id));return {...t,count:items.length,capacity:items.reduce((n,r)=>n+(r.capacity??0),0),unknown:items.filter(r=>r.capacity===null).length};});}

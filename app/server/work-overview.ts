@@ -7,13 +7,14 @@ import {buildOverviewPerson,experienceTypes,type ExperienceEvent,type OverviewAr
 
 const purpose=z.enum(experienceTypes.map(t=>t.id) as ['contact','review','onboarding','member','friend']);
 const base={id:z.uuid(),expected_version:z.number().int().min(0),request_id:requestId};
-const resource=z.object({...base,entity:z.literal('resource'),name:z.string().trim().min(1).max(120),kind:z.string().trim().min(1).max(60),purposes:z.array(purpose).min(1).max(5),capacity:z.number().int().min(0).max(100000).nullable(),active:z.boolean(),note:z.string().max(3000)}).strict();
+const resource=z.object({...base,entity:z.literal('resource'),name:z.string().trim().min(1).max(120),kind:z.string().trim().min(1).max(60),purposes:z.array(purpose).max(5),capacity:z.number().int().min(0).max(100000).nullable(),active:z.boolean(),note:z.string().max(3000)}).strict();
+const resourceDelete=z.object({...base,entity:z.literal('resource_delete')}).strict();
 const gap=z.object({...base,entity:z.literal('gap'),purpose,work:z.string().trim().min(1).max(1000),missing:z.string().trim().min(1).max(1000),resolved:z.boolean()}).strict();
 const placement=z.object({...base,entity:z.literal('placement'),archive_id:z.uuid(),event_id:z.uuid(),resource_ids:z.array(z.uuid()).max(30),note:z.string().max(3000),usage:z.enum(['planned','active'])}).strict();
-export const overviewSaveInput=z.discriminatedUnion('entity',[resource,gap,placement]);
+export const overviewSaveInput=z.discriminatedUnion('entity',[resource,resourceDelete,gap,placement]);
 export type OverviewSaveInput=z.infer<typeof overviewSaveInput>;
-const tables={resource:'work_overview_resources',gap:'work_overview_gaps',placement:'work_overview_placements'} as const;
-function present(row:Record<string,unknown>,entity:keyof typeof tables){const r={...row};if(entity==='resource'){r.purposes=JSON.parse(String(r.purposes_json));delete r.purposes_json;r.active=!!r.active;}if(entity==='placement'){r.resource_ids=JSON.parse(String(r.resource_ids_json));delete r.resource_ids_json;}if(entity==='gap')r.resolved=!!r.resolved;return r;}
+const tables={resource:'work_overview_resources',resource_delete:'work_overview_resources',gap:'work_overview_gaps',placement:'work_overview_placements'} as const;
+function present(row:Record<string,unknown>,entity:keyof typeof tables){const r={...row};if(entity==='resource'||entity==='resource_delete'){r.deleted=!!r.deleted_at;delete r.deleted_at;r.purposes=JSON.parse(String(r.purposes_json));delete r.purposes_json;r.active=!!r.active;}if(entity==='placement'){r.resource_ids=JSON.parse(String(r.resource_ids_json));delete r.resource_ids_json;}if(entity==='gap')r.resolved=!!r.resolved;return r;}
 
 export class WorkOverview{
  constructor(readonly env:Env,readonly actor:Actor){}
@@ -37,9 +38,12 @@ export class WorkOverview{
   return command(this.env,this.actor,{requestId:a.request_id,operation:'work_overview.'+a.entity,parameters:a},async()=>{
    const old=await this.stmt(`SELECT * FROM ${table} WHERE id=?`,a.id).first<Record<string,unknown>>();
    if((old?.version??0)!==a.expected_version)throw new Failure(409,'VERSION_CONFLICT','内容已更新，请重新打开后保存');
+   if(old?.deleted_at)throw new Failure(410,'RESOURCE_DELETED','资源已删除，请刷新目录');
+   if(a.entity==='resource_delete'&&!old)throw new Failure(404,'NOT_FOUND','资源不存在');
    const key=uid(),at=now(),version=a.expected_version+1;
    const statements=[this.stmt(`INSERT INTO mutation_guards VALUES(?,CASE WHEN COALESCE((SELECT version FROM ${table} WHERE id=?),0)=? THEN 1 ELSE 0 END)`,key,a.id,a.expected_version)];
-   if(a.entity==='resource'){
+   if(a.entity==='resource_delete')statements.push(this.stmt('UPDATE work_overview_resources SET deleted_at=?,active=0,version=?,updated_at=? WHERE id=?',at,version,at,a.id));
+   else if(a.entity==='resource'){
     const purposes=[...new Set(a.purposes)].sort();
     statements.push(this.stmt('INSERT INTO work_overview_resources(id,version,name,kind,purposes_json,capacity,active,note,updated_at) VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET version=excluded.version,name=excluded.name,kind=excluded.kind,purposes_json=excluded.purposes_json,capacity=excluded.capacity,active=excluded.active,note=excluded.note,updated_at=excluded.updated_at',a.id,version,a.name,a.kind,JSON.stringify(purposes),a.capacity,a.active?1:0,a.note,at));
    }else if(a.entity==='gap')statements.push(this.stmt('INSERT INTO work_overview_gaps(id,version,purpose,work,missing,resolved,updated_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET version=excluded.version,purpose=excluded.purpose,work=excluded.work,missing=excluded.missing,resolved=excluded.resolved,updated_at=excluded.updated_at',a.id,version,a.purpose,a.work,a.missing,a.resolved?1:0,at));
@@ -48,15 +52,15 @@ export class WorkOverview{
     if(old&&(old.archive_id!==a.archive_id||old.event_id!==a.event_id))throw new Failure(400,'PLACEMENT_TARGET_FIXED','阶段记录不能改绑其他档案或经历');
     const event=await this.stmt("SELECT id FROM archive_events WHERE id=? AND archive_id=? AND kind IN ('archive.created','archive.state_changed','archive.reopened')",a.event_id,a.archive_id).first();
     if(!event)throw new Failure(400,'INVALID_EXPERIENCE','请选择实际存在的经历');
-    const ids=[...new Set(a.resource_ids)],found=ids.length?await this.stmt('SELECT id,active FROM work_overview_resources WHERE id IN (SELECT value FROM json_each(?))',JSON.stringify(ids)).all<{id:string;active:number}>():{results:[]};
+    const ids=[...new Set(a.resource_ids)],found=ids.length?await this.stmt('SELECT id,active,deleted_at FROM work_overview_resources WHERE id IN (SELECT value FROM json_each(?))',JSON.stringify(ids)).all<{id:string;active:number;deleted_at:string|null}>():{results:[]};
     const previous=old?JSON.parse(String(old.resource_ids_json)) as string[]:[];
-    if(found.results.length!==ids.length||found.results.some(r=>!r.active&&!previous.includes(r.id)))throw new Failure(409,'RESOURCE_UNAVAILABLE','所选资源已停用或不存在');
+    if(found.results.length!==ids.length||found.results.some(r=>(!r.active||r.deleted_at)&&!previous.includes(r.id)))throw new Failure(409,'RESOURCE_UNAVAILABLE','所选资源已停用或不存在');
     const ag=uid();statements.push(new Archives(this.env,this.actor,'web').guard(archive.id,archive.version,ag));
-    if(ids.length){const rg=uid();statements.push(this.stmt('INSERT INTO mutation_guards VALUES(?,CASE WHEN (SELECT count(*) FROM work_overview_resources WHERE id IN (SELECT value FROM json_each(?)) AND (active=1 OR id IN (SELECT value FROM json_each(?))))=? THEN 1 ELSE 0 END)',rg,JSON.stringify(ids),JSON.stringify(previous),ids.length));statements.push(this.stmt('DELETE FROM mutation_guards WHERE id=?',rg));}
+    if(ids.length){const rg=uid();statements.push(this.stmt('INSERT INTO mutation_guards VALUES(?,CASE WHEN (SELECT count(*) FROM work_overview_resources WHERE id IN (SELECT value FROM json_each(?)) AND ((active=1 AND deleted_at IS NULL) OR id IN (SELECT value FROM json_each(?))))=? THEN 1 ELSE 0 END)',rg,JSON.stringify(ids),JSON.stringify(previous),ids.length));statements.push(this.stmt('DELETE FROM mutation_guards WHERE id=?',rg));}
     statements.push(this.stmt('INSERT INTO work_overview_placements(id,version,archive_id,event_id,resource_ids_json,note,usage,updated_at) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET version=excluded.version,resource_ids_json=excluded.resource_ids_json,note=excluded.note,usage=excluded.usage,updated_at=excluded.updated_at',a.id,version,a.archive_id,a.event_id,JSON.stringify(ids),a.note,a.usage,at));statements.push(this.stmt('DELETE FROM mutation_guards WHERE id=?',ag));
    }
    const {request_id:_,...data}=a;
-   statements.push(this.stmt('INSERT INTO work_overview_history(id,entity_type,entity_id,actor_id,before_json,after_json,created_at) VALUES(?,?,?,?,?,?,?)',uid(),a.entity,a.id,this.actor.id,old?JSON.stringify(present(old,a.entity)):null,JSON.stringify({...data,version}),at),this.stmt('DELETE FROM mutation_guards WHERE id=?',key));
+   statements.push(this.stmt('INSERT INTO work_overview_history(id,entity_type,entity_id,actor_id,before_json,after_json,created_at) VALUES(?,?,?,?,?,?,?)',uid(),a.entity,a.id,this.actor.id,old?JSON.stringify(present(old,a.entity)):null,JSON.stringify(a.entity==='resource_delete'?{...present(old!,'resource'),deleted:true,active:false,version}:{...data,version}),at),this.stmt('DELETE FROM mutation_guards WHERE id=?',key));
    return {statements,result:{id:a.id,version,changed:true}};
   });
  }
