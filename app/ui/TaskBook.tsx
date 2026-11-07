@@ -37,7 +37,7 @@ export function TaskDetailCard({stage,title,kind,code,edit,sharePath,assignment,
  <dl className="task-scene-meta-grid">{metadata.map(item=><div key={item.label}><dt><Icon name={item.icon} size={17}/>{item.label}</dt><dd>{item.value}</dd></div>)}</dl>
  <section className="task-scene-section"><h3><Icon name="file" size={22}/>任务目的</h3><p>{purpose}</p></section>
  <section className="task-scene-section task-scene-delivery"><h3><Icon name="check" size={22}/>交付要求</h3><p>{delivery}</p></section>{result}
- {(actions||sharePath||assignment||claim)&&<DetailActions className={claim?'task-claim-actions':''}>{(sharePath||assignment)&&<div className="task-action-stack">{sharePath&&<ShareLink key={sharePath} path={sharePath} label="分享任务" text="分享任务"/>}{assignment}</div>}{claim}{actions}</DetailActions>}{children}
+ {(actions||sharePath||assignment||claim)&&<DetailActions className={claim?'task-claim-actions':'task-flat-actions'}>{claim?<div className="task-action-stack">{sharePath&&<ShareLink key={sharePath} path={sharePath} label="分享任务" text="分享任务"/>}{assignment}</div>:<>{sharePath&&<ShareLink key={sharePath} path={sharePath} label="分享任务" text="分享任务"/>}{assignment}</>}{claim}{actions}</DetailActions>}{children}
  </article>;
 }
 

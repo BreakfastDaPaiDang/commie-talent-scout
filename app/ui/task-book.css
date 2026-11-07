@@ -99,3 +99,5 @@
 .task-recommendation-labels{display:flex;flex-wrap:wrap;gap:5px}
 
 .task-action-stack{display:flex;flex-direction:column;gap:8px;flex:1;min-width:0}.task-scene-actions .task-action-stack>.button{display:flex;justify-content:center;align-items:center;min-height:48px;padding:13px 20px;border-radius:4px;font-size:16px;white-space:nowrap}.task-action-stack>.button:not(.share-link){border:1px solid #9c9fa0;background:#fff;color:#343d3f}.task-scene-actions.task-claim-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:stretch}.task-claim-actions>.form-error{grid-column:1/-1}.task-scene-actions.task-claim-actions>.button.primary{flex:1;align-self:stretch;min-width:0}@media(max-width:800px){.task-scene-actions .task-action-stack>.button{font-size:14px;padding:12px 9px}}
+
+.task-scene-actions.task-flat-actions>.button{height:48px;min-height:48px;padding:12px 14px;font-size:15px;line-height:22px;white-space:nowrap}@media(max-width:800px){.task-scene-actions.task-flat-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.task-flat-actions>.button.primary{grid-column:1/-1;grid-row:1}.task-flat-actions>.form-error{grid-column:1/-1}}
