@@ -1,3 +1,4 @@
+import {WorkRecommendations} from './work-recommendations.ts';
 import {WorkTaskLabels} from './work-task-labels.ts';
 import {generateMemberMonthlyFollowUps,generateScheduledMemberMonthlyFollowUps} from './member-monthly-follow-ups.ts';
 import {runTaskNotifications} from './task-notifications.ts';
@@ -85,6 +86,7 @@ app.post('/api/auth/logout',async c=>{
 });
 app.get('/api/workspace',async c=>{const actor=await authenticate(c.req.raw,c.env);return c.json({member:publicMember(actor)});});
 app.get('/api/statistics',async c=>c.json(await statistics(c.env,await authenticate(c.req.raw,c.env),c.req.query())));
+app.get('/api/work-overview/recommendations',async c=>c.json(await new WorkRecommendations(c.env,await authenticate(c.req.raw,c.env)).read(c.req.query())));
 app.get('/api/work-overview',async c=>c.json(await new WorkOverview(c.env,await authenticate(c.req.raw,c.env)).read(c.req.query())));
 app.post('/api/work-overview/save',async c=>c.json(await new WorkOverview(c.env,await authenticate(c.req.raw,c.env)).save(await c.req.json())));
 app.get('/api/statistics/link',async c=>{await authenticate(c.req.raw,c.env);return c.json({url:c.env.APP_ORIGIN+'/statistics'});});

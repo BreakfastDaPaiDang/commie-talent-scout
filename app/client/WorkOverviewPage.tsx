@@ -1,3 +1,4 @@
+import type {RecommendationAPI,RecommendationData} from '../shared/work-recommendations';
 import React from 'react';
 import type {ObservationDraft} from '../ui/WorkOverviewDetail';
 import {api,ApiError} from './api';
@@ -9,4 +10,5 @@ async function mutate(path:string,input:object){const key=path+JSON.stringify(in
 const save=(input:OverviewSave)=>mutate('/work-overview/save',input);
 const observe=(input:ObservationDraft)=>mutate('/observations/create',input);
 const path=(p:OverviewPerson)=>(p.type==='org'?'/organizations':p.person_role==='member'?'/members':'/')+'?archive='+p.id;
-export function WorkOverviewPage({navigate}:{navigate:(url:string)=>void}){return <WorkOverview load={load} save={save} observe={observe} onArchive={p=>navigate(path(p))} onTask={id=>navigate('/tasks?task='+id)} onCreateTask={(p,specific)=>navigate('/tasks?create_for='+p.id+(specific?'&work=specific':''))}/>;}
+const recommendations:RecommendationAPI={load:(id,observation)=>api<RecommendationData>('/work-overview/recommendations?archive_id='+id+(observation?'&observation_id='+observation:'')),accept:input=>mutate('/work-tasks/create',input) as Promise<{id:string;reused?:boolean}>};
+export function WorkOverviewPage({navigate}:{navigate:(url:string)=>void}){return <WorkOverview recommendations={recommendations} load={load} save={save} observe={observe} onArchive={p=>navigate(path(p))} onTask={id=>navigate('/tasks?task='+id)} onCreateTask={(p,specific)=>navigate('/tasks?create_for='+p.id+(specific?'&work=specific':''))}/>;}
