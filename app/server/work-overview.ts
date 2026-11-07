@@ -23,18 +23,18 @@ export class WorkOverview{
  constructor(readonly env:Env,readonly actor:Actor){}
  stmt(sql:string,...args:unknown[]){return this.env.DB.prepare(sql).bind(...args);}
  async bounded<T>(sql:string,limit:number,...args:unknown[]){const r=await this.stmt(sql+' LIMIT ?',...args,limit+1).all<T>();if(r.results.length>limit)throw new Failure(409,'OVERVIEW_LIMIT','当前范围过大，请缩小范围后重试');return r.results;}
- async read(input:unknown):Promise<WorkOverviewData>{
-  const q=z.object({type:z.enum(['person','org']).default('person')}).parse(input),at=now();
-  const scope="a.type=? AND a.deleted=0 AND a.closed=0";
-  const archives=await this.bounded<OverviewArchive>(`SELECT a.id,a.name,a.type,a.status,a.created_at,a.person_role,a.version,a.current_need FROM archives a WHERE ${scope} ORDER BY a.name,a.id`,2000,q.type);
-  const events=await this.bounded<{id:string;archive_id:string;seq:number;kind:string;created_at:string;after_json:string}>(`SELECT e.id,e.archive_id,e.seq,e.kind,e.created_at,e.after_json FROM archive_events e JOIN archives a ON a.id=e.archive_id WHERE ${scope} AND e.kind IN ('archive.created','archive.state_changed','archive.reopened') ORDER BY e.seq`,30000,q.type);
-  const observations=await this.bounded<OverviewObservation>(`SELECT o.id,o.archive_id,o.created_at,o.content_version,v.occurred_at,substr(v.body,1,300) body,m.name author_name FROM observations o JOIN archives a ON a.id=o.archive_id JOIN observation_versions v ON v.observation_id=o.id AND v.version=o.content_version JOIN members m ON m.id=o.author_id WHERE ${scope} AND o.deleted=0 ORDER BY o.created_at,o.id`,30000,q.type);
-  const tasks=(await this.bounded<OverviewTask>(`SELECT t.id,t.archive_id,t.title,t.owner_id,m.name owner_name,coalesce(m.frozen,0) owner_frozen,t.deadline_at,${followUpTaskSql} follow_up FROM work_tasks t JOIN archives a ON a.id=t.archive_id LEFT JOIN members m ON m.id=t.owner_id WHERE ${scope} AND t.status='open' ORDER BY t.deadline_at,t.id`,10000,q.type)).map(t=>({...t,follow_up:!!t.follow_up}));
-  const placements=(await this.bounded<Record<string,unknown>>(`SELECT p.* FROM work_overview_placements p JOIN archives a ON a.id=p.archive_id WHERE ${scope} ORDER BY p.id`,30000,q.type)).map(r=>present(r,'placement')) as OverviewPlacement[];
+ async read(input:unknown,asOf?:string):Promise<WorkOverviewData>{
+  const q=z.object({type:z.enum(['all','person','org']).default('person')}).parse(input),at=asOf??now();
+  const scope=(q.type==='all'?'':'a.type=? AND ')+"a.deleted=0 AND a.closed=0",scopeArgs=q.type==='all'?[]:[q.type];
+  const archives=await this.bounded<OverviewArchive>(`SELECT a.id,a.name,a.type,a.status,a.created_at,a.person_role,a.version,a.current_need FROM archives a WHERE ${scope} ORDER BY a.name,a.id`,2000,...scopeArgs);
+  const events=await this.bounded<{id:string;archive_id:string;seq:number;kind:string;created_at:string;after_json:string}>(`SELECT e.id,e.archive_id,e.seq,e.kind,e.created_at,e.after_json FROM archive_events e JOIN archives a ON a.id=e.archive_id WHERE ${scope} AND e.kind IN ('archive.created','archive.state_changed','archive.reopened') ORDER BY e.seq`,30000,...scopeArgs);
+  const observations=await this.bounded<OverviewObservation>(`SELECT o.id,o.archive_id,o.created_at,o.content_version,v.occurred_at,substr(v.body,1,300) body,m.name author_name FROM observations o JOIN archives a ON a.id=o.archive_id JOIN observation_versions v ON v.observation_id=o.id AND v.version=o.content_version JOIN members m ON m.id=o.author_id WHERE ${scope} AND o.deleted=0 ORDER BY o.created_at,o.id`,30000,...scopeArgs);
+  const tasks=(await this.bounded<OverviewTask>(`SELECT t.id,t.archive_id,t.title,t.owner_id,m.name owner_name,coalesce(m.frozen,0) owner_frozen,t.deadline_at,${followUpTaskSql} follow_up FROM work_tasks t JOIN archives a ON a.id=t.archive_id LEFT JOIN members m ON m.id=t.owner_id WHERE ${scope} AND t.status='open' ORDER BY t.deadline_at,t.id`,10000,...scopeArgs)).map(t=>({...t,follow_up:!!t.follow_up}));
+  const placements=(await this.bounded<Record<string,unknown>>(`SELECT p.* FROM work_overview_placements p JOIN archives a ON a.id=p.archive_id WHERE ${scope} ORDER BY p.id`,30000,...scopeArgs)).map(r=>present(r,'placement')) as OverviewPlacement[];
   const resources=(await this.bounded<Record<string,unknown>>('SELECT * FROM work_overview_resources ORDER BY name,id',2000)).map(r=>present(r,'resource')) as OverviewResource[];
   const gaps=(await this.bounded<Record<string,unknown>>('SELECT * FROM work_overview_gaps ORDER BY updated_at DESC,id',2000)).map(r=>present(r,'gap')) as OverviewGap[];
   const parsed:ExperienceEvent[]=events.map(e=>({...e,after:JSON.parse(e.after_json)}));
-  const whites=await this.bounded<import('../shared/work-overview.ts').WhiteResource>(`SELECT w.* FROM work_overview_white_resources w JOIN archives a ON a.id=w.archive_id JOIN observations o ON o.id=w.observation_id WHERE ${scope} AND o.deleted=0 ORDER BY w.id`,30000,q.type);
+  const whites=await this.bounded<import('../shared/work-overview.ts').WhiteResource>(`SELECT w.* FROM work_overview_white_resources w JOIN archives a ON a.id=w.archive_id JOIN observations o ON o.id=w.observation_id WHERE ${scope} AND o.deleted=0 ORDER BY w.id`,30000,...scopeArgs);
   return {as_of:at,people:archives.map(a=>buildOverviewPerson(a,parsed,observations,placements,tasks,at)),resources,gaps,white_resources:whites.map(w=>({...w,removed:!!w.removed}))};
  }
  async save(input:unknown){

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
 import {readFileSync,readdirSync} from 'node:fs';
 import {statistics,statisticsInput} from '../app/server/statistics.ts';
-import {bucketDate,shanghaiDate} from '../app/shared/statistics.ts';
+import {defaultComparison,ownFirst,bucketDate,shanghaiDate} from '../app/shared/statistics.ts';
 import type {Actor,Env} from '../app/server/types.ts';
 
 function fixture() {
@@ -72,4 +72,16 @@ test('closed archives use snapshots; deleted catalog entries are excluded',async
     run("UPDATE tags SET deleted=1 WHERE id='t1'");
     assert.ok(!(await statistics(env,actor,{...query,group:'tag'})).series.some(s=>s.id==='t1'));
   }finally{db.close();}
+});
+
+test('all active human members include zero submissions, self plus three defaults, and no top-50 truncation',async()=>{
+ const {db,run,env,actor,query}=fixture();try{
+  for(let i=0;i<55;i++)run('INSERT INTO members(id,username,name,role,password_hash,created_at) VALUES(?,?,?,?,?,?)','zero'+i,'zero'+i,'零提交'+i,'member','unused','2026-09-01T00:00:00Z');
+  run("INSERT INTO members(id,username,name,role,identity_kind,password_hash,created_at) VALUES('bot','bot','服务账号','member','service','unused','2026-09-01T00:00:00Z')");
+  const result=await statistics(env,{...actor,id:'zero54'},query);
+  assert.equal(result.groups,57);assert.equal(result.series.length,57);assert.equal(result.members,2);assert.equal(result.total,3);
+  assert.deepEqual(result.series.find(s=>s.id==='zero54')?.points,[0,0,0,0]);assert.ok(!result.series.some(s=>s.id==='bot'));
+  assert.equal(defaultComparison(result).length,4);assert.equal(defaultComparison(result)[0],'zero54');assert.equal(ownFirst(result)[0].id,'zero54');
+  assert.equal((await statistics(env,actor,{...query,search:'zero54'})).series.length,1);
+ }finally{db.close();}
 });
