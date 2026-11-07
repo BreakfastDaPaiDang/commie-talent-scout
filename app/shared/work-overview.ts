@@ -1,3 +1,4 @@
+import type {Resource} from './resources.ts';
 export const experienceTypes = [
  {id:'contact',label:'接触',color:'#c84640',tint:'#f2ada4'},
  {id:'review',label:'审核',color:'#d5a119',tint:'#f1d178'},
@@ -9,7 +10,7 @@ export type ExperienceType=typeof experienceTypes[number]['id'];
 export const dayMs=86400000;
 export function experienceType(status:string):ExperienceType{return status==='人事审核'||status==='引荐中（待人事组接触）'?'review':status==='已加入待对接'?'onboarding':status==='已入伙'?'member':status==='外部社友'||status==='组织交流'?'friend':'contact';}
 export function experienceLabel(status:string){return status==='已加入待对接'?'审核通过 · 对接':status==='已入伙'?'社员':status;}
-export type OverviewResource={id:string;version:number;name:string;kind:string;purposes:ExperienceType[];capacity:number|null;active:boolean;deleted?:boolean;note:string};
+export type OverviewResource=Resource;
 export type OverviewGap={id:string;version:number;purpose:ExperienceType;work:string;missing:string;resolved:boolean};
 export type OverviewPlacement={id:string;version:number;archive_id:string;event_id:string;resource_ids:string[];note:string;usage:'planned'|'active'};
 export type ExperienceEvent={id:string;archive_id:string;seq:number;created_at:string;kind:string;after:{status?:string}|null};
@@ -45,3 +46,11 @@ export function resourceDistribution(resources:OverviewResource[],white:WhiteRes
  for(const w of white.filter(w=>!w.removed&&!w.resource_id))add('white','待补齐','#ffffff',w.capacity);
  return [...groups.values()];
 }
+
+export function referencedResources(data:WorkOverviewData):OverviewResource[]{
+ const stages=new Map<string,Set<ExperienceType>>();
+ for(const p of data.people)for(const s of p.segments)for(const placement of s.placements)for(const id of placement.resource_ids){const types=stages.get(id)??new Set<ExperienceType>();types.add(s.type);stages.set(id,types);}
+ for(const white of data.white_resources??[])if(!white.removed&&white.resource_id){const types=stages.get(white.resource_id)??new Set<ExperienceType>();types.add('review');stages.set(white.resource_id,types);}
+ return data.resources.filter(r=>stages.has(r.id)).map(r=>({...r,purposes:[...stages.get(r.id)!]}));
+}
+export function overviewResourceDistribution(data:WorkOverviewData){return resourceDistribution(referencedResources(data),data.white_resources);}

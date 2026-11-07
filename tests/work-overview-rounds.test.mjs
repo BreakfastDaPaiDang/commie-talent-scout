@@ -6,7 +6,7 @@ import {Archives} from '../app/server/archives.ts';
 import {Observations} from '../app/server/observations.ts';
 import {WorkTasks} from '../app/server/work-tasks.ts';
 import {WorkOverview} from '../app/server/work-overview.ts';
-import {resourceDistribution,buildOverviewPerson,dayMs} from '../app/shared/work-overview.ts';
+import {overviewResourceDistribution,resourceDistribution,buildOverviewPerson,dayMs} from '../app/shared/work-overview.ts';
 
 async function setup(f){const archives=new Archives(f.env,f.actor,'web'),obs=new Observations(f.env,f.actor,'web'),tasks=new WorkTasks(f.env,f.actor,'web'),overview=new WorkOverview(f.env,f.actor);const a=await archives.create({type:'person',name:'边界测试',request_id:id()});return {archives,obs,tasks,overview,a};}
 const deadline='2099-01-01T00:00:00.000Z';
@@ -21,10 +21,10 @@ test('white resources are explicit review observations, resolve to one entity an
  assert.equal((await s.overview.read({})).white_resources.length,0);
  const w1=white(o1),w2=white(o2);await s.overview.save(w1);await s.overview.save(w2);assert.equal((await s.overview.save(w1)).replayed,true);
  await assert.rejects(s.overview.save(white(o1)),{code:'WHITE_ALREADY_REGISTERED'});
- let data=await s.overview.read({});assert.equal(resourceDistribution(data.resources,data.white_resources)[0].count,2);
+ let data=await s.overview.read({});assert.equal(overviewResourceDistribution(data)[0].count,2);
  const r={entity:'resource',id:id(),expected_version:0,name:'同一个社内群',kind:'群聊',purposes:['contact','review'],capacity:5,active:true,note:'',request_id:id()};await s.overview.save(r);
  for(const w of [w1,w2])await s.overview.save({...w,expected_version:1,resource_id:r.id,request_id:id()});
- data=await s.overview.read({});const dist=resourceDistribution(data.resources,data.white_resources);assert.equal(dist.length,1);assert.equal(dist[0].id,'contact+review');assert.equal(dist[0].count,1);assert.equal(dist[0].capacity,5);assert.notEqual(dist[0].color,'#ffffff');
+ data=await s.overview.read({});const dist=overviewResourceDistribution(data);assert.equal(dist.length,1);assert.equal(dist[0].id,'review');assert.equal(dist[0].count,1);assert.equal(dist[0].capacity,5);assert.notEqual(dist[0].color,'#ffffff');
  assert.deepEqual(data.white_resources.map(w=>w.observation_id).sort(),[o1.id,o2.id].sort());
  assert.equal(f.sqlite.prepare('SELECT count(*) n FROM work_overview_history WHERE entity_type=?').get('white_resource').n,4);
  await s.overview.save({...w1,expected_version:2,resource_id:r.id,removed:true,request_id:id()});

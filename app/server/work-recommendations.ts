@@ -1,9 +1,9 @@
+import {resourcePurposes} from '../shared/resources.ts';
 import {z} from 'zod';
 import type {Source} from './commands.ts';
 import {Archives} from './archives.ts';
 import {evidenceVisibilitySql} from './tag-state.ts';
 import {Failure,now,uid,type Env,type Actor} from './types.ts';
-import {experienceType} from '../shared/work-overview.ts';
 import {recommendFromObservation,type RecommendationData,type RecommendationEvidence,type RecommendationTarget} from '../shared/work-recommendations.ts';
 
 export const handoffInput=z.object({observation_id:z.uuid(),content_version:z.number().int().positive(),target_kind:z.enum(['resource','person','task']),target_id:z.uuid(),target_version:z.number().int().positive(),target_fingerprint:z.string().regex(/^[a-f0-9]{64}$/),owner_id:z.uuid()}).strict();
@@ -19,11 +19,11 @@ export class WorkRecommendations{
   const assignees=await this.rows<{id:string;name:string}>(`SELECT id,name FROM members WHERE frozen=0 AND identity_kind='human' ${this.actor.role==='admin'?'':'AND id=?'} ORDER BY name,id`,...this.actor.role==='admin'?[]:[this.actor.id]);
   const accepted=await this.rows<RecommendationData['accepted'][number]>(`SELECT l.task_id,t.title,t.status,m.name owner_name,t.result_text,l.target_name,l.target_kind,l.target_id,l.content_version,l.observation_id FROM work_recommendation_links l JOIN work_tasks t ON t.id=l.task_id JOIN observations o ON o.id=l.observation_id AND o.deleted=0 LEFT JOIN members m ON m.id=t.owner_id WHERE l.archive_id=? ORDER BY l.created_at DESC`,a.archive_id);
   if(!evidence)return {archive_version:archive.version,evidence:null,candidates:[],assignees,actor_id:this.actor.id,accepted};
-  const resources=await this.rows<{id:string;version:number;name:string;note:string;capacity:number|null}>('SELECT id,version,name,note,capacity FROM work_overview_resources WHERE active=1 AND deleted_at IS NULL AND (capacity IS NULL OR capacity>0) AND EXISTS(SELECT 1 FROM json_each(purposes_json) WHERE value=?) ORDER BY name,id',experienceType(archive.status));
+  const resources=await this.rows<{id:string;version:number;name:string;kind:string;purposes_json:string;note:string;capacity:number|null}>('SELECT id,version,name,kind,purposes_json,note,capacity FROM work_overview_resources WHERE active=1 AND deleted_at IS NULL AND (capacity IS NULL OR capacity>0) ORDER BY name,id');
   // Match visible, active tag definitions, never infer availability from another person's needs.
   const people=await this.rows<{id:string;version:number;name:string;description:string}>(`SELECT a.id,a.version,a.name,group_concat(t.name||' '||t.description,'；') description FROM archives a JOIN archive_tags b ON b.archive_id=a.id JOIN tags t ON t.id=b.tag_id JOIN tag_categories c ON c.id=t.category_id WHERE a.type='person' AND a.closed=0 AND a.deleted=0 AND a.id<>? AND t.enabled=1 AND t.deleted=0 AND c.enabled=1 AND c.deleted=0 AND t.merged_into IS NULL AND ${evidenceVisibilitySql('b.evidence_json')} GROUP BY a.id ORDER BY a.name,a.id`,a.archive_id,this.actor.id,this.actor.role);
   const tasks=await this.rows<{id:string;version:number;title:string;purpose:string;delivery:string}>('SELECT t.id,t.version,t.title,t.purpose,t.delivery FROM work_tasks t LEFT JOIN archives a ON a.id=t.archive_id WHERE t.status=\'open\' AND t.owner_id IS NULL AND t.deadline_at>? AND (t.archive_id IS NULL OR (a.deleted=0 AND a.closed=0)) AND NOT EXISTS(SELECT 1 FROM work_recommendation_links l WHERE l.task_id=t.id) ORDER BY t.id',now());
-  const targets:RecommendationTarget[]=[...resources.map(r=>({kind:'resource' as const,id:r.id,version:r.version,name:r.name,text:r.note,conditions:[r.capacity===null?'可接收人数待确认':`登记可接收 ${r.capacity} 人`,'需确认本人意愿和接收安排']})),...people.map(p=>({kind:'person' as const,id:p.id,version:p.version,name:p.name,text:p.description,conditions:['需确认对方是否愿意、能够提供帮助']})),...tasks.map(t=>({kind:'task' as const,id:t.id,version:t.version,name:t.title,text:t.purpose+'\n'+t.delivery,conditions:['未领取；需确认本人意愿和任务要求']}))];
+  const targets:RecommendationTarget[]=[...resources.map(r=>({kind:'resource' as const,id:r.id,version:r.version,name:r.name,text:[r.kind,...resourcePurposes(JSON.parse(r.purposes_json)),r.note].join(' '),conditions:[r.capacity===null?'可接收人数待确认':`登记可接收 ${r.capacity} 人`,'需确认本人意愿和接收安排']})),...people.map(p=>({kind:'person' as const,id:p.id,version:p.version,name:p.name,text:p.description,conditions:['需确认对方是否愿意、能够提供帮助']})),...tasks.map(t=>({kind:'task' as const,id:t.id,version:t.version,name:t.title,text:t.purpose+'\n'+t.delivery,conditions:['未领取；需确认本人意愿和任务要求']}))];
   const candidates=await recommendFromObservation(evidence,targets);
   return {archive_version:archive.version,evidence,candidates,assignees,actor_id:this.actor.id,accepted};
  }

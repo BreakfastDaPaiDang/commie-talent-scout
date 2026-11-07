@@ -1,3 +1,4 @@
+import {Resources,resourceInput,resourceDeleteInput,presentResource} from './resources.ts';
 import {followUpTaskSql} from './follow-up-tasks.ts';
 import {z} from 'zod';
 import {command,requestId} from './commands.ts';
@@ -8,8 +9,7 @@ import {buildOverviewPerson,experienceTypes,type ExperienceEvent,type OverviewAr
 
 const purpose=z.enum(experienceTypes.map(t=>t.id) as ['contact','review','onboarding','member','friend']);
 const base={id:z.uuid(),expected_version:z.number().int().min(0),request_id:requestId};
-const resource=z.object({...base,entity:z.literal('resource'),name:z.string().trim().min(1).max(120),kind:z.string().trim().min(1).max(60),purposes:z.array(purpose).max(5),capacity:z.number().int().min(0).max(100000).nullable(),active:z.boolean(),note:z.string().max(3000)}).strict();
-const resourceDelete=z.object({...base,entity:z.literal('resource_delete')}).strict();
+const resource=resourceInput,resourceDelete=resourceDeleteInput;
 const gap=z.object({...base,entity:z.literal('gap'),purpose,work:z.string().trim().min(1).max(1000),missing:z.string().trim().min(1).max(1000),resolved:z.boolean()}).strict();
 const placement=z.object({...base,entity:z.literal('placement'),archive_id:z.uuid(),event_id:z.uuid(),resource_ids:z.array(z.uuid()).max(30),note:z.string().max(3000),usage:z.enum(['planned','active'])}).strict();
 const white=z.object({...base,entity:z.literal('white_resource'),observation_id:z.uuid(),resource_id:z.uuid().nullable(),capacity:z.number().int().min(0).max(100000).nullable(),removed:z.boolean().default(false)}).strict();
@@ -17,7 +17,7 @@ const need=z.object({...base,entity:z.literal('current_need'),current_need:z.str
 export const overviewSaveInput=z.discriminatedUnion('entity',[resource,resourceDelete,gap,placement,white,need]);
 export type OverviewSaveInput=z.infer<typeof overviewSaveInput>;
 const tables={resource:'work_overview_resources',resource_delete:'work_overview_resources',gap:'work_overview_gaps',placement:'work_overview_placements'} as const;
-function present(row:Record<string,unknown>,entity:keyof typeof tables){const r={...row};if(entity==='resource'||entity==='resource_delete'){r.deleted=!!r.deleted_at;delete r.deleted_at;r.purposes=JSON.parse(String(r.purposes_json));delete r.purposes_json;r.active=!!r.active;}if(entity==='placement'){r.resource_ids=JSON.parse(String(r.resource_ids_json));delete r.resource_ids_json;}if(entity==='gap')r.resolved=!!r.resolved;return r;}
+function present(row:Record<string,unknown>,entity:keyof typeof tables){const r={...row};if(entity==='resource'||entity==='resource_delete')return presentResource(row);if(entity==='placement'){r.resource_ids=JSON.parse(String(r.resource_ids_json));delete r.resource_ids_json;}if(entity==='gap')r.resolved=!!r.resolved;return r;}
 
 export class WorkOverview{
  constructor(readonly env:Env,readonly actor:Actor){}
@@ -39,6 +39,7 @@ export class WorkOverview{
  }
  async save(input:unknown){
   const a=overviewSaveInput.parse(input);
+  if(a.entity==='resource'||a.entity==='resource_delete')return new Resources(this.env,this.actor).save(a);
   if(a.entity==='white_resource')return this.saveWhite(a);
   if(a.entity==='current_need')return command(this.env,this.actor,{requestId:a.request_id,operation:'work_overview.current_need',parameters:a},async()=>{
    const service=new Archives(this.env,this.actor,'web'),old=await service.get(a.id,a.expected_version,true),key=uid(),at=now(),changed=old.current_need!==a.current_need;
@@ -52,14 +53,9 @@ export class WorkOverview{
    const old=await this.stmt(`SELECT * FROM ${table} WHERE id=?`,a.id).first<Record<string,unknown>>();
    if((old?.version??0)!==a.expected_version)throw new Failure(409,'VERSION_CONFLICT','内容已更新，请重新打开后保存');
    if(old?.deleted_at)throw new Failure(410,'RESOURCE_DELETED','资源已删除，请刷新目录');
-   if(a.entity==='resource_delete'&&!old)throw new Failure(404,'NOT_FOUND','资源不存在');
    const key=uid(),at=now(),version=a.expected_version+1;
    const statements=[this.stmt(`INSERT INTO mutation_guards VALUES(?,CASE WHEN COALESCE((SELECT version FROM ${table} WHERE id=?),0)=? THEN 1 ELSE 0 END)`,key,a.id,a.expected_version)];
-   if(a.entity==='resource_delete')statements.push(this.stmt('UPDATE work_overview_resources SET deleted_at=?,active=0,version=?,updated_at=? WHERE id=?',at,version,at,a.id));
-   else if(a.entity==='resource'){
-    const purposes=[...new Set(a.purposes)].sort();
-    statements.push(this.stmt('INSERT INTO work_overview_resources(id,version,name,kind,purposes_json,capacity,active,note,updated_at) VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET version=excluded.version,name=excluded.name,kind=excluded.kind,purposes_json=excluded.purposes_json,capacity=excluded.capacity,active=excluded.active,note=excluded.note,updated_at=excluded.updated_at',a.id,version,a.name,a.kind,JSON.stringify(purposes),a.capacity,a.active?1:0,a.note,at));
-   }else if(a.entity==='gap')statements.push(this.stmt('INSERT INTO work_overview_gaps(id,version,purpose,work,missing,resolved,updated_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET version=excluded.version,purpose=excluded.purpose,work=excluded.work,missing=excluded.missing,resolved=excluded.resolved,updated_at=excluded.updated_at',a.id,version,a.purpose,a.work,a.missing,a.resolved?1:0,at));
+   if(a.entity==='gap')statements.push(this.stmt('INSERT INTO work_overview_gaps(id,version,purpose,work,missing,resolved,updated_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET version=excluded.version,purpose=excluded.purpose,work=excluded.work,missing=excluded.missing,resolved=excluded.resolved,updated_at=excluded.updated_at',a.id,version,a.purpose,a.work,a.missing,a.resolved?1:0,at));
    else{
     const archive=await new Archives(this.env,this.actor,'web').get(a.archive_id,undefined,true);
     if(old&&(old.archive_id!==a.archive_id||old.event_id!==a.event_id))throw new Failure(400,'PLACEMENT_TARGET_FIXED','阶段记录不能改绑其他档案或经历');
@@ -73,7 +69,7 @@ export class WorkOverview{
     statements.push(this.stmt('INSERT INTO work_overview_placements(id,version,archive_id,event_id,resource_ids_json,note,usage,updated_at) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET version=excluded.version,resource_ids_json=excluded.resource_ids_json,note=excluded.note,usage=excluded.usage,updated_at=excluded.updated_at',a.id,version,a.archive_id,a.event_id,JSON.stringify(ids),a.note,a.usage,at));statements.push(this.stmt('DELETE FROM mutation_guards WHERE id=?',ag));
    }
    const {request_id:_,...data}=a;
-   statements.push(this.stmt('INSERT INTO work_overview_history(id,entity_type,entity_id,actor_id,before_json,after_json,created_at) VALUES(?,?,?,?,?,?,?)',uid(),a.entity,a.id,this.actor.id,old?JSON.stringify(present(old,a.entity)):null,JSON.stringify(a.entity==='resource_delete'?{...present(old!,'resource'),deleted:true,active:false,version}:{...data,version}),at),this.stmt('DELETE FROM mutation_guards WHERE id=?',key));
+   statements.push(this.stmt('INSERT INTO work_overview_history(id,entity_type,entity_id,actor_id,before_json,after_json,created_at) VALUES(?,?,?,?,?,?,?)',uid(),a.entity,a.id,this.actor.id,old?JSON.stringify(present(old,a.entity)):null,JSON.stringify({...data,version}),at),this.stmt('DELETE FROM mutation_guards WHERE id=?',key));
    return {statements,result:{id:a.id,version,changed:true}};
   });
  }

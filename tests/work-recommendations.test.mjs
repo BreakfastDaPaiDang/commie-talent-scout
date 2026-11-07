@@ -48,12 +48,12 @@ test('transaction guards reject a candidate becoming unavailable after validatio
  await assert.rejects(s.tasks.create(s.accept),{code:'PRECONDITION_CHANGED'});
  assert.equal(f.sqlite.prepare('SELECT count(*) n FROM work_tasks').get().n,0);assert.equal(f.sqlite.prepare('SELECT count(*) n FROM work_recommendation_links').get().n,0);assert.equal(f.sqlite.prepare('SELECT count(*) n FROM commands WHERE request_id=?').get(s.accept.request_id).n,0);
 });
-test('read uses submitted full observation, excludes zero/disabled/wrong-stage resources, and does not write',async t=>{
+test('read uses submitted full observation, excludes zero/disabled resources but accepts unrelated or free purposes, and does not write',async t=>{
  const f=fixture();t.after(f.close);const s=await setup(f);
- for(const patch of [{capacity:0},{active:false},{purposes:['review']}])await s.overview.save({...s.r,id:id(),request_id:id(),...patch});
+ for(const patch of [{capacity:0},{active:false},{purposes:['声音制作']}])await s.overview.save({...s.r,id:id(),request_id:id(),...patch});
  const before=f.sqlite.prepare('SELECT count(*) n FROM work_tasks').get().n;
- const data=await s.recommendations.read({archive_id:s.a.id});assert.equal(data.candidates.length,1);assert.equal(data.candidates[0].id,s.r.id);assert.match(data.candidates[0].conditions[0],/待确认/);assert.equal(data.evidence.id,s.o.id);assert.equal(f.sqlite.prepare('SELECT count(*) n FROM work_tasks').get().n,before);
- await s.observations.update({id:s.o.id,expected_version:1,body:'近况。'.repeat(130)+'希望剪辑',occurred_at:null,request_id:id()});assert.equal((await s.recommendations.read({archive_id:s.a.id})).candidates.length,1);
+ const data=await s.recommendations.read({archive_id:s.a.id});assert.equal(data.candidates.length,2);assert.ok(data.candidates.some(c=>c.id===s.r.id));assert.match(data.candidates[0].conditions[0],/待确认/);assert.equal(data.evidence.id,s.o.id);assert.equal(f.sqlite.prepare('SELECT count(*) n FROM work_tasks').get().n,before);
+ await s.observations.update({id:s.o.id,expected_version:1,body:'近况。'.repeat(130)+'希望剪辑',occurred_at:null,request_id:id()});assert.equal((await s.recommendations.read({archive_id:s.a.id})).candidates.length,2);
 });
 test('acceptance atomically creates assigned task, immutable evidence link and visible source comment; repeats reuse',async t=>{
  const f=fixture();t.after(f.close);const s=await setup(f),before=(await s.overview.read({})).people[0].due_at;

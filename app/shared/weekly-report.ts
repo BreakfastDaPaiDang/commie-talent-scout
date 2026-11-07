@@ -1,5 +1,5 @@
 import {bucketDate,shanghaiDate,type StatisticsQuery,type StatisticsResult} from './statistics.ts';
-import {backlogForecast,resourceDistribution,experienceTypes,type WorkOverviewData} from './work-overview.ts';
+import {backlogForecast,overviewResourceDistribution,referencedResources,experienceTypes,type WorkOverviewData} from './work-overview.ts';
 
 export type WeeklyReportData={generated_at:string;from:string;to:string;statistics:StatisticsResult;overview:WorkOverviewData};
 export function weeklyReportQuery(date=new Date(),scope:Pick<StatisticsQuery,'group'|'archive_type'>={group:'user',archive_type:'all'}):StatisticsQuery{
@@ -19,14 +19,14 @@ export function weeklyReportDocument(data:WeeklyReportData){
  return {
   schema_version:'1.0.0',report_type:'weekly_work_overview',generated_at:data.generated_at,
   timezone:'Asia/Shanghai',period:{from:data.from,to:data.to,week_starts_on:'Monday',end_inclusive:true},
-  scope:{archive_type:statistics.query.archive_type,group_by:statistics.query.group,temporary_search_applied:false,resources:'all_internal_resources'},
-  definitions:{observation_body:'经历中的 observation.body 是最多 300 字的摘要；通过 observation.id 与 content_version 定位原始观察，不能当作全文。',submission_trend:'按观察首次提交时间统计本周至生成时刻；排除草稿及已删除记录。组内去重，跨组可重叠，total 单独去重。',admission_progress:'当前开启档案；人物仅含未正式入社者，组织单独标注。经历按实际业务状态切换分段。',resources:'生成时当前社内资源；组合用途单列，白色占位补齐后按实际资源 ID 去重。',follow_up:'最新新增观察后 30 天到期；无观察时从建档计时。未更新者在到期后每一天继续计入，日间合计不可相加当作独立人数。',null_capacity:'未知，不能作为零；known_capacity 只含已填写容量。',snapshot:'进度、资源、预测是当前快照，不是本周新增或历史周末状态。'},
+  scope:{archive_type:statistics.query.archive_type,group_by:statistics.query.group,temporary_search_applied:false,resources:'referenced_internal_resources'},
+  definitions:{observation_body:'经历中的 observation.body 是最多 300 字的摘要；通过 observation.id 与 content_version 定位原始观察，不能当作全文。',submission_trend:'按观察首次提交时间统计本周至生成时刻；排除草稿及已删除记录。组内去重，跨组可重叠，total 单独去重。',admission_progress:'当前开启档案；人物仅含未正式入社者，组织单独标注。经历按实际业务状态切换分段。',resources:'生成时档案经历或白色资源已引用的社内资源；按实际使用环节组合单列，资源自身用途自由定义；白色占位补齐后按实际资源 ID 去重。',follow_up:'最新新增观察后 30 天到期；无观察时从建档计时。未更新者在到期后每一天继续计入，日间合计不可相加当作独立人数。',null_capacity:'未知，不能作为零；known_capacity 只含已填写容量。',snapshot:'进度、资源、预测是当前快照，不是本周新增或历史周末状态。'},
   units:{duration_days:'day',resource_count:'resource',known_capacity:'person',unknown_capacity_count:'resource',forecast_total:'archive'},
   experience_types:experienceTypes,
   charts:{
    submission_trend:statistics,
    admission_progress:{as_of:overview.as_of,people:overview.people.filter(p=>p.type==='org'||(p.person_role!=='member'&&p.status!=='已入伙'))},
-   internal_resources:{as_of:overview.as_of,distribution:resourceDistribution(overview.resources,overview.white_resources).map(g=>({id:g.id,label:g.label,color:g.color,resource_count:g.count,known_capacity:g.capacity,unknown_capacity_count:g.unknown})),resources:overview.resources,white_resources:overview.white_resources??[],gaps:overview.gaps},
+   internal_resources:{as_of:overview.as_of,distribution:overviewResourceDistribution(overview).map(g=>({id:g.id,label:g.label,color:g.color,resource_count:g.count,known_capacity:g.capacity,unknown_capacity_count:g.unknown})),resources:overview.resources.filter(r=>referencedResources(overview).some(used=>used.id===r.id)),white_resources:overview.white_resources??[],gaps:overview.gaps},
    follow_up_forecast:{as_of:overview.as_of,threshold_days:30,horizon_days:30,points:backlogForecast(overview.people,overview.as_of).map(f=>{const at=new Date(Date.parse(overview.as_of)+f.day*86400000).toISOString(),due=overview.people.filter(p=>p.due_at<=at);return {...f,at,date:shanghaiDate(new Date(at)),person_count:due.filter(p=>p.type==='person').length,organization_count:due.filter(p=>p.type==='org').length,archive_ids:due.map(p=>p.id)};}),archives:overview.people.map(p=>({id:p.id,name:p.name,type:p.type,status:p.status,last_observation_at:p.last_observation_at,due_at:p.due_at,assignment:p.assignment,owner_name:p.owner_name,tasks:p.tasks}))}
   }
  };
