@@ -174,6 +174,11 @@ try{
   await page.evaluate(()=>Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async value=>{window.__sharedUrl=value;}}}));await actions.getByRole('button',{name:'分享任务',exact:true}).click();assert.equal(new URL(await page.evaluate(()=>window.__sharedUrl)).searchParams.get('task'),new URL(page.url()).searchParams.get('task'));
  }
  await page.goto(base+'/tasks?task='+waitingTask.id);await page.getByRole('button',{name:'领取任务',exact:true}).click();await page.getByRole('button',{name:'提交交付',exact:true}).waitFor();assert.equal(f.sqlite.prepare('SELECT owner_id FROM work_tasks WHERE id=?').get(waitingTask.id).owner_id,f.actor.id);
+ for(const width of [1440,390]){
+  await page.setViewportSize({width,height:1080});await page.goto(base+'/tasks?task='+waitingTask.id);const actions=page.locator('.task-scene-actions');await actions.getByRole('button',{name:'提交交付',exact:true}).waitFor();await actions.scrollIntoViewIfNeeded();assert.equal(await actions.locator('.task-action-stack').count(),0);
+  const rects=await actions.locator(':scope > button').evaluateAll(els=>els.map(el=>{const r=el.getBoundingClientRect();return {text:el.textContent,x:r.x,y:r.y,width:r.width,height:r.height};}));assert.equal(rects.length,5);assert.ok(rects.every(r=>Math.abs(r.height-48)<1));if(width===1440)assert.ok(rects.every(r=>Math.abs(r.y-rects[0].y)<1));else{const main=rects.find(r=>r.text.includes('提交交付'));assert.ok(rects.filter(r=>r!==main).every(r=>r.y>main.y));}
+  await actions.screenshot({path:out+'/task-active-actions-'+width+'.png',animations:'disabled'});await page.screenshot({path:out+'/task-active-page-'+width+'.png',fullPage:true,animations:'disabled'});await actions.getByRole('button',{name:'提交交付',exact:true}).click();await page.getByRole('dialog',{name:'提交交付',exact:true}).waitFor();await page.keyboard.press('Escape');
+ }
  await page.setViewportSize({width:1440,height:1080});
  await page.goto(base+'/agent');await page.getByRole('heading',{name:/如果你被难住了/}).waitFor();
  const agentHeadings=await page.locator('.agent-copy h1,.agent-copy h2').allTextContents();assert.ok(!agentHeadings.includes('Agent 接入流程'));assert.ok(!agentHeadings.includes('把大象装进冰箱需要几步？'));assert.equal(await page.locator('.agent-connect-steps li').count(),3);
