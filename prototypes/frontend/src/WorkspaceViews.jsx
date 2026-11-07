@@ -139,7 +139,7 @@ export function Detail({ w }) {
     w.setComposeOpen(true);
   }
   return (
-    <DetailFrame label={entity.type==='person'?'人物档案':'组织档案'} code={entity.id.toUpperCase().slice(0,6)} expanded={w.detailWide} onExpand={()=>w.setDetailWide(!w.detailWide)} onClose={w.closeDetail} onNextUnread={w.unreadEntities.some(e=>e.id!==entity.id)?w.nextUnread:undefined} scrollRef={scroll} onScroll={event=>{w.readingPositions.current[`${w.actorId}:${entity.id}`]=event.currentTarget.scrollTop;}}>
+    <DetailFrame sharePath={(entity.type==='org'?'/organizations':'/')+'?archive='+encodeURIComponent(entity.id)} label={entity.type==='person'?'人物档案':'组织档案'} code={entity.id.toUpperCase().slice(0,6)} expanded={w.detailWide} onExpand={()=>w.setDetailWide(!w.detailWide)} onClose={w.closeDetail} onNextUnread={w.unreadEntities.some(e=>e.id!==entity.id)?w.nextUnread:undefined} scrollRef={scroll} onScroll={event=>{w.readingPositions.current[`${w.actorId}:${entity.id}`]=event.currentTarget.scrollTop;}}>
           <EntityHeader key={entity.id} name={entity.name} state={<StateBadge entity={entity} onClick={locked?undefined:()=>w.setDialog({type:'state',nextState:entity.state})}/>} avatar={<Avatar type={entity.type} name={entity.name} contacts={entity.contacts} src={entity.avatar} size="hero"/>} actions={<IconButton name="more" label="档案操作" onClick={()=>w.setDialog({type:'entity-actions'})}/>} assignment={owners.length>0&&<div className="assignment-row"><div className="assigned-members">{owners.map(id=>{const m=w.members.find(m=>m.id===id);return <span className="member-chip" key={id}><Avatar name={m?.name} src={m?.avatar} qq={m?.qq} size="micro"/>{memberName(id)}{m?.frozen&&<small>已冻结</small>}</span>})}</div></div>} contacts={<>
               {entity.contacts.map((contact, i) => (
                 <button
@@ -256,7 +256,7 @@ export function Detail({ w }) {
                       </div>
                     </div>
                   ) : (
-                    <ObservationFrame id={`observation-${item.id}`} avatar={<Avatar name={memberName(item.author)} qq={w.members.find(m=>m.id===item.author)?.qq} src={w.members.find(m=>m.id===item.author)?.avatar} size="tiny"/>} author={memberName(item.author)} time={item.time} edited={item.edited?'已编辑':undefined} unread={unread} onHistory={()=>w.setDialog({type:'history',record:item})} historyLabel={`查看${memberName(item.author)}记录的历史`} deleted={item.deleted} footer={<>                      {!locked && canEditRecord(item, actor) && (
+                    <ObservationFrame sharePath={!item.deleted?(entity.type==='org'?'/organizations':'/')+'?archive='+encodeURIComponent(entity.id)+'&observation='+encodeURIComponent(item.id):undefined} id={`observation-${item.id}`} avatar={<Avatar name={memberName(item.author)} qq={w.members.find(m=>m.id===item.author)?.qq} src={w.members.find(m=>m.id===item.author)?.avatar} size="tiny"/>} author={memberName(item.author)} time={item.time} edited={item.edited?'已编辑':undefined} unread={unread} onHistory={()=>w.setDialog({type:'history',record:item})} historyLabel={`查看${memberName(item.author)}记录的历史`} deleted={item.deleted} footer={<>                      {!locked && canEditRecord(item, actor) && (
                         <>
                           {item.deleted ? (
                             <button

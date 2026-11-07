@@ -2,6 +2,7 @@ import type {WeeklyReportFormat} from '../shared/weekly-report';
 import React,{useEffect,useMemo,useState,type ReactNode} from 'react';
 import {defaultComparison,ownFirst,defaultStatisticsQuery,type StatisticsQuery,type StatisticsResult} from '../shared/statistics';
 import './statistics.css';
+import './share-link.css';
 
 const groupLabels={user:'成员',tag:'标签',type:'人物／组织'};
 const colors = ['#9b482f','#326a83','#58834c','#8662a1','#b38025','#287f79','#c0507a','#4c6fb0','#d07a30','#6f9b46','#7b5ba6','#b05555'];
@@ -31,12 +32,13 @@ export function StatisticsDashboard({load,getLink,renderCharts,initialData,initi
   const y=(n:number)=>270-n/ceiling*220;
   const focusDay=hover===null?null:data?.dates[hover];
   function toggle(id:string){setLineHover(null);setSelected(old=>old.includes(id)?old.filter(x=>x!==id):[...old,id]);}
+  const memberName=(s:StatisticsResult['series'][number])=>!report&&s.archive_path?<a className="statistics-archive-link" href={s.archive_path}>{s.name}</a>:s.name;
   const detailTables=data?<section className="statistics-all-members" aria-label="统计明细"><section className="statistics-details">
 
-        <div className="statistics-table-scroll"><table><thead><tr><th>对比</th><th>{groupLabels[query.group]}</th><th>记录数</th><th>占去重总数</th></tr></thead><tbody>{ownFirst(data).map(s=><tr key={s.id} className={s.id===data.viewer_id?'statistics-self':undefined}><td><input type="checkbox" aria-label={`对比 ${s.name}`} checked={selected.includes(s.id)} onChange={()=>toggle(s.id)}/></td><th scope="row">{s.name}{s.id===data.viewer_id&&<small>我</small>}</th><td>{s.total}</td><td>{data.total?(100*s.total/data.total).toFixed(1):'0.0'}%</td></tr>)}</tbody></table></div>
+        <div className="statistics-table-scroll"><table><thead><tr><th>对比</th><th>{groupLabels[query.group]}</th><th>记录数</th><th>占去重总数</th></tr></thead><tbody>{ownFirst(data).map(s=><tr key={s.id} className={s.id===data.viewer_id?'statistics-self':undefined}><td><input type="checkbox" aria-label={`对比 ${s.name}`} checked={selected.includes(s.id)} onChange={()=>toggle(s.id)}/></td><th scope="row">{memberName(s)}{s.id===data.viewer_id&&<small>我</small>}</th><td>{s.total}</td><td>{data.total?(100*s.total/data.total).toFixed(1):'0.0'}%</td></tr>)}</tbody></table></div>
         {!data.series.length&&<p className="statistics-empty">没有匹配的分组</p>}
       </section>
-      {!!lines.length&&<details className="statistics-periods" open={report||undefined}><summary>查看逐期数据</summary><div className="statistics-table-scroll"><table><thead><tr><th>周期起始日</th>{lines.map(s=><th key={s.id}>{s.name}</th>)}</tr></thead><tbody>{data.dates.map((date,i)=><tr key={date}><th scope="row">{date}</th>{lines.map(s=><td key={s.id}>{s.points[i]}</td>)}</tr>)}</tbody></table></div></details>}
+      {!!lines.length&&<details className="statistics-periods" open={report||undefined}><summary>查看逐期数据</summary><div className="statistics-table-scroll"><table><thead><tr><th>周期起始日</th>{lines.map(s=><th key={s.id}>{memberName(s)}</th>)}</tr></thead><tbody>{data.dates.map((date,i)=><tr key={date}><th scope="row">{date}</th>{lines.map(s=><td key={s.id}>{s.points[i]}</td>)}</tr>)}</tbody></table></div></details>}
 </section>:null;
   const trend=data?<section className="statistics-trend" aria-label="提交趋势与明细">
       <section className="statistics-chart-card" aria-label="提交趋势">
@@ -50,7 +52,7 @@ export function StatisticsDashboard({load,getLink,renderCharts,initialData,initi
               {lines.map((line,index)=>{const active=lineHover===line.id,dim=lineHover!==null&&!active,color=colors[index % colors.length],pts=line.points.map((n,i)=>`${x(i)},${y(n)}`).join(' ');return <g key={line.id} onMouseEnter={()=>setLineHover(line.id)} onMouseLeave={()=>setLineHover(null)}><polyline fill="none" stroke="transparent" strokeWidth="16" points={pts} style={{pointerEvents:'stroke'}}/><polyline fill="none" stroke={color} strokeWidth={active?4.5:2.5} points={pts} className="statistics-line" style={{opacity:dim?0.2:1,pointerEvents:'none'}}/>{line.points.map((n,i)=><circle key={i} cx={x(i)} cy={y(n)} r={(data.dates.length>90?1.5:3)+(active?1.6:0)} fill={color} style={{opacity:dim?0.2:1,pointerEvents:'none'}}/>)}</g>;})}
               {hover!==null&&<line x1={x(hover)} x2={x(hover)} y1="42" y2="270" stroke="#888" strokeDasharray="4 4"/>}
             </svg></div>
-            <div className="statistics-legend" aria-live="polite">{focusDay&&<strong>{focusDay}</strong>}{lines.map((line,i)=>{const active=lineHover===line.id,dim=lineHover!==null&&!active;return <span key={line.id} className={active?'statistics-legend-active':dim?'statistics-legend-dim':undefined}><i style={{background:colors[i % colors.length]}}/>{line.name}{hover!==null&&<b>{line.points[hover]} 条</b>}</span>;})}</div>
+            <div className="statistics-legend" aria-live="polite">{focusDay&&<strong>{focusDay}</strong>}{lines.map((line,i)=>{const active=lineHover===line.id,dim=lineHover!==null&&!active;return <span key={line.id} className={active?'statistics-legend-active':dim?'statistics-legend-dim':undefined}><i style={{background:colors[i % colors.length]}}/>{memberName(line)}{hover!==null&&<b>{line.points[hover]} 条</b>}</span>;})}</div>
           </>}
         </>}
       </section>

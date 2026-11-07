@@ -4,7 +4,7 @@ export type StatisticsQuery = {
   from: string; to: string; group: StatisticsGroup; interval: StatisticsInterval;
   archive_type: 'all' | 'person' | 'org'; search: string;
 };
-export type StatisticsSeries = {id: string; name: string; total: number; points: number[]};
+export type StatisticsSeries = {id: string; name: string; total: number; points: number[];archive_path?:string|null};
 export type StatisticsResult = {
   viewer_id?: string; query: StatisticsQuery; dates: string[]; series: StatisticsSeries[];
   total: number; members: number; archives: number; groups: number;
