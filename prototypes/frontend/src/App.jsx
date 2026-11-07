@@ -112,11 +112,11 @@ export default function App() {
           </Button>
         </div>
       )}
-      {w.page === "statistics" ? <StatisticsPreview/> : w.page === "tools" ? <AuxiliaryTools/> : <div
-        className={`workspace ${["accounts", "agent"].includes(w.page) ? "support-workspace" : ""}`}
+      {w.page === "statistics" ? <StatisticsPreview/> : w.page === "tools" ? <AuxiliaryTools/> : w.page === "agent" ? <main className="support-content agent-page"><AgentPage w={w}/></main> : <div
+        className={`workspace ${w.page === "accounts" ? "support-workspace" : ""}`}
       >
         <main
-          className={`main-panel ${["accounts", "agent"].includes(w.page) ? "support-panel" : ""}`}
+          className={`main-panel ${w.page === "accounts" ? "support-panel" : ""}`}
         >
           {['person','org'].includes(w.page)?<ArchiveHead label={labels[w.page]} count={w.entities.filter(e=>e.type===w.page).length.toString().padStart(2,'0')} query={w.search} onQuery={w.setSearch} onCreate={()=>w.setDialog({type:'entity-new'})}/>:(          <header
             className={`page-head ${["person", "org"].includes(w.page) ? "archive-head" : ""}`}
@@ -169,7 +169,6 @@ export default function App() {
           {["person", "org"].includes(w.page) && <ArchiveList w={w} />}
           {w.page === "unread" && <Updates w={w} />}
           {w.page === "accounts" && <Accounts w={w} />}
-          {w.page === "agent" && <AgentPage w={w} />}
         </main>
         {w.detailVisible ? (
           <Detail w={w} />

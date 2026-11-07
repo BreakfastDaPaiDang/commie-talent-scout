@@ -23,7 +23,7 @@ export function AgentPage(){
       try{await navigator.clipboard.writeText(prompt);setCopied(true);}catch{setFallback(prompt);}
     }catch(e){setError((e as Error).message);}finally{working.current=false;setBusy(false);}
   }
-  return <main className="support-content"><AgentHandoff onCopy={()=>void copy()} busy={busy} copied={copied} fallback={fallback} error={error} onNew={ready?()=>void copy(true):undefined}/></main>;
+  return <main className="support-content agent-page"><AgentHandoff onCopy={()=>void copy()} busy={busy} copied={copied} fallback={fallback} error={error} onNew={ready?()=>void copy(true):undefined}/></main>;
 }
 type Connection={id:string;name:string;created_at:string;expires_at:string;revoked_at:string|null;active:number;version:number};
 export function ConnectionsPage(){
