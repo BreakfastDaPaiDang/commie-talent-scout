@@ -20,7 +20,7 @@ async function setup(f,source='web'){
 for(const source of ['web','mcp'])test(`${source}: explicit personnel delivery advances audit, onboarding and membership atomically`,async t=>{
  const f=fixture();t.after(f.close);const s=await setup(f,source),before=await s.archives.get(s.id);
  const result=await s.tasks.complete(s.input);
- assert.equal(result.archive_status,'已加入待对接');assert.equal(result.archive_version,before.version+1);assert.equal(result.archive_advanced,true);
+ assert.notEqual(result.membership_joined,true);assert.equal(result.archive_status,'已加入待对接');assert.equal(result.archive_version,before.version+1);assert.equal(result.archive_advanced,true);
  const a=await s.archives.get(s.id);assert.equal(a.person_role,'external');assert.equal(a.closed,false);assert.equal(a.name,before.name);
  const next=(await s.tasks.detail(result.next_task_id)).task;
  assert.equal(next.kind,'onboarding');assert.equal(next.source,'rule');assert.equal(next.status,'open');assert.equal(next.owner_id,null);
@@ -32,7 +32,7 @@ for(const source of ['web','mcp'])test(`${source}: explicit personnel delivery a
  const claimed=await otherEntry.claim({id:next.id,expected_version:next.version,request_id:uuid()});
  const nextRefs=await fresh(f,s.id);
  const finish=await otherEntry.complete({...s.input,references:nextRefs,id:next.id,expected_version:claimed.version,result_kind:'onboarding_completed',result_text:'对接完成',request_id:uuid()});
- assert.equal(finish.archive_status,'已入伙');assert.equal(finish.next_task_id,null);
+ assert.equal(finish.membership_joined,true);assert.equal(finish.archive_status,'已入伙');assert.equal(finish.next_task_id,null);
  const joined=await s.archives.get(s.id);assert.equal(joined.person_role,'member');assert.equal(joined.member_status,'可接工作');assert.equal(joined.closed,false);
  assert.equal((await s.archives.list({type:'person',person_scope:'external'})).archives.some(a=>a.id===s.id),false);
  assert.equal((await s.archives.list({type:'person',person_scope:'members'})).archives.some(a=>a.id===s.id),true);

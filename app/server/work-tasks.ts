@@ -376,7 +376,7 @@ export class WorkTasks {
     const stageTask=!advanced?await preparePersonnelTask(this.stmt.bind(this),old.id,rule.to,new Date(Date.parse(at)+7*86400000).toISOString()):null;
     if(!advanced)statements.push(...planArchiveEffects({old,status:rule.to,memberIds:[],reopen:false,stageTask,at,actorId:this.actor.id,source:this.source,members:[],bindings:[],tags:new TagState(this.env,this.actor),stmt:this.stmt.bind(this),event:archives.event.bind(archives)}));
     statements.push(this.stmt('DELETE FROM mutation_guards WHERE id=?',key));
-    return {result:{archive_id:old.id,archive_status:advanced?old.status:rule.to,archive_version:old.version+(advanced?0:1),archive_advanced:!advanced,next_task_id:stageTask?.id??null},statements};
+    return {result:{archive_id:old.id,archive_status:advanced?old.status:rule.to,archive_version:old.version+(advanced?0:1),archive_advanced:!advanced,...(!advanced&&rule.to==='已入伙'?{membership_joined:true}:{}),next_task_id:stageTask?.id??null},statements};
   }
   private async restoreCancelledAudit(task:Row,at:string){
     const unchanged={result:{},statements:[] as D1PreparedStatement[]};if(!task.archive_id||task.kind!=='audit'||task.source!=='rule')return unchanged;
