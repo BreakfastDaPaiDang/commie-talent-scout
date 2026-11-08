@@ -1,3 +1,4 @@
+import {ThemePicker} from './ThemePicker';
 import {ShareLink} from './ShareLink';
 import type {ArchiveReminder} from '../rules/archive-reminders';
 import React,{useEffect,useRef,type ReactNode,type RefObject} from 'react';
@@ -15,7 +16,7 @@ export function AuxiliaryToolsNav({active,onClick}:{active:boolean;onClick:()=>v
  return <button type="button" className={'tool-link '+(active?'active':'')} aria-label="辅助工具" title="辅助工具" aria-current={active?'page':undefined} onClick={onClick}><Icon name="folder"/><span>辅助工具</span></button>;
 }
 export function TopBar({navigation,tools,mobileTools,onHome}:{navigation:ReactNode;tools:ReactNode;mobileTools?:ReactNode;onHome:()=>void}){
- return <header className="topbar"><a className="brand" href="/" onClick={e=>{e.preventDefault();onHome();}}><Mark/><span>康米巨星<small>猎头系统</small></span></a><nav className="primary-nav" aria-label="主要导航">{navigation}</nav><div className="topbar-tools">{tools}</div>{mobileTools}</header>;
+ return <header className="topbar"><a className="brand" href="/" onClick={e=>{e.preventDefault();onHome();}}><Mark/><span>康米巨星<small>猎头系统</small></span></a><nav className="primary-nav" aria-label="主要导航">{navigation}</nav><div className="topbar-tools">{tools}</div><ThemePicker/>{mobileTools}</header>;
 }
 export function WorkspaceFrame({list,detail,selected,expanded=false,detailOnly=false}:{list:ReactNode;detail:ReactNode;selected:boolean;expanded?:boolean;detailOnly?:boolean}){
  return <div className={`workspace-layout ${selected?'has-detail':''} ${expanded?'expanded-detail':''} ${detailOnly?'detail-only':''}`}><div className="workspace"><main className="main-panel">{list}</main>{detail}</div></div>;

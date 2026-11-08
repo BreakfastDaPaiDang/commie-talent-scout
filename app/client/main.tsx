@@ -1,3 +1,4 @@
+import {ThemePicker} from '../ui/ThemePicker';
 import {ResourcePage} from './ResourcePage';
 import {UnreadNav} from '../ui/UnreadNav';
 import {StatisticsPage} from './StatisticsPage';
@@ -69,7 +70,7 @@ function App(){
   async function logout(){setBusy(true);try{if(member)await flushDrafts(member.id);clearUploadMemory();await api('/auth/logout',{});if(member)clearDraftMemory(member.id);setMember(null);setError('');}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
   async function refreshActor(message?:string){try{const r=await api<{member:Member}>('/auth/me');setMember(r.member);if(r.member.role!=='admin'&&path.startsWith('/admin/')){navigate('/');setNotice(message??'权限已更新');}return r.member;}catch(e){if(e instanceof ApiError&&e.status===401){setMember(null);setNotice(message??'登录已失效，请重新登录');return null;}throw e;}}
   if(loading)return <main className="initial-loading" role="status">正在打开工作台…</main>;
-  if(!member||member.must_change_password||path==='/account/password')return <div className="login-page"><section className="login-scene" aria-hidden="true"><img src="/art/login-observatory-v4.png" alt=""/></section><main className="login-form"><Brand/>
+  if(!member||member.must_change_password||path==='/account/password')return <div className="login-page"><ThemePicker/><section className="login-scene" aria-hidden="true"><img src="/art/login-observatory-v4.png" alt=""/></section><main className="login-form"><Brand/>
     {member?<><h1 className="password-heading">{member.must_change_password?'设置你的密码':'修改密码'}</h1><p>{member.must_change_password?'首次登录，请更换临时密码。':'修改后，所有旧登录和连接会失效。'}</p><form aria-label="修改密码" onSubmit={change}>
       <input type="hidden" name="username" autoComplete="username" value={member.username}/>
       <label>当前密码<PasswordInput name="current_password" autoComplete="current-password" required maxLength={128}/></label>
