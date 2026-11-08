@@ -19,6 +19,7 @@ test('same-stage records stay separate, ties use event order, and rollback retai
  const widths=experienceWidths(segments,6);assert.ok(widths.every(w=>w>0));assert.ok(Math.abs(widths.reduce((a,b)=>a+b,0)-87.5)<1e-9);
  const ordinary=buildExperience(archive,[event('a',1,0,'个人接触'),event('b',2,2,'人事审核'),event('c',3,6,'个人接触')],[],[],time(11));
  assert.deepEqual(experienceWidths(ordinary,11),[2/11*87.5,4/11*87.5,5/11*87.5]);
+ const sameDay=buildExperience(archive,[event('a',1,0,'个人接触')],[observation('new',2,.1)],[],time(.25));assert.ok(Math.abs(experienceWidths(sameDay,.25).reduce((a,b)=>a+b,0)-87.5)<1e-9);
 });
 test('backfill inserts its own record without stealing placements or inventing an unknown stage',()=>{
  const events=[event('start',1,1,'个人接触'),event('review',2,4,'人事审核')];

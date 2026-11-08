@@ -44,7 +44,7 @@ export function buildExperience(a:OverviewArchive,events:ExperienceEvent[],obser
 /** Preserve the elapsed-time row length, reserving a small clickable sliver for same-time records. */
 export function experienceWidths(segments:ExperienceSegment[],maxDays:number):number[]{
  if(!segments.length)return [];
- const total=segments.reduce((n,s)=>n+s.days,0),budget=Math.min(87.5,Math.max(total/Math.max(maxDays,1)*87.5,Math.min(segments.length*1.5,12)));
+ const total=segments.reduce((n,s)=>n+s.days,0),budget=Math.min(87.5,Math.max(total/(maxDays>0?maxDays:1)*87.5,Math.min(segments.length*1.5,12)));
  const floor=Math.min(1.5,budget/segments.length),widths=segments.map(s=>total?s.days/total*budget:budget/segments.length);
  let remaining=budget,weight=total;const pending=new Set(widths.map((_,i)=>i));
  while(pending.size){
