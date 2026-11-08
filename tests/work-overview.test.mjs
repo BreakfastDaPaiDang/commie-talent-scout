@@ -37,7 +37,7 @@ test('overview excludes closed/deleted archives and old observations edited toda
  const f=fixture();t.after(f.close);const a=await new Archives(f.env,f.actor,'web').create({type:'person',name:'虚构对象',request_id:randomUUID()});const old=new Date(Date.now()-40*dayMs).toISOString(),o=randomUUID();
  f.sqlite.prepare('UPDATE archives SET created_at=? WHERE id=?').run(old,a.id);
  f.sqlite.prepare('INSERT INTO observations(id,archive_id,author_id,created_at,updated_at) VALUES(?,?,?,?,?)').run(o,a.id,f.actor.id,old,new Date().toISOString());f.sqlite.prepare('INSERT INTO observation_versions(observation_id,version,body,editor_id,created_at) VALUES(?,1,?,?,?)').run(o,'最新编辑文字',f.actor.id,new Date().toISOString());
- const w=new WorkOverview(f.env,f.actor),data=await w.read({type:'person'});assert.equal(data.people[0].last_observation_at,old);assert.ok(data.people[0].due_at<data.as_of);assert.equal(data.people[0].segments[0].observations.length,0);
+ const w=new WorkOverview(f.env,f.actor),data=await w.read({type:'person'});assert.equal(data.people[0].last_observation_at,old);assert.ok(data.people[0].due_at<data.as_of);assert.equal(data.people[0].segments[0].observation_id,o);assert.equal(data.people[0].segments[0].type,null);
  f.sqlite.prepare('UPDATE archives SET closed=1 WHERE id=?').run(a.id);assert.equal((await w.read({})).people.length,0);f.sqlite.prepare('UPDATE archives SET closed=0,deleted=1 WHERE id=?').run(a.id);assert.equal((await w.read({})).people.length,0);
 });
 test('placements bind real archive events, preserve plan/actual distinction and reject closed archives',async t=>{

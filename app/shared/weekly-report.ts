@@ -17,10 +17,10 @@ export type WeeklyReportFormat='pdf'|'json';
 export function weeklyReportDocument(data:WeeklyReportData){
  const {overview,statistics}=data;
  return {
-  schema_version:'1.0.0',report_type:'weekly_work_overview',generated_at:data.generated_at,
+  schema_version:'1.1.0',report_type:'weekly_work_overview',generated_at:data.generated_at,
   timezone:'Asia/Shanghai',period:{from:data.from,to:data.to,week_starts_on:'Monday',end_inclusive:true},
   scope:{archive_type:statistics.query.archive_type,group_by:statistics.query.group,temporary_search_applied:false,resources:'referenced_internal_resources'},
-  definitions:{observation_body:'经历中的 observation.body 是最多 300 字的摘要；通过 observation.id 与 content_version 定位原始观察，不能当作全文。',submission_trend:'按观察首次提交时间统计本周至生成时刻；排除草稿及已删除记录。组内去重，跨组可重叠，total 单独去重。',admission_progress:'当前开启档案；人物仅含未正式入社者，组织单独标注。经历按实际业务状态切换分段。',resources:'生成时档案经历或白色资源已引用的社内资源；按实际使用环节组合单列，资源自身用途自由定义；白色占位补齐后按实际资源 ID 去重。',follow_up:'最新新增观察后 30 天到期；无观察时从建档计时。未更新者在到期后每一天继续计入，日间合计不可相加当作独立人数。',null_capacity:'未知，不能作为零；known_capacity 只含已填写容量。',snapshot:'进度、资源、预测是当前快照，不是本周新增或历史周末状态。'},
+  definitions:{observation_body:'经历中的 observation.body 是最多 300 字的摘要；通过 observation.id 与 content_version 定位原始观察，不能当作全文。',submission_trend:'按观察首次提交时间统计本周至生成时刻；排除草稿及已删除记录。组内去重，跨组可重叠，total 单独去重。',admission_progress:'当前开启档案；人物仅含未正式入社者，组织单独标注。每条已提交观察独立成段，状态切换保留边界；source 区分 observation/state，observation_id 定位来源。同阶段不合并，补记按发生时间排列；type=null 表示该时间没有可核对的阶段。',resources:'生成时档案经历或白色资源已引用的社内资源；按实际使用环节组合单列，资源自身用途自由定义；白色占位补齐后按实际资源 ID 去重。',follow_up:'最新新增观察后 30 天到期；无观察时从建档计时。未更新者在到期后每一天继续计入，日间合计不可相加当作独立人数。',null_capacity:'未知，不能作为零；known_capacity 只含已填写容量。',snapshot:'进度、资源、预测是当前快照，不是本周新增或历史周末状态。'},
   units:{duration_days:'day',resource_count:'resource',known_capacity:'person',unknown_capacity_count:'resource',forecast_total:'archive'},
   experience_types:experienceTypes,
   charts:{
