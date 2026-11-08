@@ -6,32 +6,22 @@ html[data-theme=night]{
  --theme-green-soft:#25382e;--theme-green-text:#98d6af;--theme-blue-soft:#25333d;--theme-blue-text:#9ccdeb;
  --theme-violet-soft:#332b42;--theme-violet-text:#c4b2f0;--theme-header:#151719;--theme-on-header:#efeeeb;
 }
-html[data-theme=care]{
- --ink:#3b382f;--muted:#706955;--paper:#f7f0df;--page-bg:#eee6d5;--wash:#e7ddc7;--line:#cfc2a8;--red:#b5382c;
- --theme-surface:#f7f0df;--theme-soft:#e7ddc7;--theme-text:#3b382f;--theme-muted:#706955;--theme-line:#cfc2a8;
- --theme-warm-soft:#ede0b7;--theme-warm-text:#775319;--theme-red-soft:#efddd0;--theme-red-text:#a1372c;
- --theme-green-soft:#dfe5cf;--theme-green-text:#406043;--theme-blue-soft:#dce3da;--theme-blue-text:#365c69;
- --theme-violet-soft:#e8dddf;--theme-violet-text:#6b4e75;--theme-header:#393a32;--theme-on-header:#f4eedf;
-}
-.theme-picker{display:inline-flex;align-items:center;gap:3px;flex-shrink:0;color:inherit;font-size:14px;line-height:1}
-.theme-picker select{color:inherit;background:transparent;border:1px solid currentColor;border-radius:4px;font:inherit;padding:8px 2px 8px 6px;min-height:36px;width:65px;cursor:pointer}
-.theme-picker option{background:var(--paper);color:var(--ink)}
+.theme-picker{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;width:40px;height:40px;padding:0;border:0;border-radius:6px;color:inherit;background:transparent;cursor:pointer;transition:background-color .15s}
+.theme-picker:hover{background:color-mix(in srgb,currentColor 10%,transparent)}
+.theme-picker:active{background:color-mix(in srgb,currentColor 16%,transparent)}
+.theme-picker:focus-visible{outline:2px solid currentColor;outline-offset:2px}
 .topbar>.theme-picker{margin-left:-10px}
 .login-page>.theme-picker{position:absolute;right:24px;top:20px;z-index:2;color:var(--ink)}
 html[data-theme=night] :is(input,textarea,select){color:var(--ink)}
-html[data-theme=care] :is(input,textarea,select){color:var(--ink)}
 html[data-theme] .topbar{background:var(--theme-header,#202020);color:var(--theme-on-header,#fff)}
-html[data-theme] .topbar .theme-picker select{color:inherit}
 html[data-theme=night] :is(input,textarea)::placeholder{color:#a3a6a8;opacity:1}
-html[data-theme=care] :is(input,textarea)::placeholder{color:#7b725f;opacity:1}
 html[data-theme=night] :is(.agent-art img,.login-scene img,.empty-detail img,.caught-up img){mix-blend-mode:normal}
 @media(max-width:1100px){.topbar>.theme-picker{margin-left:auto}.topbar>.theme-picker+.icon-button{margin-left:0}}
-@media(max-width:600px){.topbar>.theme-picker{position:absolute;right:55px;top:12px;margin:0}.theme-picker{font-size:13px}.theme-picker>svg{display:none}.theme-picker select{width:62px}.login-page>.theme-picker{top:12px;right:16px}}
+@media(max-width:600px){.theme-picker{width:44px;height:44px}.topbar>.theme-picker{position:absolute;right:55px;top:8px;margin:0}.login-page>.theme-picker{top:8px;right:16px}}
 
 html[data-theme=night] .button.primary{background:#b93630;color:#fff;border-color:#b93630}
-html[data-theme=care] .button.primary{background:#b5382c;color:#fff;border-color:#b5382c}
 
-html:is([data-theme=night],[data-theme=care]) :is(.statistics-chart,.wo-forecast) g>line{stroke:var(--line)}
+html[data-theme=night] :is(.statistics-chart,.wo-forecast) g>line{stroke:var(--line)}
 html[data-theme=night] .wo-forecast>line{stroke:var(--muted)}
 html[data-theme=night] :is(.statistics-line,.statistics-chart circle,.statistics-legend i){filter:brightness(1.5)}
 
@@ -39,5 +29,5 @@ html[data-theme=night] :is(.statistics-line,.statistics-chart circle,.statistics
 html .topbar-tools{flex-shrink:0}
 @media(min-width:1201px) and (max-width:1400px){html .topbar{gap:24px}html .primary-nav{gap:24px}html .topbar-tools{gap:12px}html .current-member>span{max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
 @media(min-width:601px) and (max-width:1200px){html .topbar-tools{display:none}html .topbar>.icon-button{display:flex;margin-left:0}html .topbar>.theme-picker{margin-left:auto}}
-html:is([data-theme=night],[data-theme=care]){--surface:var(--paper);--accent:var(--theme-violet-text)}
-html:is([data-theme=night],[data-theme=care]) .wo-segment-picker button{background:var(--paper);border-color:var(--line)}
+html[data-theme=night]{--surface:var(--paper);--accent:var(--theme-violet-text)}
+html[data-theme=night] .wo-segment-picker button{background:var(--paper);border-color:var(--line)}
