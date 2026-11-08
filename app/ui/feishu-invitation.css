@@ -1,0 +1,7 @@
+.modal:has(>.feishu-invitation){width:min(480px,calc(100vw - 24px))}
+.feishu-invitation{padding:24px;overflow:auto;text-align:center;min-height:0}
+.feishu-invitation .feishu-qr{display:block;width:min(100%,320px);height:auto;max-height:55dvh;aspect-ratio:1;margin:0 auto;background:#fff}
+.feishu-invitation p{margin:16px 0 0;font-size:18px;line-height:1.6;color:var(--theme-text,#332e2a)}
+@media(max-width:520px){.feishu-invitation{padding:18px}.feishu-invitation p{font-size:16px}}
+
+.feishu-invitation-actions{display:flex;justify-content:flex-end;padding:16px 24px;border-top:1px solid var(--theme-line,#ded8d2);flex-shrink:0}

@@ -1,3 +1,4 @@
+import {FeishuInvitation} from '../../../app/ui/FeishuInvitation';
 import WorkOverviewPreview from './WorkOverviewPreview';
 import React from "react";
 import { createRoot } from "react-dom/client";
@@ -42,5 +43,5 @@ function ResponsivePreview() {
   );
 }
 createRoot(document.getElementById("root")).render(
-  new URLSearchParams(location.search).has('work-overview') ? <WorkOverviewPreview /> : new URLSearchParams(location.search).has('flow') ? <FlowPreview /> : sizes[preview] ? <ResponsivePreview /> : <App />,
+  new URLSearchParams(location.search).has('feishu-invitation') ? <FeishuInvitation onClose={()=>location.assign('/')} /> : new URLSearchParams(location.search).has('work-overview') ? <WorkOverviewPreview /> : new URLSearchParams(location.search).has('flow') ? <FlowPreview /> : sizes[preview] ? <ResponsivePreview /> : <App />,
 );
