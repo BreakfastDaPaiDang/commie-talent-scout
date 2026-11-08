@@ -1,3 +1,4 @@
+import {ScrollRegion} from './ScrollRegion';
 import type {WeeklyReportFormat} from '../shared/weekly-report';
 import React,{useEffect,useMemo,useState,type ReactNode} from 'react';
 import {defaultComparison,ownFirst,defaultStatisticsQuery,type StatisticsQuery,type StatisticsResult} from '../shared/statistics';
@@ -35,10 +36,10 @@ export function StatisticsDashboard({load,getLink,renderCharts,initialData,initi
   const memberName=(s:StatisticsResult['series'][number])=>!report&&s.archive_path?<a className="statistics-archive-link" href={s.archive_path}>{s.name}</a>:s.name;
   const detailTables=data?<section className="statistics-all-members" aria-label="统计明细"><section className="statistics-details">
 
-        <div className="statistics-table-scroll"><table><thead><tr><th>对比</th><th>{groupLabels[query.group]}</th><th>记录数</th><th>占去重总数</th></tr></thead><tbody>{ownFirst(data).map(s=><tr key={s.id} className={s.id===data.viewer_id?'statistics-self':undefined}><td><input type="checkbox" aria-label={`对比 ${s.name}`} checked={selected.includes(s.id)} onChange={()=>toggle(s.id)}/></td><th scope="row">{memberName(s)}{s.id===data.viewer_id&&<small>我</small>}</th><td>{s.total}</td><td>{data.total?(100*s.total/data.total).toFixed(1):'0.0'}%</td></tr>)}</tbody></table></div>
+        <ScrollRegion className="statistics-table-scroll" label="成员明细" rows="tbody tr" report={report}><table><thead><tr><th>对比</th><th>{groupLabels[query.group]}</th><th>记录数</th><th>占去重总数</th></tr></thead><tbody>{ownFirst(data).map(s=><tr key={s.id} className={s.id===data.viewer_id?'statistics-self':undefined}><td><input type="checkbox" aria-label={`对比 ${s.name}`} checked={selected.includes(s.id)} onChange={()=>toggle(s.id)}/></td><th scope="row">{memberName(s)}{s.id===data.viewer_id&&<small>我</small>}</th><td>{s.total}</td><td>{data.total?(100*s.total/data.total).toFixed(1):'0.0'}%</td></tr>)}</tbody></table></ScrollRegion>
         {!data.series.length&&<p className="statistics-empty">没有匹配的分组</p>}
       </section>
-      {!!lines.length&&<details className="statistics-periods" open={report||undefined}><summary>查看逐期数据</summary><div className="statistics-table-scroll"><table><thead><tr><th>周期起始日</th>{lines.map(s=><th key={s.id}>{memberName(s)}</th>)}</tr></thead><tbody>{data.dates.map((date,i)=><tr key={date}><th scope="row">{date}</th>{lines.map(s=><td key={s.id}>{s.points[i]}</td>)}</tr>)}</tbody></table></div></details>}
+      {!!lines.length&&<details className="statistics-periods" open={report||undefined}><summary>查看逐期数据</summary><ScrollRegion className="statistics-table-scroll" label="逐期数据" rows="tbody tr" report={report}><table><thead><tr><th>周期起始日</th>{lines.map(s=><th key={s.id}>{memberName(s)}</th>)}</tr></thead><tbody>{data.dates.map((date,i)=><tr key={date}><th scope="row">{date}</th>{lines.map(s=><td key={s.id}>{s.points[i]}</td>)}</tr>)}</tbody></table></ScrollRegion></details>}
 </section>:null;
   const trend=data?<section className="statistics-trend" aria-label="提交趋势与明细">
       <section className="statistics-chart-card" aria-label="提交趋势">

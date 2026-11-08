@@ -1,3 +1,4 @@
+import {ScrollRegion} from './ScrollRegion';
 import {ResourceEditor} from './ResourceEditor';
 import type {RecommendationAPI} from '../shared/work-recommendations';
 import React,{useEffect,useMemo,useRef,useState,type CSSProperties,type ReactNode} from 'react';
@@ -50,11 +51,11 @@ export function WorkOverview({embedded=false,report=false,initialData,externalSc
   {loading&&<p role="status">正在读取工作记录…</p>}
   {data&&!loading&&<div className="wo-visuals">
    <section className="wo-panel wo-main" aria-label="人员经历"><header className="wo-panel-head"><div><h2>{scope==='org'?'组织经历':'入社进度'}</h2>{embedded&&<Legend/>}</div></header>
-    <div className="wo-timeline-scroll" tabIndex={0} aria-label="完整经历列表"><div>
+    <ScrollRegion className="wo-timeline-scroll" label="完整经历列表" rows=".wo-row" sticky=".wo-ruler" report={report}><div>
      <div className="wo-ruler"><div>{ticks.map(n=><span key={n} style={{left:`${n/scaleDays*87.5}%`}}>{n}天</span>)}</div></div>
      {timelinePeople.map(p=>{const widths=experienceWidths(p.segments,scaleDays);return <div className="wo-row" key={p.id}><div className="wo-person"><button onClick={()=>openArchive(p)}>{p.name}</button>{scope==='all'&&p.type==='org'&&<small>组织</small>}<span className={p.assignment==='assigned'?'':'wo-unassigned'}>{p.assignment==='conflict'?'多任务待核对':p.owner_name??'待分派'}</span>{p.due_at<=data.as_of&&<small>待联系</small>}{!p.history_complete&&<small className="wo-history-warning">状态历史需核对</small>}</div><div className="wo-track">{p.segments.map((s,i)=>{const palette=experienceTypes.find(t=>t.id===s.type)??{color:'#81776e',tint:'#ded8d2'};const resourceNames=s.placements.flatMap(v=>v.resource_ids.map(id=>resourceName(data.resources,id)));return <button key={s.id} data-source={s.source} data-observation-id={s.observation_id??undefined} aria-pressed={detail?.person.id===p.id&&detail?.segment.id===s.id} className={`wo-segment ${s.current?'is-current':''}`} style={{width:`${widths[i]}%`,'--wo-color':palette.color,'--wo-tint':palette.tint} as CSSProperties} title={`${experienceLabel(s.status)} · ${fmt(s.start)} — ${fmt(s.end)} · ${duration(s.days)}`} aria-label={`${p.name} ${experienceLabel(s.status)} ${duration(s.days)} 第${i+1}段`} onClick={()=>selectDetail({person:p,segment:s})}><span className="wo-segment-content"><span className="wo-segment-head"><b>{experienceLabel(s.status)}</b><em>{duration(s.days)}</em></span><span className="wo-segment-note">{[resourceNames.join(' · '),...s.placements.map(p=>p.note),s.observations.at(-1)?.body].filter(Boolean).join(' · ')||''}</span></span>{s.current&&<span className="wo-current-dot" aria-label="当前阶段"/>}</button>;})}</div></div>;})}
      {!timelinePeople.length&&<p className="wo-empty">{scope==='org'?'当前范围没有组织档案':'当前范围没有未入社人员或组织'}</p>}
-    </div></div>
+    </div></ScrollRegion>
    </section>
    {trend}<div className="wo-charts">
     <section className="wo-panel" aria-label="社内资源"><header className="wo-panel-head"><h2>社内资源</h2><a className="button quiet" href="/tools/resources" onClick={e=>{if(onResources){e.preventDefault();onResources();}}}>资源工具</a></header><div className="wo-resource-tools"><div className="wo-switch">{(['count','capacity'] as const).map(m=><button key={m} aria-pressed={mode===m} onClick={()=>setMode(m)}>{m==='count'?'资源个数':'可接收人数'}</button>)}</div></div>
