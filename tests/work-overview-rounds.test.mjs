@@ -32,14 +32,14 @@ test('white resources are explicit review observations, resolve to one entity an
  await s.overview.save({entity:'resource_delete',id:r.id,expected_version:1,request_id:id()});await s.overview.save({...w2,expected_version:2,resource_id:r.id,removed:true,request_id:id()});assert.equal(resourceDistribution((await s.overview.read({})).resources,(await s.overview.read({})).white_resources).length,0);
 });
 
-test('white registration rejects an already linked stage, and deleted source observations leave the live chart',async t=>{
+test('white registration is per observation, and deleted source observations leave the live chart',async t=>{
  const f=fixture();t.after(f.close);const s=await setup(f);await s.tasks.refer({archive_id:s.a.id,expected_version:1,deadline_at:deadline,request_id:id()});
  const o=await s.obs.create({archive_id:s.a.id,body:'审核观察',request_id:id()}),w=white(o);await s.overview.save(w);
  await s.obs.setDeleted({id:o.id,expected_version:1,request_id:id()},true);assert.equal((await s.overview.read({})).white_resources.length,0);assert.equal(f.sqlite.prepare('SELECT count(*) n FROM work_overview_white_resources').get().n,1);
  const r={entity:'resource',id:id(),expected_version:0,name:'已登记群',kind:'群聊',purposes:['review'],capacity:null,active:true,note:'',request_id:id()};await s.overview.save(r);
  const segment=(await s.overview.read({})).people[0].segments.at(-1);
  await s.overview.save({entity:'placement',id:id(),expected_version:0,archive_id:s.a.id,event_id:segment.id,resource_ids:[r.id],note:'',usage:'active',request_id:id()});
- const o2=await s.obs.create({archive_id:s.a.id,body:'资源已对接',request_id:id()});await assert.rejects(s.overview.save(white(o2)),{code:'WHITE_NOT_ELIGIBLE'});
+ const o2=await s.obs.create({archive_id:s.a.id,body:'新一次接触不继承旧资源',request_id:id()});const w2=white(o2);await s.overview.save(w2);const own=(await s.overview.read({})).people[0].segments.find(s=>s.observation_id===o2.id);assert.equal(own.placements.length,0);await s.overview.save({entity:'placement',id:id(),expected_version:0,archive_id:s.a.id,event_id:own.id,resource_ids:[r.id],note:'这次实际对接',usage:'active',request_id:id()});const o3=await s.obs.create({archive_id:s.a.id,body:'本次已对接',request_id:id()});const third=(await s.overview.read({})).people[0].segments.find(s=>s.observation_id===o3.id);await s.overview.save({entity:'placement',id:id(),expected_version:0,archive_id:s.a.id,event_id:third.id,resource_ids:[r.id],note:'',usage:'active',request_id:id()});await assert.rejects(s.overview.save(white(o3)),{code:'WHITE_NOT_ELIGIBLE'});
 });
 
 test('current need changes preserve profile and observation timer, conflict rather than overwrite, and replay safely',async t=>{
@@ -71,5 +71,5 @@ for(const source of ['web','mcp'])test(`${source}: manual follow-up needs a fres
 test('backfilled observations belong to occurrence stage but reset the timer on submission',()=>{
  const at='2026-11-07T00:00:00.000Z',a={id:'p',name:'测试',type:'person',status:'人事审核',person_role:'external',created_at:'2026-09-01T00:00:00.000Z'};
  const events=[{id:'c',archive_id:'p',seq:1,created_at:a.created_at,kind:'archive.created',after:{status:'个人接触'}},{id:'r',archive_id:'p',seq:2,created_at:'2026-10-01T00:00:00.000Z',kind:'archive.state_changed',after:{status:a.status}}];
- const p=buildOverviewPerson(a,events,[{id:'o',archive_id:'p',created_at:at,occurred_at:'2026-09-20T00:00:00.000Z',body:'补记',author_name:'甲'}],[],[],at);assert.equal(p.segments[0].observations.length,1);assert.equal(p.segments[1].observations.length,0);assert.equal(p.due_at,new Date(Date.parse(at)+30*dayMs).toISOString());
+ const p=buildOverviewPerson(a,events,[{id:'o',archive_id:'p',created_at:at,occurred_at:'2026-09-20T00:00:00.000Z',body:'补记',author_name:'甲'}],[],[],at);assert.equal(p.segments[0].observations.length,0);assert.equal(p.segments[1].observation_id,'o');assert.equal(p.segments[1].type,'contact');assert.equal(p.segments[2].observations.length,0);assert.equal(p.due_at,new Date(Date.parse(at)+30*dayMs).toISOString());
 });
