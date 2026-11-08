@@ -359,3 +359,38 @@ test('task lists and details retain the initiator avatar version across profile 
   }
  }
 });
+
+test('owner current-round observations derive ready consistently without completing tasks',async t=>{
+ const f=fixture();t.after(f.close);const service=new WorkTasks(f.env,f.actor,'web');
+ const archive=await new Archives(f.env,f.actor,'web').create({type:'person',name:'观察待提交',request_id:uuid()});
+ const task=await service.create({...taskInput(),archive_id:archive.id});
+ const claimed=await service.claim({id:task.id,expected_version:task.version,request_id:uuid()});
+ f.sqlite.prepare("UPDATE work_tasks SET kind='monthly',created_at='2026-01-01T00:00:00.000Z',deadline_at='2026-01-02T00:00:00.000Z' WHERE id=?").run(task.id);
+ const check=async expected=>{
+  const detail=(await service.detail(task.id)).task;
+  const listed=(await service.list({archive_id:archive.id,state:'all'})).tasks.find(v=>v.id===task.id);
+  assert.equal(detail.ready_to_submit,expected);assert.equal(listed.ready_to_submit,expected);
+  assert.equal(detail.version,claimed.version);assert.equal(detail.status,'open');assert.equal(detail.overdue,true);
+ };
+ await check(false);
+ const ref=resultReference(f,archive.id);
+ f.sqlite.prepare("UPDATE observations SET created_at='2025-12-01T00:00:00.000Z' WHERE id=?").run(ref.observation_id);
+ await check(false); // Updating old content must not qualify.
+ const other=addMember(f,'其他观察者');
+ f.sqlite.prepare("UPDATE observations SET created_at='2026-02-01T00:00:00.000Z',author_id=? WHERE id=?").run(other.id,ref.observation_id);
+ await check(false);
+ f.sqlite.prepare('UPDATE observations SET author_id=? WHERE id=?').run(f.actor.id,ref.observation_id);
+ await check(true);
+ f.sqlite.prepare('UPDATE observations SET deleted=1 WHERE id=?').run(ref.observation_id);await check(false);
+ f.sqlite.prepare('UPDATE observations SET deleted=0 WHERE id=?').run(ref.observation_id);await check(true);
+ // Reopening starts a new round; even a restored previous-round observation no longer qualifies.
+ f.sqlite.prepare("INSERT INTO work_task_events(id,task_id,actor_id,source,kind,created_at) VALUES(?,?,?,'web','task.reopened','2026-03-01T00:00:00.000Z')").run(uuid(),task.id,f.actor.id);
+ await check(false);
+ f.sqlite.prepare("UPDATE observations SET created_at='2026-03-01T00:00:00.000Z' WHERE id=?").run(ref.observation_id);await check(true);
+ f.sqlite.prepare('UPDATE archives SET closed=1 WHERE id=?').run(archive.id);await check(true);
+ f.sqlite.prepare("UPDATE work_tasks SET status='completed' WHERE id=?").run(task.id);
+ assert.equal((await service.detail(task.id)).task.ready_to_submit,false);
+ f.sqlite.prepare("UPDATE work_tasks SET status='open',kind='custom' WHERE id=?").run(task.id);await check(false);
+ f.sqlite.prepare("UPDATE work_tasks SET automation_rule='archive.follow_up' WHERE id=?").run(task.id);await check(true);
+ f.sqlite.prepare("UPDATE work_tasks SET owner_id=NULL WHERE id=?").run(task.id);await check(false);
+});
