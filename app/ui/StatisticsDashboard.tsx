@@ -6,7 +6,8 @@ import './statistics.css';
 import './share-link.css';
 
 const groupLabels={user:'成员',tag:'标签',type:'人物／组织'};
-const colors = ['#9b482f','#326a83','#58834c','#8662a1','#b38025','#287f79','#c0507a','#4c6fb0','#d07a30','#6f9b46','#7b5ba6','#b05555'];
+const baseColors = ['#9b482f','#326a83','#58834c','#8662a1','#b38025','#287f79','#c0507a','#4c6fb0','#d07a30','#6f9b46','#7b5ba6','#b05555'];
+const colors=baseColors.map((color,index)=>`var(--chart-${index},${color})`);
 type Props = {load:(query:StatisticsQuery)=>Promise<StatisticsResult>;getLink?:()=>Promise<string>;renderCharts?:(trend:ReactNode,state:{archiveType:StatisticsQuery['archive_type'];revision:number;refresh:()=>void})=>ReactNode;initialData?:StatisticsResult;initialQuery?:StatisticsQuery;report?:boolean;exportWeekly?:(query:StatisticsQuery,format:WeeklyReportFormat,target:Window|null)=>Promise<void>};
 
 export function StatisticsDashboard({load,getLink,renderCharts,initialData,initialQuery,report=false,exportWeekly}:Props) {

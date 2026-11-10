@@ -1,5 +1,5 @@
 import {UnreadNav} from '../../../app/ui/UnreadNav';
-import {TopBar,ArchiveHead,AuxiliaryToolsNav,AgentNav} from '../../../app/ui/Workspace';
+import {TopBar,ArchiveHead,ArchiveListPanel,ClosedHistoryFilter,AuxiliaryToolsNav,AgentNav} from '../../../app/ui/Workspace';
 import {AuxiliaryTools} from '../../../app/ui/AuxiliaryTools';
 import {StatisticsPreview} from './StatisticsPreview';
 import React from "react";
@@ -115,9 +115,7 @@ export default function App() {
       {w.page === "statistics" ? <StatisticsPreview/> : w.page === "tools" ? <AuxiliaryTools/> : w.page === "agent" ? <main className="support-content agent-page"><AgentPage w={w}/></main> : <div
         className={`workspace ${w.page === "accounts" ? "support-workspace" : ""}`}
       >
-        <main
-          className={`main-panel ${w.page === "accounts" ? "support-panel" : ""}`}
-        >
+        <ArchiveListPanel className={w.page === "accounts" ? "support-panel" : ""} footer={['person','org'].includes(w.page)?<ClosedHistoryFilter value={w.closedHistory} onChange={w.setClosedHistory}/>:undefined}>
           {['person','org'].includes(w.page)?<ArchiveHead label={labels[w.page]} count={w.entities.filter(e=>e.type===w.page).length.toString().padStart(2,'0')} query={w.search} onQuery={w.setSearch} onCreate={()=>w.setDialog({type:'entity-new'})}/>:(          <header
             className={`page-head ${["person", "org"].includes(w.page) ? "archive-head" : ""}`}
           >
@@ -169,7 +167,7 @@ export default function App() {
           {["person", "org"].includes(w.page) && <ArchiveList w={w} />}
           {w.page === "unread" && <Updates w={w} />}
           {w.page === "accounts" && <Accounts w={w} />}
-        </main>
+        </ArchiveListPanel>
         {w.detailVisible ? (
           <Detail w={w} />
         ) : (

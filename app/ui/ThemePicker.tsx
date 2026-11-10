@@ -9,7 +9,7 @@ const snapshot=()=>typeof document==='undefined'?'light':valid(document.document
 function apply(value:Theme){
  document.documentElement.dataset.theme=value;
  document.documentElement.style.colorScheme=value==='night'?'dark':'light';
- document.querySelector('meta[name="theme-color"]')?.setAttribute('content',value==='night'?'#151719':'#202020');
+ document.querySelector('meta[name="theme-color"]')?.setAttribute('content',value==='night'?'#191a1b':'#202020');
  window.dispatchEvent(new Event('cts-theme-change'));
 }
 function subscribe(notify:()=>void){
