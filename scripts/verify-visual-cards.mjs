@@ -28,7 +28,7 @@ try{
  }
  await page.setViewportSize({width:1440,height:1080});await page.locator('.entity-row').nth(1).click();await page.getByRole('button',{name:'重新开启',exact:true}).waitFor();
  check('完成卡片仍可打开，详情只读且可重新开启',await page.locator('.observation-composer').count()===0&&await page.getByRole('button',{name:'编辑档案',exact:true}).count()===0);
- await page.locator('.entity-row').first().click();await page.getByRole('textbox',{name:'新的观察记录',exact:true}).click();
+ await page.locator('.entity-row').first().click();if(!await page.getByRole('textbox',{name:'新的观察记录',exact:true}).isVisible())await page.getByRole('button',{name:'开始撰写观察',exact:true}).click();await page.getByRole('textbox',{name:'新的观察记录',exact:true}).click();
  check('图片提示仅可粘贴',await page.locator('.composer-hint').textContent()==='可粘贴');
  await page.getByRole('button',{name:'筛选',exact:true}).click();await page.getByRole('combobox',{name:'筛选业务状态',exact:true}).selectOption('个人接触');await page.getByRole('button',{name:'重置筛选',exact:true}).click();check('删去计数行后仍可清除筛选',await page.getByRole('combobox',{name:'筛选业务状态',exact:true}).inputValue()==='');
  await page.getByRole('button',{name:'编辑档案',exact:true}).click();await page.getByRole('button',{name:'保存资料',exact:true}).click();await page.getByRole('dialog').waitFor({state:'detached'});await page.locator('.entity-header [role="status"]').waitFor();await page.locator('.entity-header [role="status"]').waitFor({state:'detached',timeout:5000});checks.push({name:'普通保存提示自动消失',ok:true});

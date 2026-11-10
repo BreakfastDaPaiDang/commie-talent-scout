@@ -36,3 +36,26 @@ html .detail-panel:before,html .detail-panel:after{display:none}
 html .composer:not(.open) textarea{background:var(--theme-field);border:1px solid var(--line);border-radius:12px;box-shadow:inset 0 1px 0 #ffffff08}
 html .composer.open{border-radius:12px;background:var(--theme-field)}
 html .composer.open textarea{background:transparent}
+
+/* #141: strengthen the reading pane without enlarging the list or identity. */
+html .composer textarea[hidden]{display:none}
+html .composer:not(.open){margin-bottom:24px}
+html .composer:not(.open) .compose-launch{min-width:44px;min-height:44px}
+html .detail-panel .archive-current-need h2{font-size:16px;font-weight:550;margin-bottom:10px}
+html .detail-panel .archive-current-need p{font-size:21px;line-height:1.85;max-width:52em}
+html .detail-panel .archive-tags .tag-chip{font-size:17px;padding:4px 10px;line-height:1.55}
+html .detail-panel .task-list-row.compact strong{font-size:18px;line-height:1.55;font-weight:600}
+html .detail-panel .task-compact-owner{font-size:14px}
+html .detail-panel .timeline-tabs button{font-size:20px}
+html .detail-panel .record-body{font-size:23px;line-height:1.9}
+html .detail-panel .event-overview>strong{font-size:17px;font-weight:550}
+html .detail-panel .compact-event .reading-content{font-size:16px;line-height:1.85}
+@media(max-width:600px){
+ html .detail-panel .archive-current-need h2{font-size:14px}
+ html .detail-panel .archive-current-need p{font-size:18px}
+ html .detail-panel .archive-tags .tag-chip{font-size:15px;padding:3px 8px}
+ html .detail-panel .task-list-row.compact strong{font-size:16px}
+ html .detail-panel .timeline-tabs button{font-size:15px}
+ html .detail-panel .record-body{font-size:20px}
+ html .detail-panel .event-overview>strong{font-size:16px}
+}
