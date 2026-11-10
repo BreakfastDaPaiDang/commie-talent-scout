@@ -23,7 +23,7 @@ try{
   await page.screenshot({path:`${out}/plain-avatar-${width}.png`});
  }
  await page.getByRole('button',{name:'编辑档案',exact:true}).click();await page.getByRole('dialog').waitFor();await page.screenshot({path:out+'/mobile-editor.png'});await page.keyboard.press('Escape');
- await page.getByRole('textbox',{name:'新的观察记录',exact:true}).fill('未提交的虚构观察');await page.screenshot({path:out+'/mobile-composer.png'});
+ if(!await page.getByRole('textbox',{name:'新的观察记录',exact:true}).isVisible())await page.getByRole('button',{name:'开始撰写观察',exact:true}).click();await page.getByRole('textbox',{name:'新的观察记录',exact:true}).fill('未提交的虚构观察');await page.screenshot({path:out+'/mobile-composer.png'});
  await page.setViewportSize({width:1440,height:1000});await page.getByRole('button',{name:'展开阅读视图',exact:true}).click();assert.equal(await page.locator('.entity-avatar > .avatar img').isVisible(),true);assert.equal(await page.locator('.avatar-ornament').count(),0);await page.screenshot({path:out+'/expanded-composer.png'});
  assert.deepEqual(artRequests,[]);assert.deepEqual(errors,[]);await context.close();checks.push('uploaded avatar remains visible at six widths without ornament elements or requests','mobile editing, composing and expanded reading remain usable');
 }finally{

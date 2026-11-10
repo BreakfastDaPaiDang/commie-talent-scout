@@ -50,7 +50,7 @@ try{
  assert.equal((await v.http('/archives/reopen',reopenRequest)).body.replayed,true);
  assert.equal((await get()).tags[0].description,'重开后读取的新含义');
  const stale=await v.http('/archives/state',input(a,'已弃用'));assert.equal(stale.status,409);assert.equal(stale.body.error.code,'VERSION_CONFLICT');
- await page.reload();await page.getByRole('textbox',{name:'新的观察记录',exact:true}).waitFor();
+ await page.reload();if(!await page.getByRole('textbox',{name:'新的观察记录',exact:true}).isVisible())await page.getByRole('button',{name:'开始撰写观察',exact:true}).click();await page.getByRole('textbox',{name:'新的观察记录',exact:true}).waitFor();
  checks.push('MCP explicitly reopens; web replay stays idempotent, old version is rejected, closed tag snapshot and reopening definition diff survive');
 
  a=await get();const secondClose=input(a,'已弃用');await v.call('set_archive_state',secondClose);
@@ -58,7 +58,7 @@ try{
  dialog=page.getByRole('dialog').last();await dialog.getByRole('radio',{name:'个人接触',exact:true}).check();await capture('mobile-reopen');
  const sentReopen=page.waitForRequest(r=>r.url().endsWith('/api/archives/reopen')&&r.method()==='POST');
  await dialog.getByRole('button',{name:'重新开启档案',exact:true}).click();const mobileRequest=(await sentReopen).postDataJSON();await dialog.waitFor({state:'detached'});
- await page.getByRole('textbox',{name:'新的观察记录',exact:true}).waitFor();
+ if(!await page.getByRole('textbox',{name:'新的观察记录',exact:true}).isVisible())await page.getByRole('button',{name:'开始撰写观察',exact:true}).click();await page.getByRole('textbox',{name:'新的观察记录',exact:true}).waitFor();
  const afterReopen=(await events()).length;assert.equal((await v.call('reopen_archive',mobileRequest)).replayed,true);assert.equal((await events()).length,afterReopen);
  assert.equal((await get()).closed,false);await capture('mobile-opened');
  const history=await events();assert.equal(history.filter(e=>e.kind==='archive.closed').length,2);assert.equal(history.filter(e=>e.kind==='archive.reopened').length,2);

@@ -34,7 +34,7 @@ try{
  checks.push('desktop and mobile full publish forms retain ordinary fields and remove the monthly generation panel');
  await page.setViewportSize({width:1440,height:1000});
  await page.goto(v.base+'/?archive='+archive.id+'&task='+task.id,{waitUntil:'domcontentloaded'});
- await page.getByRole('textbox',{name:'新的观察记录',exact:true}).fill('虚构记录：实际留档不会隐式完成任务。');
+ if(!await page.getByRole('textbox',{name:'新的观察记录',exact:true}).isVisible())await page.getByRole('button',{name:'开始撰写观察',exact:true}).click();await page.getByRole('textbox',{name:'新的观察记录',exact:true}).fill('虚构记录：实际留档不会隐式完成任务。');
  await page.getByRole('button',{name:'发布记录',exact:true}).click();
  await page.locator('.record-body').filter({hasText:'虚构记录：实际留档不会隐式完成任务。'}).waitFor();
  assert.equal((await v.call('get_work_task',{id:task.id})).task.status,'open');

@@ -46,6 +46,7 @@ export async function verifyDisplayModes({browser,page,context,base,taskId,archi
  const sampleId=randomUUID(),sampleTask=randomUUID(),now=new Date().toISOString();
  sqlite.prepare("INSERT INTO archives(id,type,name,status,created_by,created_at,updated_at,contacts_json) VALUES(?,'person','沈舟（界面验收）','已加入待对接',?,?,?,?)").run(sampleId,owner,now,now,JSON.stringify([{type:'邮箱',value:'shenzhou@example.invalid',note:''},{type:'微信',value:'demo_shenzhou',note:''}]));
  sqlite.prepare("INSERT INTO work_tasks(id,archive_id,kind,title,purpose,delivery,source,owner_id,deadline_at,created_by,created_at,updated_at) VALUES(?,?,'custom','安排首次项目交流','确认参与意愿','记录沟通结果','manual',?,'2098-12-01T12:00:00Z',?,?,?)").run(sampleTask,sampleId,owner,owner,now,now);
+ sqlite.prepare('UPDATE archives SET current_need=? WHERE id=?').run('希望参与实际写作项目，先与接待人讨论一个可完成的选题。',sampleId);
  const geometry={};
  for(const width of [1440,390])for(const mode of ['light','night']){
   await page.setViewportSize({width,height:1000});await page.goto(base+'/?archive='+sampleId);await selectTheme(page,mode);
@@ -62,11 +63,21 @@ export async function verifyDisplayModes({browser,page,context,base,taskId,archi
   geometry[width+'-'+mode]=await page.locator('.detail-top,.entity-heading h1,.archive-edit-entry,.detail-panel').evaluateAll(els=>els.map(el=>{const r=el.getBoundingClientRect();return [r.x,r.y,r.width,r.height];}));
   await page.screenshot({path:out+'/'+mode+'-archive-'+width+'.png',fullPage:true});
   const body='已联系：近期在学习写作，希望先参与一次选题讨论。'+width+'-'+mode;
-  await page.getByRole('textbox',{name:'新的观察记录',exact:true}).fill(body);await page.getByRole('button',{name:'发布记录',exact:true}).scrollIntoViewIfNeeded();
+  const input=page.getByRole('textbox',{name:'新的观察记录',exact:true}),launch=page.getByRole('button',{name:'开始撰写观察',exact:true});
+  assert.equal(await input.isVisible(),false,'an empty observation starts with only the plus button');
+  assert.equal(await page.locator('.archive-current-need p').evaluate(el=>getComputedStyle(el).fontSize),width<600?'18px':'21px');
+  assert.equal(await task.locator('strong').evaluate(el=>getComputedStyle(el).fontSize),width<600?'16px':'18px');
+  await launch.focus();await page.keyboard.press('Enter');await input.waitFor();await page.waitForFunction(()=>document.activeElement?.getAttribute('aria-label')==='新的观察记录');
+  await input.fill(body);await page.getByText('草稿已保存',{exact:true}).waitFor();
+  await page.getByRole('button',{name:'收起',exact:true}).click();assert.equal(await input.isVisible(),false);assert.equal(await launch.evaluate(el=>el===document.activeElement),true);
+  await page.keyboard.press('Space');await input.waitFor();assert.equal(await input.inputValue(),body);
+  await page.reload();await input.waitFor();assert.equal(await input.inputValue(),body,'saved draft reopens after refresh');
+  await page.getByRole('button',{name:'发布记录',exact:true}).scrollIntoViewIfNeeded();
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
   await page.screenshot({path:out+'/'+mode+'-observation-publish-'+width+'.png',fullPage:true});
   await page.getByRole('button',{name:'发布记录',exact:true}).click();await page.locator('.record-body').filter({hasText:body}).waitFor();
   assert.equal(sqlite.prepare('SELECT count(*) n FROM observations o JOIN observation_versions v ON v.observation_id=o.id AND v.version=o.content_version WHERE o.archive_id=? AND v.body=?').get(sampleId,body).n,1);
+  await input.waitFor({state:'hidden'});
   if(width<600)await page.getByRole('button',{name:'关闭档案详情',exact:true}).click();
   const footer=page.locator('.archive-list-footer');await footer.waitFor();
   assert.equal(await page.getByRole('combobox',{name:'已关闭档案',exact:true}).count(),1);
@@ -85,7 +96,7 @@ export async function verifyDisplayModes({browser,page,context,base,taskId,archi
  await page.getByRole('button',{name:'切换到日间模式'}).focus();await page.keyboard.press('Enter');await page.waitForFunction(()=>document.documentElement.dataset.theme==='light');await check('light');await page.keyboard.press('Space');await page.waitForFunction(()=>document.documentElement.dataset.theme==='night');await tab.close();
  // Login, same target after signing in, and shared prototype palette.
  const receiver=await browser.newContext({viewport:{width:390,height:844}}),login=await receiver.newPage();
- await login.goto(base+'/tasks?task='+taskId);await selectTheme(login,'night');await login.reload();await login.locator('input[name=password]').waitFor();assert.equal(await login.locator('html').getAttribute('data-theme'),'night');await login.screenshot({path:out+'/night-login-390.png',fullPage:true});
+ await login.goto(base+'/tasks?task='+taskId);await selectTheme(login,'night');await login.reload();await login.locator('input[name=password]').waitFor();assert.equal(await login.locator('html').getAttribute('data-theme'),'night');await login.evaluate(()=>document.fonts.ready);await login.screenshot({path:out+'/night-login-390.png',fullPage:true,animations:'disabled'});
  await login.locator('input[name=username]').fill('fixture');await login.locator('input[name=password]').fill(password);await login.getByRole('button',{name:'登录',exact:true}).click();await login.getByRole('button',{name:'提交交付',exact:true}).waitFor();assert.equal(await login.locator('html').getAttribute('data-theme'),'night');assert.equal(new URL(login.url()).searchParams.get('task'),taskId);await receiver.close();
  for(const width of [1440,390]){
   await page.setViewportSize({width,height:1000});await page.goto('http://127.0.0.1:5196/');await selectTheme(page,'night');await page.screenshot({path:out+'/night-shared-prototype-'+width+'.png',fullPage:true});assert.equal(await page.locator('body').evaluate(el=>getComputedStyle(el).backgroundColor),colors.night);

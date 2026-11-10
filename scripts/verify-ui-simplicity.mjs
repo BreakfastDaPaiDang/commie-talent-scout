@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import {mkdirSync,writeFileSync} from 'node:fs';
 import {chromium} from 'playwright-core';
-import {fixture,uuid} from './ui-review-fixtures.mjs';
+import {fixture,uuid,archives} from './ui-review-fixtures.mjs';
+archives[0].current_need='希望参与组织工作积累经验，先完成一次选题讨论与短篇写作。';
 const out='tmp/verification/ui-simplicity';mkdirSync(out,{recursive:true});
 const browser=await chromium.launch({channel:'msedge',headless:true});
 const failures=[],checks=[];
@@ -14,7 +15,7 @@ try{
  check('范围按钮显示服务端总数',await page.locator('.scope-tabs button small').count()===3);
  check('档案常态只有统一编辑入口，状态为展示',await page.locator('.entity-header button:not(.contact-pill)').count()===1 && await page.locator('button.state-badge').count()===0 && await page.locator('.archive-tags>header button').count()===0);
  await page.screenshot({path:out+'/detail.png'});
- await page.getByRole('textbox',{name:'新的观察记录',exact:true}).click();
+ if(!await page.getByRole('textbox',{name:'新的观察记录',exact:true}).isVisible())await page.getByRole('button',{name:'开始撰写观察',exact:true}).click();await page.getByRole('textbox',{name:'新的观察记录',exact:true}).click();
  check('观察发布无需手动填写时间',await page.locator('input[type="datetime-local"]').count()===0);
  check('上传只显示设计后的图片按钮',await page.locator('input[type="file"]').evaluateAll(es=>es.every(e=>getComputedStyle(e).opacity==='0'||getComputedStyle(e).display==='none')));
  check('不在发布区展示保留周期和内部流程',!await page.locator('.observation-composer').innerText().then(t=>/30 天|上传完成后|发生时间/.test(t)));

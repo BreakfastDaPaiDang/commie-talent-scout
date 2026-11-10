@@ -62,8 +62,13 @@ export function TimelineTabs({id,value,onChange,deletedCount,materialCount}:{id:
  return <TabList id={id} value={value} onChange={onChange} label="动态筛选" items={[{key:'all',label:'全部动态'},{key:'observations',label:'观察记录'},{key:'deleted',label:'已删除',count:deletedCount},...(materialCount!==undefined?[{key:'materials',label:'绑定材料',count:materialCount}]:[])]}/>;
 }
 export function ComposerFrame({open,onOpen,textarea,children}:{open:boolean;onOpen:()=>void;textarea:React.TextareaHTMLAttributes<HTMLTextAreaElement>;children?:ReactNode}){
- const input=useRef<HTMLTextAreaElement>(null);
- return <section className={`composer observation-composer ${open?'open':''}`} aria-label="撰写观察"><div className="composer-line"><button type="button" className="compose-launch" aria-label="开始撰写观察" onClick={()=>{onOpen();input.current?.focus();}}><Icon name="plus" size={22}/></button><textarea ref={input} aria-label="新的观察记录" rows={open?3:1} placeholder="写下新的观察…" {...textarea} onFocus={e=>{onOpen();textarea.onFocus?.(e);}}/></div>{open&&children}</section>;
+ const input=useRef<HTMLTextAreaElement>(null),launch=useRef<HTMLButtonElement>(null),focusRequested=useRef(false),wasOpen=useRef(open);
+ useEffect(()=>{
+  if(open&&focusRequested.current&&!textarea.disabled){input.current?.focus();focusRequested.current=false;}
+  if(!open&&wasOpen.current){focusRequested.current=false;launch.current?.focus();}
+  wasOpen.current=open;
+ },[open,textarea.disabled]);
+ return <section className={`composer observation-composer ${open?'open':''}`} aria-label="撰写观察"><div className="composer-line"><button type="button" className="compose-launch" ref={launch} aria-label="开始撰写观察" title="新增观察" aria-expanded={open} onClick={()=>{focusRequested.current=true;onOpen();}}><Icon name="plus" size={22}/></button><textarea ref={input} aria-label="新的观察记录" rows={open?3:1} placeholder="写下新的观察…" {...textarea} hidden={!open} onFocus={e=>{onOpen();textarea.onFocus?.(e);}}/></div>{open&&children}</section>;
 }
 export function ObservationFrame({id,avatar,author,time,edited,unread,onHistory,historyLabel,footer,deleted,children,sharePath}:{id:string;avatar:ReactNode;author:ReactNode;time:ReactNode;edited?:ReactNode;unread?:boolean;onHistory:()=>void;historyLabel:string;footer?:ReactNode;deleted?:boolean;children:ReactNode;sharePath?:string}){
  return <article className={`observation observation-card ${deleted?'deleted':''}`} id={id}><header className="record-byline">{avatar}<strong>{author}</strong>{unread&&<span className="unread-dot"/>}<time>{time}</time>{edited&&<small>{edited}</small>}<IconButton name="history" label={historyLabel} onClick={onHistory}/></header>{children}{(footer||sharePath)&&<footer className="record-actions">{sharePath&&<ShareLink key={sharePath} path={sharePath} label="分享观察"/>}{footer}</footer>}</article>;
