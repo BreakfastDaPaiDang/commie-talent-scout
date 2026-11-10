@@ -17,16 +17,17 @@ test('archive ranges default to 30, persist per page, reset to 30 and leave dele
   for(const [key,type,scope] of [['外部人物','person','external'],['组织','org','all']] as const){
    await act(async()=>root.render(<ArchivesPage key={key} actor={actor} pageLabel={key} type={type} personScope={scope}/>));
    assert.equal(requests.at(-1)!.searchParams.get('closed_history'),'30');assert.equal(requests.at(-1)!.searchParams.get('person_scope'),scope);
-   assert.equal(w.document.querySelector('.filter-summary')!.textContent,'已关闭档案：最近 30 天');
-   await click('已关闭档案：最近 30 天');await choose('90');assert.equal(requests.at(-1)!.searchParams.get('closed_history'),'90');
-   await click('筛选');assert.equal(w.document.querySelector('.filter-summary')!.textContent,'已关闭档案：最近 90 天');
-   await click('筛选');await choose('all');assert.equal(requests.at(-1)!.searchParams.get('closed_history'),'all');
+   assert.equal(w.document.querySelector('.filter-summary'),null);
+   assert.equal(w.document.querySelectorAll('.archive-list-footer select[aria-label="已关闭档案"]').length,1);
+   await choose('90');assert.equal(requests.at(-1)!.searchParams.get('closed_history'),'90');
+   await click('筛选');assert.equal(w.document.querySelectorAll('select[aria-label="已关闭档案"]').length,1,'opening filters does not duplicate the footer control');
+   await choose('all');assert.equal(requests.at(-1)!.searchParams.get('closed_history'),'all');
    await click('重置筛选');assert.equal(requests.at(-1)!.searchParams.get('closed_history'),'30');
    await choose('90');
   }
   await act(async()=>root.render(<ArchivesPage key="back" actor={actor} type="person" personScope="external" pageLabel="外部人物"/>));
   assert.equal(requests.at(-1)!.searchParams.get('closed_history'),'90','returning to a page restores its own preference');
   await act(async()=>root.render(<ArchivesPage key="trash" actor={actor} type="person" trash/>));
-  assert.equal(requests.at(-1)!.searchParams.get('closed_history'),'all');assert.equal(w.document.querySelector('.filter-summary'),null);
+  assert.equal(requests.at(-1)!.searchParams.get('closed_history'),'all');assert.equal(w.document.querySelector('.archive-list-footer'),null);
  }finally{await act(async()=>root.unmount());globalThis.fetch=oldFetch;dom.window.close();}
 });

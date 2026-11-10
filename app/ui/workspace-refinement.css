@@ -1,0 +1,38 @@
+/* Approved 2026-11-10 layout: the same geometry in day and night. */
+:root{--jelly-fill:linear-gradient(155deg,#ffffffa8,#ffffff00 55%);--jelly-edge:#dedbd8;--jelly-shadow:inset 0 1px 0 #ffffffc0,0 3px 10px #29242108;--jelly-selected:#f3e9e6;--jelly-rail:#bd7068;--theme-raised:#fff;--theme-field:#fbfaf9;--theme-hover:#eeebe8;--theme-focus:#a8443c}
+html .archive-list-panel{display:flex;flex-direction:column;min-height:0;height:100%;overflow:hidden}
+.archive-list-scroll{flex:1;min-height:0;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--line) transparent}
+.archive-list-footer{flex-shrink:0;padding:12px 28px;background:var(--paper);border-top:1px solid var(--line);z-index:2}
+.archive-list-footer .closed-history-filter{display:flex;justify-content:flex-start;gap:8px;font-size:13px;color:var(--muted)}
+.archive-list-footer .closed-history-filter select{flex:0 1 auto;width:auto;max-width:170px;min-height:36px;padding:4px 24px 4px 7px;border:1px solid transparent;border-radius:7px;background:transparent;color:inherit;cursor:pointer}
+.archive-list-footer .closed-history-filter select:hover{background:var(--theme-hover)}
+html .archive-list-scroll>.list-toolbar{padding-bottom:22px}
+html .entity-list{padding-bottom:12px}
+html .entity-row{width:calc(100% - 24px);margin:0 12px 12px;border:1px solid var(--jelly-edge);border-radius:16px;background:var(--jelly-fill),var(--paper);box-shadow:var(--jelly-shadow);overflow:hidden}
+html .entity-row:hover{background:var(--jelly-fill),var(--theme-hover)}
+html .entity-row.selected,html .entity-row.is-overdue.selected{background:var(--jelly-fill),var(--jelly-selected);border-color:var(--jelly-edge);box-shadow:var(--jelly-shadow)}
+html .entity-row.selected:before{top:12px;bottom:12px;left:0;width:3px;height:auto;background:var(--jelly-rail);border:0;border-radius:3px}
+html .entity-row.selected:after{display:none}
+html .entity-row.is-overdue{box-shadow:var(--jelly-shadow),inset 3px 0 var(--theme-warm-text,#a17132)}
+html .detail-top{justify-content:flex-end}
+html .entity-identity>.archive-edit-entry{display:inline-flex;align-items:center;justify-content:center;width:48px;min-width:48px;height:48px;padding:6px;margin:0 0 0 auto;border:0;border-radius:10px;background:transparent;color:var(--ink);cursor:pointer;align-self:center}
+html .archive-edit-entry:hover{background:var(--theme-hover)}
+html .archive-edit-entry>svg{width:30px;height:30px}
+html .entity-heading .state-badge{border-color:var(--line);border-radius:9px;background:var(--jelly-fill),var(--wash)}
+html .related-tasks{border-bottom:0}
+html .related-tasks>header{justify-content:flex-end;padding:14px 0}
+.related-task-list:has(.compact){border:1px solid var(--jelly-edge);border-radius:14px;background:var(--jelly-fill),var(--paper);box-shadow:var(--jelly-shadow);overflow:hidden}
+html .related-task-list .compact{margin:0 14px;border-top:1px solid var(--line)}
+html .related-task-list .compact:first-child{border-top:0}
+html .compact .task-status-icon{display:inline-flex;align-items:center;justify-content:center;width:28px;min-width:28px;height:28px;padding:0;background:transparent;color:var(--theme-warm-text,#806843);border:0;border-radius:0}
+html .compact .task-status-icon[aria-label="已完成"]{color:var(--theme-green-text,#416c50)}
+html .compact .task-status-icon:is([aria-label="已取消"],[aria-label="未完成关闭"]){color:var(--theme-red-text,#a43e37)}
+html :is(.search-field,.button,.share-link,.task-edit-button){border-radius:9px}
+html :is(.task-recommendation,.task-index-panel,.task-scene,.task-scene-empty,.task-completion-record,.task-board-card){border-radius:14px}
+html .wo-page{font-family:var(--font)}
+@media(max-width:600px){.archive-list-footer{padding:9px 16px}.archive-list-footer .closed-history-filter{font-size:12px}html .entity-row{width:calc(100% - 16px);margin:0 8px 10px;border-radius:14px}html .archive-list-scroll>.list-toolbar{padding-bottom:16px}html .entity-identity>.archive-edit-entry{width:44px;min-width:44px;height:44px}html .related-task-list .compact{margin:0 10px}}
+
+html .detail-panel:before,html .detail-panel:after{display:none}
+html .composer:not(.open) textarea{background:var(--theme-field);border:1px solid var(--line);border-radius:12px;box-shadow:inset 0 1px 0 #ffffff08}
+html .composer.open{border-radius:12px;background:var(--theme-field)}
+html .composer.open textarea{background:transparent}

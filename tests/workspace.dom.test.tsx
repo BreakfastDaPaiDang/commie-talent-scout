@@ -69,11 +69,11 @@ test('organization detail keeps its type while the archive request is pending',a
  globalThis.fetch=async url=>String(url)==='/api/archives/'+id?response:Response.json(String(url).includes('/timeline')?{events:[],next_cursor:null}:String(url).includes('/members')?{members:[],next_cursor:null}:String(url).includes('/drafts')?{drafts:[]}:String(url).includes('/archives?')?{archives:[organization],next_cursor:null}:{draft:null});
  try{
   await act(async()=>{f.root.render(<ArchivesPage actor={actor} type="org"/>);});
-  assert.match(f.w.document.querySelector('.detail-top')?.textContent??'',/^组织档案/,'pending organization data must not default to a person label');
+  assert.ok(!/人物档案|组织档案/.test(f.w.document.querySelector('.detail-top')?.textContent??''),'the approved layout removes visible breadcrumb labels');
   assert.equal(f.w.document.querySelector('.detail-panel')?.getAttribute('aria-label'),'组织档案详情');
   assert.equal(f.w.location.pathname,'/organizations');
   await act(async()=>{release(Response.json({archive:organization}));});
-  assert.match(f.w.document.querySelector('.detail-top')?.textContent??'',/^组织档案/);
+  assert.equal(f.w.document.querySelector('.detail-panel')?.getAttribute('aria-label'),'组织档案详情','organization identity remains accessible after loading');
   assert.equal(f.w.document.querySelector('.entity-heading h1')?.textContent,organization.name);
  }finally{release(Response.json({archive:organization}));await f.close();}
 });

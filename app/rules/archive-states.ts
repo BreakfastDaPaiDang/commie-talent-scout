@@ -29,7 +29,7 @@ export type PersonIdentity={type?:string;status:string;person_role?:PersonRole|n
 export const isMemberArchive=(a:PersonIdentity)=>a.type!=='org'&&(a.person_role?a.person_role==='member':isMemberStatus(a.status));
 // Keep the persisted/API key stable while making the approval prerequisite explicit.
 export const archiveStateLabel=(status:string)=>status==='已加入待对接'?'审核通过（待对接）':status;
-export const archiveDisplayStatus=(a:PersonIdentity)=>isMemberArchive(a)?a.member_status??'可接工作':archiveStateLabel(a.status);
+export const archiveDisplayStatus=(a:PersonIdentity)=>isMemberArchive(a)?a.member_status??'可接工作':a.status==='已加入待对接'?'待对接':archiveStateLabel(a.status);
 export const archivePath=(a:PersonIdentity)=>a.type==='org'?'/organizations':isMemberArchive(a)?'/members':'/';
 
 // A UI shortcut is a projection of the existing state command, not another workflow.

@@ -1,3 +1,4 @@
+import './workspace-refinement.css';
 import {ThemePicker} from './ThemePicker';
 import {ShareLink} from './ShareLink';
 import type {ArchiveReminder} from '../rules/archive-reminders';
@@ -18,8 +19,14 @@ export function AuxiliaryToolsNav({active,onClick}:{active:boolean;onClick:()=>v
 export function TopBar({navigation,tools,mobileTools,onHome}:{navigation:ReactNode;tools:ReactNode;mobileTools?:ReactNode;onHome:()=>void}){
  return <header className="topbar"><a className="brand" href="/" onClick={e=>{e.preventDefault();onHome();}}><Mark/><span>康米巨星<small>猎头系统</small></span></a><nav className="primary-nav" aria-label="主要导航">{navigation}</nav><div className="topbar-tools">{tools}</div><ThemePicker/>{mobileTools}</header>;
 }
-export function WorkspaceFrame({list,detail,selected,expanded=false,detailOnly=false}:{list:ReactNode;detail:ReactNode;selected:boolean;expanded?:boolean;detailOnly?:boolean}){
- return <div className={`workspace-layout ${selected?'has-detail':''} ${expanded?'expanded-detail':''} ${detailOnly?'detail-only':''}`}><div className="workspace"><main className="main-panel">{list}</main>{detail}</div></div>;
+export function WorkspaceFrame({list,detail,selected,expanded=false,detailOnly=false,listFooter}:{listFooter?:ReactNode;list:ReactNode;detail:ReactNode;selected:boolean;expanded?:boolean;detailOnly?:boolean}){
+ return <div className={`workspace-layout ${selected?'has-detail':''} ${expanded?'expanded-detail':''} ${detailOnly?'detail-only':''}`}><div className="workspace"><ArchiveListPanel footer={listFooter}>{list}</ArchiveListPanel>{detail}</div></div>;
+}
+export function ArchiveListPanel({children,footer,className=''}:{children:ReactNode;footer?:ReactNode;className?:string}){
+ return <main className={'main-panel archive-list-panel '+className}><div className="archive-list-scroll">{children}</div>{footer&&<footer className="archive-list-footer">{footer}</footer>}</main>;
+}
+export function ArchiveEditButton({onClick,label='编辑档案'}:{onClick:()=>void;label?:string}){
+ return <button type="button" className="archive-edit-entry" aria-label={label} title={label} onClick={onClick}><Icon name="edit" size={30}/></button>;
 }
 export function ArchiveHead({label,count,query,onQuery,onCreate,searchRef,searchLabel='搜索档案',searchPlaceholder='搜索档案、观察',createControl}:{searchLabel?:string;searchPlaceholder?:string;createControl?:ReactNode;label:string;count:string;query:string;onQuery:(value:string)=>void;onCreate?:()=>void;searchRef?:RefObject<HTMLInputElement|null>}){
  const localRef=useRef<HTMLInputElement>(null),inputRef=searchRef??localRef;
@@ -43,7 +50,7 @@ export function ArchiveRow({avatar,name,state,status,binding,excerpt,footer,tags
  return <button className={`entity-row ${selected?'selected':''} ${completed?'completed':''} ${unread?'has-updates':''} ${overdue?'is-overdue':''}`} onClick={onClick} aria-label={label}>{avatar}<div className="row-content">{overdue&&<span className="row-reminder"><span><Icon name="warning" size={16}/><strong>需更新或关闭</strong></span><small>超过 {updateReminder!.threshold_days} 天未更新</small></span>}<div className="row-heading"><div className="row-title"><h2>{name}</h2></div><div className="row-meta">{state}{draft&&<span className="draft-tag">草稿</span>}</div>{binding&&<div className="row-binding">{binding}</div>}</div>{tags}<p className="record-excerpt">{excerpt}</p><div className="row-foot">{footer}</div></div><CompletionStamp status={status}/>{unread&&<span className="row-unread">有更新</span>}</button>;
 }
 export function DetailFrame({label,code,expanded,onExpand,onClose,onNextUnread,scrollRef,onScroll,children,sharePath}:{label:string;code:string;expanded?:boolean;onExpand?:()=>void;onClose?:()=>void;onNextUnread?:()=>void;scrollRef?:RefObject<HTMLDivElement|null>;onScroll?:React.UIEventHandler<HTMLDivElement>;children:ReactNode;sharePath?:string}){
- return <aside className="detail-panel" aria-label={label+'详情'}><div className="detail-top"><span>{label}{code&&<span className="detail-number"> / {code}</span>}</span><div>{sharePath&&<ShareLink key={sharePath} path={sharePath} label="分享档案"/>} {onNextUnread&&<button className="next-unread" onClick={onNextUnread}>下一处未读<Icon name="arrow" size={15}/></button>}{onExpand&&<IconButton name="expand" label={expanded?'收起阅读视图':'展开阅读视图'} onClick={onExpand}/>} {onClose&&<IconButton name="close" label="关闭档案详情" onClick={onClose}/>}</div></div><div className="detail-scroll" ref={scrollRef} onScroll={onScroll}><div className="detail-inner">{children}</div></div></aside>;
+ return <aside className="detail-panel" aria-label={label+'详情'}><div className="detail-top"><div>{sharePath&&<ShareLink key={sharePath} path={sharePath} label="分享档案"/>} {onNextUnread&&<button className="next-unread" onClick={onNextUnread}>下一处未读<Icon name="arrow" size={15}/></button>}{onExpand&&<IconButton name="expand" label={expanded?'收起阅读视图':'展开阅读视图'} onClick={onExpand}/>} {onClose&&<IconButton name="close" label="关闭档案详情" onClick={onClose}/>}</div></div><div className="detail-scroll" ref={scrollRef} onScroll={onScroll}><div className="detail-inner">{children}</div></div></aside>;
 }
 export function EntityHeader({name,state,avatar,actions,assignment,contacts,children}:{name:ReactNode;state:ReactNode;avatar:ReactNode;actions:ReactNode;assignment:ReactNode;contacts:ReactNode;children?:ReactNode}){
  return <header className="entity-header"><div className="entity-identity"><div className="entity-heading"><h1>{name}</h1>{state}</div><div className="entity-avatar avatar-hero">{avatar}</div>{actions}</div>{assignment}<div className="contacts-bar">{contacts}</div>{children}</header>;
