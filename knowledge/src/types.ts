@@ -1,5 +1,5 @@
 export type Identity={id:string;name:string;username:string;role:'member'|'admin';eligible:boolean;membership_id:string|null;verified_at:string;environment:string};
-export type Env={KNOWLEDGE_DB:D1Database;IDENTITY:Fetcher;ENVIRONMENT:'staging'|'production';IDENTITY_ORIGIN:string;APP_ORIGIN:string};
+export type Env={KNOWLEDGE_DB:D1Database;IDENTITY:Fetcher;CATALOG_FILES?:R2Bucket;ENVIRONMENT:'staging'|'production';IDENTITY_ORIGIN:string;APP_ORIGIN:string};
 export class KnowledgeError extends Error{
  constructor(readonly status:number,readonly code:string,message:string){super(message);}
 }

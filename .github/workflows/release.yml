@@ -31,6 +31,7 @@ jobs:
       - run: npx playwright-core install --with-deps msedge
       - run: node scripts/check-ui.mjs
       - run: node --experimental-transform-types scripts/verify-work-overview.mjs
+      - run: node --experimental-transform-types scripts/verify-knowledge-workspace.mjs
   deploy:
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     needs: checks

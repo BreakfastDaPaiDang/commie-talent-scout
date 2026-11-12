@@ -2,7 +2,7 @@ import {readFileSync} from 'node:fs';
 import {execFileSync} from 'node:child_process';
 const env=process.argv[process.argv.indexOf('--env')+1];if(!['staging','production'].includes(env))throw new Error('Unknown identity environment');
 const origin=JSON.parse(readFileSync('knowledge/wrangler.jsonc','utf8')).env[env].vars.IDENTITY_ORIGIN;
-async function ready(){try{const r=await fetch(origin+'/api/knowledge/identity',{redirect:'error',signal:AbortSignal.timeout(10000)});await r.arrayBuffer();return r.status===401;}catch{return false;}}
+async function ready(){try{const health=await fetch(origin+'/api/health',{redirect:'error',signal:AbortSignal.timeout(10000)});if(!health.ok)return false;const data=await health.json();if(data.catalog_bridge!==1||data.knowledge_workspace!==1)return false;const r=await fetch(origin+'/api/knowledge/identity',{redirect:'error',signal:AbortSignal.timeout(10000)});await r.arrayBuffer();return r.status===401;}catch{return false;}}
 if(env==='production'){
  // The personnel release checks and publishes the identity bridge independently.
  for(let i=0;i<60;i++){if(await ready()){console.log('Production identity bridge ready');process.exit(0);}await new Promise(r=>setTimeout(r,10000));}

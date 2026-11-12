@@ -1,0 +1,11 @@
+export type CatalogPerson={id:string;name:string};
+export type CatalogContent={name:string;kind:string;purposes:string[];capacity:number|null;active:boolean;deleted:boolean;note:string;group_id:string|null;owner_id:string|null;collaborator_ids:string[];provider:string;conditions:string;contact:string;requirements:string;time_commitment:string;support:string;headcount:number|null;attachment_ids:string[];source:string};
+export type CatalogEntry=CatalogContent&{id:string;version:number;record_kind:'resource'|'position';published_at:string;updated_at:string};
+export type CatalogGroup={id:string;version:number;name:string;description:string;maintainer_ids:string[];updated_at:string};
+export type CatalogIdentity={kind:'member';id:string;name:string;eligible:boolean}|{kind:'guest';id:string;name:string;eligible:false};
+export type CatalogIssue={id:string;version:number;target_type:'entry'|'group';target_id:string;base_version:number;title:string;body:string;proposal:CatalogContent|Omit<CatalogGroup,'id'|'version'|'updated_at'>|null;author_id:string;author_name:string;state:'open'|'merged'|'closed';result:string;handled_by:string|null;created_at:string;updated_at:string};
+export type CatalogComment={id:string;author_id:string;author_name:string;body:string;created_at:string};
+export type CatalogGrant={id:string;version:number;entry_id:string;recipient_name:string;recipient_archive_id:string|null;receiver_id:string;receiver_name:string;issued_by:string;issuer_name:string;note:string;state:'pending'|'received'|'cancelled';revoked_at:string|null;received_at:string|null;created_at:string;updated_at:string};
+export type CatalogFile={id:string;name:string;mime:string;bytes:number;state:'pending'|'ready';entry_id:string|null};
+export type CatalogVersion={version:number;content:unknown;actor_name:string;issue_id:string|null;created_at:string};
+export const emptyCatalogContent=():CatalogContent=>({name:'',kind:'',purposes:[],capacity:null,active:true,deleted:false,note:'',group_id:null,owner_id:null,collaborator_ids:[],provider:'',conditions:'',contact:'',requirements:'',time_commitment:'',support:'',headcount:null,attachment_ids:[],source:''});

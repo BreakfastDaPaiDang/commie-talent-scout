@@ -1,10 +1,10 @@
 name: Knowledge database and service
 on:
   pull_request:
-    paths: ['knowledge/**', 'app/server/knowledge-identity.ts', '.github/workflows/knowledge.yml', 'package.json', 'package-lock.json']
+    paths: ['knowledge/**', 'app/shared/knowledge.ts', 'app/shared/catalog.ts', 'app/server/knowledge-identity.ts', '.github/workflows/knowledge.yml', 'package.json', 'package-lock.json']
   push:
     branches: [main]
-    paths: ['knowledge/**', 'app/server/knowledge-identity.ts', '.github/workflows/knowledge.yml', 'package.json', 'package-lock.json']
+    paths: ['knowledge/**', 'app/shared/knowledge.ts', 'app/shared/catalog.ts', 'app/server/knowledge-identity.ts', '.github/workflows/knowledge.yml', 'package.json', 'package-lock.json']
   workflow_dispatch:
 permissions:
   contents: read
@@ -54,8 +54,12 @@ jobs:
         run: node knowledge/scripts/ensure-identity.mjs --env staging
       - name: Provision, back up, migrate, release and verify staging
         run: node knowledge/scripts/release.mjs --env staging
+      - name: Freeze, import, verify and switch staging resource authority
+        run: node knowledge/scripts/cutover-resources.mjs --env staging
       - name: Provision, back up, migrate, release and verify production
         run: node knowledge/scripts/release.mjs --env production
+      - name: Freeze, import, verify and switch production resource authority
+        run: node knowledge/scripts/cutover-resources.mjs --env production
       - name: Import supplied private drafts without publishing
         run: node knowledge/scripts/import-drafts.mjs
         env:

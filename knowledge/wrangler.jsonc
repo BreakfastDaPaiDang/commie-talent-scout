@@ -12,17 +12,19 @@
    "name":"commie-knowledge",
    "vars":{"ENVIRONMENT":"production","IDENTITY_ORIGIN":"https://scout.dapaidang.org","APP_ORIGIN":"https://knowledge.dapaidang.org"},
    "services":[{"binding":"IDENTITY","service":"cts-web"}],
+   "r2_buckets":[{"binding":"CATALOG_FILES","bucket_name":"commie-catalog-production-files"}],
    "d1_databases":[{"binding":"KNOWLEDGE_DB","database_name":"commie-knowledge-production","migrations_dir":"migrations"}],
    "routes":[{"pattern":"knowledge.dapaidang.org","custom_domain":true}],
-   "triggers":{"crons":["*/10 * * * *"]}
+   "triggers":{"crons":[]}
   },
   "staging":{
    "name":"commie-knowledge-staging",
    "vars":{"ENVIRONMENT":"staging","IDENTITY_ORIGIN":"https://scout-staging.dapaidang.org","APP_ORIGIN":"https://knowledge-staging.dapaidang.org"},
    "services":[{"binding":"IDENTITY","service":"cts-web-staging"}],
+   "r2_buckets":[{"binding":"CATALOG_FILES","bucket_name":"commie-catalog-staging-files"}],
    "d1_databases":[{"binding":"KNOWLEDGE_DB","database_name":"commie-knowledge-staging","migrations_dir":"migrations"}],
    "routes":[{"pattern":"knowledge-staging.dapaidang.org","custom_domain":true}],
-   "triggers":{"crons":["*/10 * * * *"]}
+   "triggers":{"crons":[]}
   }
  }
 }

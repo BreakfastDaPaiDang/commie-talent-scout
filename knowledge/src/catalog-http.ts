@@ -1,0 +1,36 @@
+import {Hono} from 'hono';
+import {z} from 'zod';
+import {Catalog,type CatalogActor} from './catalog.ts';
+import {catalogIdentity,catalogMembers,giftCookie,giftIdentity} from './catalog-auth.ts';
+import {CatalogFiles} from './catalog-files.ts';
+import {KnowledgeError,type Env} from './types.ts';
+
+export const catalogApp=new Hono<{Bindings:Env;Variables:{catalog:Catalog}}>();
+catalogApp.onError((error,c)=>{
+ if(error instanceof KnowledgeError)return c.json({error:{code:error.code,message:error.message}},error.status as 400);
+ if(error instanceof z.ZodError||error instanceof SyntaxError)return c.json({error:{code:'INVALID_INPUT',message:'输入格式不正确，请核对字段'}},400);
+ return c.json({error:{code:'RESULT_UNKNOWN',message:'结果未确认，请先查询原请求再重试'}},500);
+});
+catalogApp.post('/access/session',async c=>{const {key}=z.object({key:z.string().max(100)}).strict().parse(await c.req.json());const actor=await giftIdentity(key,c.env);c.header('Set-Cookie',giftCookie(key,new URL(c.req.url).protocol==='https:'));return c.json({identity:actor});});
+catalogApp.post('/access/logout',c=>{c.header('Set-Cookie',giftCookie('',new URL(c.req.url).protocol==='https:',true));return c.json({ok:true});});
+catalogApp.use('*',async(c,next)=>{const actor=await catalogIdentity(c.req.raw,c.env);let people:Promise<{id:string;name:string}[]>|undefined;c.set('catalog',new Catalog(c.env,actor,()=>people??=catalogMembers(c.req.raw,c.env)));await next();});
+catalogApp.get('/identity',c=>{const s=c.get('catalog');return c.json({identity:{kind:s.guest?'guest':'member',id:s.actor.id,name:s.actor.name,eligible:s.actor.eligible}});});
+catalogApp.get('/members',async c=>{const s=c.get('catalog');s.member();return c.json({members:await s.directory()});});
+catalogApp.get('/groups',async c=>c.json(await c.get('catalog').groups()));
+catalogApp.post('/groups',async c=>c.json(await c.get('catalog').createGroup(await c.req.json())));
+catalogApp.get('/entries',async c=>c.json(await c.get('catalog').list(c.req.query())));
+catalogApp.get('/entries/:id',async c=>c.json(await c.get('catalog').get(c.req.param('id'))));
+catalogApp.post('/entries',async c=>c.json(await c.get('catalog').publish(await c.req.json())));
+catalogApp.get('/resources',async c=>c.json(await c.get('catalog').allResources()));
+catalogApp.get('/issues',async c=>c.json(await c.get('catalog').issues(c.req.query())));
+catalogApp.get('/issues/:id',async c=>c.json(await c.get('catalog').issueDetail(c.req.param('id'))));
+catalogApp.post('/issues',async c=>c.json(await c.get('catalog').submitIssue(await c.req.json())));
+catalogApp.post('/issues/comment',async c=>c.json(await c.get('catalog').comment(await c.req.json())));
+catalogApp.post('/issues/resolve',async c=>c.json(await c.get('catalog').resolve(await c.req.json())));
+catalogApp.get('/grants',async c=>c.json(await c.get('catalog').grants()));
+catalogApp.post('/grants',async c=>c.json(await c.get('catalog').give(await c.req.json())));
+catalogApp.post('/grants/action',async c=>c.json(await c.get('catalog').grantAction(await c.req.json())));
+catalogApp.get('/requests/:id',async c=>{const s=c.get('catalog');s.member();return c.json({result:await s.receipt(z.uuid().parse(c.req.param('id')))});});
+catalogApp.post('/files/prepare',async c=>c.json(await new CatalogFiles(c.get('catalog')).prepare(await c.req.json())));
+catalogApp.put('/files/:id/content',async c=>c.json(await new CatalogFiles(c.get('catalog')).upload(c.req.param('id'),c.req.raw)));
+catalogApp.get('/files/:id/content',async c=>new CatalogFiles(c.get('catalog')).download(c.req.param('id')));

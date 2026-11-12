@@ -1,6 +1,6 @@
 {
   "format": 1,
-  "count": 41,
+  "count": 42,
   "migrations": {
     "0001_identity.sql": {
       "sha256": "ceb732997de6972d3f88ae3a15b52b4df0def3418cc4b0834cd289ce55daff6a",
@@ -206,6 +206,11 @@
       "sha256": "7ffee9a9682601594bd213b2e03c9d6fc7f64e8ee2ac9bc7ca2d79fe6b48de02",
       "backwards_compatible": true,
       "reason": "Additive recommendation evidence and target links to existing tasks; no changes to existing data or lifecycle."
+    },
+    "0042_catalog_authority.sql": {
+      "sha256": "4bcc7d5647d8c6899a7bbcd509308c0639d7038e2ff406dc74d1c7ae6d213b5c",
+      "backwards_compatible": true,
+      "reason": "Adds an initially legacy authority gate. Explicit verified cutover freezes old resource writes, including old-code rollback; independent resources retain empty ID references for existing foreign keys."
     }
   }
 }
