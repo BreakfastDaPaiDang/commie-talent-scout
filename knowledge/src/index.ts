@@ -23,7 +23,7 @@ app.onError((error,c)=>{
  return c.json({error:{code:'RESULT_UNKNOWN',message:'结果未确认，请查询原请求再重试'}},500);
 });
 app.get('/api/health',c=>c.json({ok:true,service:'commie-knowledge',version:'0.1.0',environment:c.env.ENVIRONMENT}));
-app.use('*',async(c,next)=>{const actor=await authenticate(c.req.raw,c.env);c.set('identity',actor);c.set('knowledge',new Knowledge(c.env.KNOWLEDGE_DB,actor));await next();});
+app.use('*',async(c,next)=>{const actor=await authenticate(c.req.raw,c.env);c.set('identity',actor);c.set('knowledge',new Knowledge(c.env.KNOWLEDGE_DB,actor,undefined,c.env.APP_ORIGIN));await next();});
 app.get('/api/identity',c=>c.json(c.get('identity')));
 app.get('/api/guide',c=>c.json({rules:guide}));
 app.get('/api/tags',async c=>c.json(await c.get('knowledge').tags()));

@@ -15,7 +15,7 @@ export const guide=[
  '知识库不推进人物状态，不创建审核任务。附录导入内容为私人草稿，不是已通过共识。',
 ];
 export async function handleMcp(request:Request,env:Env,ctx:ExecutionContext,actor:Identity){
- const server=new McpServer({name:'commie-knowledge',version:'0.1.0'}),service=new Knowledge(env.KNOWLEDGE_DB,actor);
+ const server=new McpServer({name:'commie-knowledge',version:'0.1.0'}),service=new Knowledge(env.KNOWLEDGE_DB,actor,undefined,env.APP_ORIGIN);
  const definitions=[
   ['knowledge_whoami','核对当前账号、环境与本次认可资格',z.object({}).strict(),()=>Promise.resolve({service:'commie-knowledge',...actor})],
   ['knowledge_guide','读取知识库使用和授权指南',z.object({}).strict(),()=>Promise.resolve({rules:guide})],

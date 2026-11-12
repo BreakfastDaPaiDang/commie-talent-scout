@@ -1,8 +1,10 @@
 name: Checks and production release
 on:
   pull_request:
+    paths-ignore: ['knowledge/**', '.github/workflows/knowledge.yml']
   push:
     branches: [main]
+    paths-ignore: ['knowledge/**', '.github/workflows/knowledge.yml']
   workflow_dispatch:
 permissions:
   contents: read

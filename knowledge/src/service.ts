@@ -21,7 +21,8 @@ function presentVersion(v:Version){const {tags_json,...rest}=v;return {...rest,t
 function proposalStatus(p:Proposal,at:string){return p.status==='pending'&&p.deadline_at<=at?'expired':p.status;}
 
 export class Knowledge{
- constructor(readonly db:D1Database,readonly actor:Identity,readonly clock:()=>string=now){}
+ constructor(readonly db:D1Database,readonly actor:Identity,readonly clock:()=>string=now,readonly origin=''){}
+ present(v:Version){return {...presentVersion(v),url:this.origin+'/api/entries/'+v.entry_id};}
  stmt(sql:string,...params:unknown[]){return this.db.prepare(sql).bind(...params);}
  eligible(){if(!this.actor.eligible||!this.actor.membership_id)throw new KnowledgeError(403,'MEMBERSHIP_REQUIRED','此操作需要账号当前绑定正式社员档案');}
  async entry(id:string){const e=await this.stmt('SELECT * FROM kb_entries WHERE id=?',id).first<Entry>();if(!e||(!e.public_at&&e.author_id!==this.actor.id))throw new KnowledgeError(404,'NOT_FOUND','条目不存在或不可见');return e;}
@@ -98,7 +99,7 @@ export class Knowledge{
  }
  async get(input:unknown){
   const a=schemas.get.parse(input),e=await this.entry(a.id),at=this.clock();
-  const versions=(await this.stmt("SELECT * FROM kb_versions WHERE entry_id=? AND (state='submitted' OR author_id=?) ORDER BY created_at,id",e.id,this.actor.id).all<Version>()).results.map(presentVersion);
+  const versions=(await this.stmt("SELECT * FROM kb_versions WHERE entry_id=? AND (state='submitted' OR author_id=?) ORDER BY created_at,id",e.id,this.actor.id).all<Version>()).results.map(v=>this.present(v));
   const proposals=(await this.stmt('SELECT * FROM kb_proposals WHERE entry_id=? ORDER BY submitted_at,id',e.id).all<Proposal>()).results.map(p=>({...p,status:proposalStatus(p,at)}));
   const votes=(await this.stmt('SELECT v.* FROM kb_votes v JOIN kb_proposals p ON p.id=v.proposal_id WHERE p.entry_id=? ORDER BY v.created_at,v.actor_id',e.id).all()).results;
   const events=(await this.stmt('SELECT seq,actor_id,kind,detail_json,created_at FROM kb_events WHERE entry_id=? ORDER BY seq',e.id).all()).results;
@@ -123,7 +124,7 @@ export class Knowledge{
   const rows=(await this.stmt('SELECT v.* FROM kb_entries e JOIN kb_versions v ON v.id=e.active_version_id WHERE e.closed_at IS NULL ORDER BY e.id LIMIT ? OFFSET ?',q.limit+1,q.cursor).all<Version>()).results;
   const after=Number((await this.db.prepare('SELECT revision FROM kb_meta WHERE id=1').first<{revision:number}>())!.revision);
   if(after!==revision)throw new KnowledgeError(409,'KNOWLEDGE_CHANGED','知识库已更新，请从首批重新读取');
-  return {revision,entries:rows.slice(0,q.limit).map(presentVersion),next_cursor:rows.length>q.limit?q.cursor+q.limit:null,complete:rows.length<=q.limit};
+  return {revision,entries:rows.slice(0,q.limit).map(v=>this.present(v)),next_cursor:rows.length>q.limit?q.cursor+q.limit:null,complete:rows.length<=q.limit};
  }
  async changes(){return {revision:Number((await this.db.prepare('SELECT revision FROM kb_meta WHERE id=1').first<{revision:number}>())!.revision)};}
 }
