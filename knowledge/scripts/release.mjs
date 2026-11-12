@@ -20,12 +20,16 @@ if(!matches.length){
 }
 const databaseId=matches[0].uuid;
 if(!databaseId||Object.values(personnel.env).some(e=>e.d1_databases.some(d=>d.database_id===databaseId))||release.recovery.database_id===databaseId)throw new Error('Knowledge must use its own D1 database');
+const fileBucket=target.r2_buckets?.find(b=>b.binding==='CATALOG_FILES')?.bucket_name;
+if(fileBucket!==`commie-catalog-${environment}-files`)throw new Error('Catalog files require their own environment bucket');
+const bucketPath=`/accounts/${account}/r2/buckets/${fileBucket}`;
+if(!await cf(bucketPath,{allowMissing:true})){try{await cf(`/accounts/${account}/r2/buckets`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:fileBucket})});}catch(error){if(!await cf(bucketPath,{allowMissing:true}))throw error;}}
 binding.database_id=databaseId;writeFileSync(configPath,JSON.stringify(config,null,2));mkdirSync('tmp/knowledge',{recursive:true});
 const query=async(sql,params=[])=>{const result=await cf(`/accounts/${account}/d1/database/${databaseId}/query`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sql,params})});if(!Array.isArray(result)||result.some(r=>!r.success))throw new Error('Knowledge management query failed');return result[0].results;};
 const pointer=objectPath(account,release.backup_bucket,`releases/knowledge-${environment}/latest.json`),priorResponse=await cf(pointer,{raw:true,allowMissing:true}),prior=priorResponse?await priorResponse.json():null;
 const migrations=migrationPlan('knowledge/migrations',prior?.migrations??{});
 const schema=await query("SELECT name FROM sqlite_master WHERE type='table'");
-const allowedTables=new Set(['kb_meta','kb_tags','kb_entries','kb_versions','kb_proposals','kb_votes','kb_events','kb_requests','kb_guards','kb_imports','d1_migrations','sqlite_sequence','_cf_KV']);
+const allowedTables=new Set(['kb_meta','kb_tags','kb_entries','kb_versions','kb_proposals','kb_votes','kb_events','kb_requests','kb_guards','kb_imports','d1_migrations','sqlite_sequence','_cf_KV','catalog_meta','catalog_groups','catalog_entries','catalog_versions','catalog_issues','catalog_comments','catalog_grants','catalog_grant_events','catalog_files','catalog_requests','catalog_imports','catalog_source_history','kw_meta','kw_branches','kw_categories','kw_documents','kw_versions','kw_items','kw_commits','kw_changes','kw_merges','kw_approvals','kw_issues','kw_comments','kw_events','kw_requests','kw_guards']);
 if(schema.some(t=>!allowedTables.has(t.name)))throw new Error('Unrecognized tables found in knowledge database; refusing to adopt it');
 if(schema.some(t=>t.name==='d1_migrations')){const applied=await query('SELECT name FROM d1_migrations');if(applied.some(m=>!migrations[m.name]))throw new Error('Unknown knowledge migration in database');}
 const deploymentPath=`/accounts/${account}/workers/scripts/${target.name}/deployments`;
@@ -49,8 +53,8 @@ const applied=await query('SELECT name FROM d1_migrations');if(applied.length!==
 if((await query('PRAGMA foreign_key_check')).length)throw new Error('Knowledge foreign keys invalid');
 const origin=target.vars.APP_ORIGIN;
 async function smoke(){
- const health=await fetch(origin+'/api/health',{redirect:'error',signal:AbortSignal.timeout(20000)});if(health.status!==200)throw new Error('Knowledge health failed');const data=await health.json();if(data.service!=='commie-knowledge'||data.environment!==environment)throw new Error('Wrong knowledge deployment');
- for(const path of ['/api/entries','/api/effective','/mcp']){const r=await fetch(origin+path,{redirect:'error',signal:AbortSignal.timeout(20000)});if(r.status!==401||!r.headers.get('cache-control')?.includes('no-store'))throw new Error('Knowledge private access check failed');await r.arrayBuffer();}
+ const health=await fetch(origin+'/api/health',{redirect:'error',signal:AbortSignal.timeout(20000)});if(health.status!==200)throw new Error('Knowledge health failed');const data=await health.json();if(data.service!=='commie-knowledge'||data.environment!==environment||data.workspace!==1||data.version!=='0.3.0')throw new Error('Wrong knowledge deployment');
+ for(const path of ['/api/entries','/api/effective','/api/knowledge-workspace/branches','/mcp']){const r=await fetch(origin+path,{redirect:'error',signal:AbortSignal.timeout(20000)});if(r.status!==401||!r.headers.get('cache-control')?.includes('no-store'))throw new Error('Knowledge private access check failed');await r.arrayBuffer();}
  const rejected=await fetch(origin+'/api/identity',{headers:{Authorization:'Bearer knowledge-smoke-'+randomUUID()},redirect:'error',signal:AbortSignal.timeout(20000)});
  if(rejected.status!==401||(await rejected.json()).error?.code!=='IDENTITY_REJECTED')throw new Error('Knowledge identity service binding failed');
  const identity=await fetch(target.vars.IDENTITY_ORIGIN+'/api/knowledge/identity',{redirect:'error',signal:AbortSignal.timeout(20000)});if(identity.status!==401)throw new Error('Identity bridge not deployed');await identity.arrayBuffer();

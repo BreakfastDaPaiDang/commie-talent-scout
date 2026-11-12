@@ -18,6 +18,8 @@ export async function authenticate(request: Request, env: Env, allowPasswordChan
     AND c.kind=?`).bind(await digest(value),now(),bearer?'mcp':'session').first<Actor>();
   if (!actor) throw new Failure(401,'UNAUTHENTICATED','登录或连接已失效，请重新认证');
   if (actor.must_change_password && !allowPasswordChange) throw new Failure(403,'PASSWORD_CHANGE_REQUIRED','请先更换临时密码');
+  const catalogHeaders=new Headers();if(bearer)catalogHeaders.set('Authorization','Bearer '+bearer);else if(cookie)catalogHeaders.set('Cookie',cookieName+'='+cookie);
+  Object.defineProperty(actor,'catalog_headers',{value:catalogHeaders,enumerable:false});
   return actor;
 }
 async function limit(env: Env, identity: string, seconds: number, max: number) {

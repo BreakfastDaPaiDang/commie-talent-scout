@@ -1,5 +1,6 @@
 import {Resources} from './resources.ts';
-import {knowledgeIdentity} from './knowledge-identity.ts';
+import {knowledgeIdentity,knowledgeMembers} from './knowledge-identity.ts';
+import {catalogProxy,catalogMode} from './catalog-bridge.ts';
 import {weeklyReport} from './weekly-report.ts';
 import {WorkRecommendations} from './work-recommendations.ts';
 import {WorkTaskLabels} from './work-task-labels.ts';
@@ -38,7 +39,7 @@ import {Messages} from './messages.ts';
 import {Notifications} from './notifications.ts';
 
 const app=new Hono<{Bindings:Env}>();
-app.use('/api/*',bodyLimit({maxSize:1024*1024,onError:c=>c.json({error:{code:'REQUEST_TOO_LARGE',message:'请求内容过大'}},413)}));
+app.use('/api/*',async(c,next)=>bodyLimit({maxSize:/^\/api\/catalog\/files\/[^/]+\/content$/.test(c.req.path)?10485760:1024*1024,onError:c=>c.json({error:{code:'REQUEST_TOO_LARGE',message:'请求内容过大'}},413)})(c,next));
 app.use('/mcp',bodyLimit({maxSize:1024*1024,onError:c=>c.json({error:{code:'REQUEST_TOO_LARGE',message:'请求内容过大'}},413)}));
 app.use('*',async(c,next)=>{
   c.env={...c.env,APP_ORIGIN:new URL(c.req.url).origin};
@@ -50,7 +51,7 @@ app.use('*',async(c,next)=>{
   if (!['GET','HEAD','OPTIONS'].includes(c.req.method) && c.req.path.startsWith('/api')) {
     if (c.req.header('Origin')!==new URL(c.req.url).origin) throw new Failure(403,'ORIGIN_REJECTED','请求来源不匹配，请从本站重新操作');
     const length=Number(c.req.header('Content-Length')??0);
-    if(length>1024*1024) throw new Failure(413,'REQUEST_TOO_LARGE','请求内容过大');
+    if(length>(/^\/api\/catalog\/files\/[^/]+\/content$/.test(c.req.path)?10485760:1024*1024)) throw new Failure(413,'REQUEST_TOO_LARGE','请求内容过大');
   }
   await next();
 });
@@ -63,7 +64,9 @@ app.onError((error,c)=>{
   console.error(JSON.stringify({event:'request.failed',path:c.req.path,code:'INTERNAL_ERROR'}));
   return c.json({error:{code:'INTERNAL_ERROR',message:'服务暂时不可用，请稍后重试'}},500);
 });
-app.get('/api/health',c=>c.json({ok:true,version:'1.0.0',environment:c.env.ENVIRONMENT}));
+app.get('/api/health',c=>c.json({ok:true,version:'1.0.0',environment:c.env.ENVIRONMENT,catalog_bridge:1,knowledge_workspace:1}));
+app.all('/api/catalog/*',c=>catalogProxy(c.req.raw,c.env));
+app.all('/api/knowledge-workspace/*',c=>catalogProxy(c.req.raw,c.env,true));
 app.post('/api/auth/login',async c=>{
   const {secret,member}=await login(c.req.raw,c.env,await c.req.json());
   c.header('Set-Cookie',sessionCookie(secret,c.req.raw));
@@ -89,9 +92,11 @@ app.post('/api/auth/logout',async c=>{
 });
 app.get('/api/workspace',async c=>{const actor=await authenticate(c.req.raw,c.env);return c.json({member:publicMember(actor)});});
 app.get('/api/knowledge/identity',async c=>c.json(await knowledgeIdentity(c.req.raw,c.env)));
+app.get('/api/knowledge/members',async c=>c.json(await knowledgeMembers(c.req.raw,c.env)));
 app.get('/api/statistics',async c=>c.json(await statistics(c.env,await authenticate(c.req.raw,c.env),c.req.query())));
 app.get('/api/work-overview/recommendations',async c=>c.json(await new WorkRecommendations(c.env,await authenticate(c.req.raw,c.env)).read(c.req.query())));
 app.get('/api/resources',async c=>c.json(await new Resources(c.env,await authenticate(c.req.raw,c.env)).list(c.req.query())));
+app.get('/api/resources/authority',async c=>{await authenticate(c.req.raw,c.env);return c.json({mode:await catalogMode(c.env)});});
 app.post('/api/resources/save',async c=>c.json(await new Resources(c.env,await authenticate(c.req.raw,c.env)).save(await c.req.json())));
 app.get('/api/work-overview',async c=>c.json(await new WorkOverview(c.env,await authenticate(c.req.raw,c.env)).read(c.req.query())));
 app.post('/api/work-overview/save',async c=>c.json(await new WorkOverview(c.env,await authenticate(c.req.raw,c.env)).save(await c.req.json())));

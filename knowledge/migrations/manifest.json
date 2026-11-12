@@ -4,6 +4,16 @@
       "sha256": "7abe666036c66417ae9b10e661519e0fa22dcbcec5cb1640962e516455f935df",
       "backwards_compatible": true,
       "reason": "Creates isolated knowledge tables in a separate database; no personnel data or rules changed."
+    },
+    "0002_production_catalog.sql": {
+      "sha256": "6eeac8ce1c6e49d60e0d60de888c8c5a4c09548a91dbfac7c2d4bcf6a116bbcc",
+      "backwards_compatible": true,
+      "reason": "Adds publication, issue revisions, named reception, revocable read grants and attachments in the independent database; preserves all legacy knowledge records."
+    },
+    "0003_knowledge_workspace.sql": {
+      "sha256": "9be5991e33324e6faa3a1c6c6d9675f9fed4a797d1954dc0c5803fbfd30b47c0",
+      "backwards_compatible": true,
+      "reason": "Adds independent document branches, immutable commits, three-member consent, explicit multi-candidate selection, issues and anchored comments; preserves legacy records and private draft ownership."
     }
   }
 }

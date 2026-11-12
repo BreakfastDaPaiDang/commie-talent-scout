@@ -4,8 +4,12 @@ export type Env = {
   ASSETS: Fetcher;
   ENVIRONMENT: 'staging' | 'production';
   APP_ORIGIN: string;
+  CATALOG?: Fetcher;
+  CATALOG_ORIGIN?: string;
 };
 export type Actor = {
+  /** Request-local, non-enumerable forwarding headers; never serialized or stored. */
+  catalog_headers?: Headers;
   identity_kind?: 'human'|'service'; execution_purpose?: 'interactive'|'verification';
   credential_parent_id?: string|null; credential_expires_at?: string;
   id: string; username: string; name: string; role: 'admin' | 'member'; frozen: number;
