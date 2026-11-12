@@ -1,0 +1,86 @@
+[
+  {
+    "width": 1440,
+    "name": "外部人物",
+    "path": "/people",
+    "realHttp": true,
+    "returnHome": true
+  },
+  {
+    "width": 1440,
+    "name": "社员",
+    "path": "/members",
+    "realHttp": true,
+    "returnHome": true
+  },
+  {
+    "width": 1440,
+    "name": "任务",
+    "path": "/tasks",
+    "realHttp": true,
+    "returnHome": true
+  },
+  {
+    "width": 1440,
+    "name": "仪表盘",
+    "path": "/statistics",
+    "realHttp": true,
+    "returnHome": true
+  },
+  {
+    "width": 1440,
+    "name": "知识库",
+    "path": "/knowledge",
+    "realHttp": true,
+    "returnHome": true
+  },
+  {
+    "width": 1440,
+    "name": "Agent 接入",
+    "path": "/agent",
+    "realHttp": true,
+    "returnHome": true
+  },
+  {
+    "width": 390,
+    "name": "外部人物",
+    "path": "/people",
+    "realHttp": true,
+    "returnHome": true
+  },
+  {
+    "width": 390,
+    "name": "社员",
+    "path": "/members",
+    "realHttp": true,
+    "returnHome": true
+  },
+  {
+    "width": 390,
+    "name": "任务",
+    "path": "/tasks",
+    "realHttp": true,
+    "returnHome": true
+  },
+  {
+    "width": 390,
+    "name": "仪表盘",
+    "path": "/statistics",
+    "realHttp": true,
+    "returnHome": true
+  },
+  {
+    "width": 390,
+    "name": "知识库",
+    "path": "/knowledge",
+    "realHttp": true,
+    "returnHome": true
+  },
+  {
+    "width": 390,
+    "name": "Agent 接入",
+    "path": "/agent",
+    "realHttp": true,
+    "returnHome": true
+  }
+]

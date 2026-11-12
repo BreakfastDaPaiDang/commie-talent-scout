@@ -1,3 +1,4 @@
+import HomePreview from './HomePreview';
 import {FeishuInvitation} from '../../../app/ui/FeishuInvitation';
 import KnowledgePreview from './KnowledgePreview';
 import WorkOverviewPreview from './WorkOverviewPreview';
@@ -44,5 +45,5 @@ function ResponsivePreview() {
   );
 }
 createRoot(document.getElementById("root")).render(
-  new URLSearchParams(location.search).has('knowledge') ? <KnowledgePreview /> : new URLSearchParams(location.search).has('feishu-invitation') ? <FeishuInvitation onClose={()=>location.assign('/')} /> : new URLSearchParams(location.search).has('work-overview') ? <WorkOverviewPreview /> : new URLSearchParams(location.search).has('flow') ? <FlowPreview /> : sizes[preview] ? <ResponsivePreview /> : <App />,
+  new URLSearchParams(location.search).has('home') ? <HomePreview /> : new URLSearchParams(location.search).has('knowledge') ? <KnowledgePreview /> : new URLSearchParams(location.search).has('feishu-invitation') ? <FeishuInvitation onClose={()=>location.assign('/')} /> : new URLSearchParams(location.search).has('work-overview') ? <WorkOverviewPreview /> : new URLSearchParams(location.search).has('flow') ? <FlowPreview /> : sizes[preview] ? <ResponsivePreview /> : <App />,
 );
