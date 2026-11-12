@@ -67,3 +67,11 @@ test('idempotent commands and concurrent stale edits cannot duplicate or silentl
  const save={branch_id:first.id,expected_version:1,title:'竞争',body:'正文',category:'技术',message:'新增'};const settled=await Promise.allSettled(f.w.slice(0,2).map(w=>w.save({...save,request_id:request()})));assert.equal(settled.filter(r=>r.status==='fulfilled').length,1);assert.equal((await f.w[0].list({branch_id:first.id})).documents.length,1);
  assert.equal(f.sqlite.prepare('PRAGMA foreign_key_check').all().length,0);
 }finally{f.close();}});
+
+test('guest history exposes only published main commits, not intermediate drafts or member issues',async()=>{const f=setup();try{
+ const {b,d}=await change(f.w[0]),revision=await f.w[0].save({branch_id:b.id,expected_version:b.version,document_id:d.id,title:'公开版本',body:'准备发布的最终正文',category:'知性',message:'修改中间稿',request_id:request()}),m=await propose(f,await f.w[0].branch(b.id));await agree(f,m);const merged=await accept(f,m);
+ const issue=await f.w[0].createIssue({title:'成员内部议题',body:'尚未形成共识的讨论',request_id:request()});
+ const guest=new KnowledgeWorkspace(f.db,{kind:'guest',id:request(),name:'接收者',eligible:false}),history=await guest.history('main');assert.deepEqual(history.commits.map(c=>c.id),[merged.commit_id]);
+ assert.equal((await guest.commitDetail('main',merged.commit_id)).changes[0].after.id,revision.version_id);
+ await assert.rejects(guest.commitDetail('main',d.commit_id),e=>e.code==='NOT_FOUND');await assert.rejects(guest.commitDetail('main',revision.commit_id),e=>e.code==='NOT_FOUND');assert.deepEqual((await guest.issues()).issues,[]);await assert.rejects(guest.issue(issue.id),e=>e.code==='NOT_FOUND');
+}finally{f.close();}});
