@@ -11,7 +11,7 @@ async function connected(t){
  p.sqlite.prepare('UPDATE credentials SET hash=? WHERE id=?').run(await digest(token),p.actor.credential_id);
  const membership=request();p.sqlite.prepare("INSERT INTO archives(id,type,name,status,person_role,linked_account_id,created_by,created_at,updated_at) VALUES(?,'person',?,'已入伙','member',?,?,?,?)").run(membership,p.actor.name,p.actor.id,p.actor.id,at,at);
  const paths=[],pending=[],ctx={waitUntil(p){pending.push(p);}};t.after(()=>Promise.all(pending));
- const env={KNOWLEDGE_DB:k.db,ENVIRONMENT:'staging',APP_ORIGIN:'https://knowledge.example',IDENTITY_ORIGIN:'https://identity.example',IDENTITY:{fetch(req){paths.push(new URL(req.url).pathname);return personnel.fetch(req,p.env,ctx);}}};
+ const env={KNOWLEDGE_DB:k.db,ENVIRONMENT:'staging',APP_ORIGIN:'https://knowledge.example',IDENTITY_ORIGIN:'https://identity.example',IDENTITY:{fetch(req){assert.equal(req.redirect,'manual','workerd supports manual; credentials must never follow redirects');paths.push(new URL(req.url).pathname);return personnel.fetch(req,p.env,ctx);}}};
  const call=async(path,body,headers={Authorization:'Bearer '+token})=>{const response=await worker.fetch(new Request(env.APP_ORIGIN+path,{method:body?'POST':'GET',headers:{...headers,...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{})}),env,ctx);return {status:response.status,headers:response.headers,body:await response.json()};};
  return {k,p,env,ctx,call,paths,token,membership};
 }
@@ -26,6 +26,7 @@ test('HTTPS, cross-origin, unavailable identity and cross-environment protection
  const f=await connected(t);const plain=await worker.fetch(new Request('http://knowledge.example/api/entries',{headers:{Authorization:'Bearer '+f.token}}),f.env,f.ctx);assert.equal(plain.status,403);assert.equal(f.paths.length,0);
  assert.equal((await f.call('/api/entries',undefined,{Authorization:'Bearer '+f.token,Origin:'https://other.example'})).status,403);
  f.env.ENVIRONMENT='production';assert.equal((await f.call('/api/identity')).status,503);f.env.ENVIRONMENT='staging';
+ f.env.IDENTITY={fetch(){return new Response(null,{status:302,headers:{Location:'https://unrelated.example'}});}};assert.equal((await f.call('/api/identity')).status,503);
  f.env.IDENTITY={fetch(){throw new Error('unavailable');}};assert.equal((await f.call('/api/entries')).status,503);assert.equal(f.k.sqlite.prepare('SELECT count(*) n FROM kb_entries').get().n,0);
 });
 test('MCP initializes, discovers tools, isolates drafts, returns effective text and uses the HTTP domain service',async t=>{

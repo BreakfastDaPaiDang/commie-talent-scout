@@ -8,7 +8,9 @@ export async function authenticate(request:Request,env:Env):Promise<Identity>{
  const origin=new URL(env.IDENTITY_ORIGIN);
  if(origin.protocol!=='https:'||origin.origin!==env.IDENTITY_ORIGIN)throw new KnowledgeError(503,'IDENTITY_CONFIGURATION','身份服务配置无效');
  let response:Response;
- try{response=await env.IDENTITY.fetch(new Request(origin.origin+'/api/knowledge/identity',{headers:{Authorization:bearer},redirect:'error',signal:AbortSignal.timeout(10000)}));}
+ // workerd supports manual/follow, not Node's redirect:error. Manual rejects
+ // redirects below without ever forwarding a user's credential to another host.
+ try{response=await env.IDENTITY.fetch(new Request(origin.origin+'/api/knowledge/identity',{headers:{Authorization:bearer},redirect:'manual',signal:AbortSignal.timeout(10000)}));}
  catch{throw new KnowledgeError(503,'IDENTITY_UNAVAILABLE','身份服务暂不可用，请稍后重试');}
  if(response.status===401||response.status===403)throw new KnowledgeError(response.status,'IDENTITY_REJECTED','连接已失效或该账号不能使用知识库');
  if(!response.ok)throw new KnowledgeError(503,'IDENTITY_UNAVAILABLE','身份服务暂不可用，请稍后重试');
