@@ -11,5 +11,5 @@
 
 html[data-theme=night] .kb-workspace .button.primary,html[data-theme=night] .kb-form .button.primary{background:#785352;box-shadow:none;border-color:#8b6562;color:#f0e9e2}
 html[data-theme=night] .kb-view-switch .active,html[data-theme=night] .kb-current{background:#785352;color:#f0e9e2}
-@media(max-width:600px){.topbar .primary-nav:has(>button:nth-child(6)){gap:4px;justify-content:space-between;max-width:100%}.topbar .primary-nav:has(>button:nth-child(6))>button{font-size:clamp(14px,4.6vw,18px)}}
+@media(max-width:600px){.topbar .primary-nav:has(>button:nth-child(6)){gap:4px;justify-content:space-between;max-width:100%}.topbar .primary-nav:has(>button:nth-child(6))>button{font-size:clamp(14px,4.7vw,18px)}}
 @media(min-width:601px) and (max-width:1500px){.topbar .primary-nav:has(>button:nth-child(6)){gap:clamp(16px,2vw,28px)}}
