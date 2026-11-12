@@ -3,7 +3,7 @@ import {resolve} from 'node:path';
 import {createHash,randomUUID} from 'node:crypto';
 import {gzipSync} from 'node:zlib';
 import {cf,objectPath,projectConfig,wrangler} from '../../scripts/lib/cloudflare-admin.mjs';
-import {snapshotDatabase} from '../../scripts/lib/snapshot-database.mjs';
+import {snapshotKnowledge} from './snapshot.mjs';
 import {migrationPlan} from '../../scripts/lib/release-plan.mjs';
 
 const environment=process.argv[process.argv.indexOf('--env')+1];
@@ -38,7 +38,7 @@ if(schema.some(t=>t.name==='kb_entries')){
  try{
   await wrangler(['d1','export',name,'--env',environment,'--config',configPath,'--remote','--output',file]);
   if(statSync(file).size>release.max_export_bytes)throw new Error('Knowledge backup exceeds reviewed size');
-  const sql=readFileSync(file),restored=snapshotDatabase(sql);try{if(restored.prepare('PRAGMA foreign_key_check').all().length)throw new Error('Knowledge backup foreign keys invalid');}finally{restored.close();}
+  const sql=readFileSync(file),restored=snapshotKnowledge(sql);restored.close();
   snapshot=`snapshots/knowledge-${environment}/${new Date().toISOString().replaceAll(':','-')}-${randomUUID()}`;
   const compressed=gzipSync(sql);await cf(objectPath(account,release.backup_bucket,snapshot+'/database.sql.gz'),{method:'PUT',body:compressed,headers:{'Content-Type':'application/gzip'},raw:true});
   await cf(objectPath(account,release.backup_bucket,snapshot+'/manifest.json'),{method:'PUT',body:JSON.stringify({database_id:databaseId,environment,sql_sha256:createHash('sha256').update(sql).digest('hex'),sql_bytes:sql.length}),headers:{'Content-Type':'application/json'},raw:true});
