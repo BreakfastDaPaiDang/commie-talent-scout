@@ -1,0 +1,28 @@
+{
+ "$schema":"../node_modules/wrangler/config-schema.json",
+ "name":"commie-knowledge",
+ "account_id":"370c0a6a58a36a7e781de20d1a257ac2",
+ "main":"src/index.ts",
+ "compatibility_date":"2026-09-01",
+ "compatibility_flags":["nodejs_compat"],
+ "workers_dev":false,
+ "observability":{"enabled":true,"head_sampling_rate":0.1,"redact_query_string":true},
+ "env":{
+  "production":{
+   "name":"commie-knowledge",
+   "vars":{"ENVIRONMENT":"production","IDENTITY_ORIGIN":"https://scout.dapaidang.org","APP_ORIGIN":"https://knowledge.dapaidang.org"},
+   "services":[{"binding":"IDENTITY","service":"cts-web"}],
+   "d1_databases":[{"binding":"KNOWLEDGE_DB","database_name":"commie-knowledge-production","migrations_dir":"migrations"}],
+   "routes":[{"pattern":"knowledge.dapaidang.org","custom_domain":true}],
+   "triggers":{"crons":["*/10 * * * *"]}
+  },
+  "staging":{
+   "name":"commie-knowledge-staging",
+   "vars":{"ENVIRONMENT":"staging","IDENTITY_ORIGIN":"https://scout-staging.dapaidang.org","APP_ORIGIN":"https://knowledge-staging.dapaidang.org"},
+   "services":[{"binding":"IDENTITY","service":"cts-web-staging"}],
+   "d1_databases":[{"binding":"KNOWLEDGE_DB","database_name":"commie-knowledge-staging","migrations_dir":"migrations"}],
+   "routes":[{"pattern":"knowledge-staging.dapaidang.org","custom_domain":true}],
+   "triggers":{"crons":["*/10 * * * *"]}
+  }
+ }
+}

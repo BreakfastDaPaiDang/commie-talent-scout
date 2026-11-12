@@ -1,4 +1,5 @@
 import {Resources} from './resources.ts';
+import {knowledgeIdentity} from './knowledge-identity.ts';
 import {weeklyReport} from './weekly-report.ts';
 import {WorkRecommendations} from './work-recommendations.ts';
 import {WorkTaskLabels} from './work-task-labels.ts';
@@ -87,6 +88,7 @@ app.post('/api/auth/logout',async c=>{
   return c.json({ok:true});
 });
 app.get('/api/workspace',async c=>{const actor=await authenticate(c.req.raw,c.env);return c.json({member:publicMember(actor)});});
+app.get('/api/knowledge/identity',async c=>c.json(await knowledgeIdentity(c.req.raw,c.env)));
 app.get('/api/statistics',async c=>c.json(await statistics(c.env,await authenticate(c.req.raw,c.env),c.req.query())));
 app.get('/api/work-overview/recommendations',async c=>c.json(await new WorkRecommendations(c.env,await authenticate(c.req.raw,c.env)).read(c.req.query())));
 app.get('/api/resources',async c=>c.json(await new Resources(c.env,await authenticate(c.req.raw,c.env)).list(c.req.query())));

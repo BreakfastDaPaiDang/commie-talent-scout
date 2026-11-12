@@ -33,6 +33,7 @@ backups/
 
 # Cloudflare local state
 .wrangler/
+knowledge/wrangler.generated.json
 
 # Local caches and logs
 .cache/

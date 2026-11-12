@@ -20,7 +20,10 @@
     "bootstrap": "node scripts/bootstrap.mjs",
     "deploy:staging": "npm run build && wrangler deploy --env staging",
     "deploy": "npm run build && wrangler deploy --env production",
-    "test:dom": "node --import ./tests/dom-register.mjs --import tsx --test tests/*.dom.test.tsx"
+    "test:dom": "node --import ./tests/dom-register.mjs --import tsx --test tests/*.dom.test.tsx",
+    "knowledge:check": "tsc -p knowledge/tsconfig.json",
+    "knowledge:test": "node --experimental-transform-types --test knowledge/tests/*.test.mjs",
+    "knowledge:build": "wrangler deploy --config knowledge/wrangler.jsonc --env staging --dry-run --outdir ../tmp/knowledge/build"
   },
   "dependencies": {
     "@modelcontextprotocol/client": "2.0.0",
