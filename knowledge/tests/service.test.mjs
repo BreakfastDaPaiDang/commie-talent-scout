@@ -5,7 +5,7 @@ import {Knowledge,expire} from '../src/service.ts';
 
 test('private drafts, search and immutable submitted versions; three distinct current members adopt',async t=>{
  const f=fixture();t.after(f.close);const [a,b,c]=f.services;const d=await draft(a);
- assert.equal((await a.list({scope:'drafts'})).entries.length,1);assert.equal((await b.list({scope:'drafts'})).entries.length,0);await assert.rejects(b.get({id:d.entry_id}),{code:'NOT_FOUND'});assert.equal((await a.effective({})).entries.length,0);
+ assert.equal((await a.list({scope:'drafts'})).entries[0].state,'draft');assert.equal((await b.list({scope:'drafts'})).entries.length,0);await assert.rejects(b.get({id:d.entry_id}),{code:'NOT_FOUND'});assert.equal((await a.effective({})).entries.length,0);
  const p=await a.submit({id:d.id,expected_revision:1,request_id:request()});assert.equal((await b.list({scope:'pending'})).entries.length,1);
  await assert.rejects(a.save({id:d.id,expected_revision:1,title:'改写',body:'不允许',tags:[],request_id:request()}),{code:'DRAFT_OWNER_REQUIRED'});
  assert.throws(()=>f.sqlite.prepare('UPDATE kb_versions SET body=? WHERE id=?').run('偷改',d.id),/immutable/);
@@ -16,7 +16,7 @@ test('private drafts, search and immutable submitted versions; three distinct cu
 test('revision votes start at zero, old content remains effective and failed revisions do not discard it',async t=>{
  const f=fixture();t.after(f.close);const [a,b]=f.services,p=await proposal(a);await adopt(f,p);
  const d=await draft(b,{entry_id:p.entry_id,title:'新判断',body:'修订内容'});assert.equal((await a.get({id:p.entry_id})).versions.length,1);
- const rev=await b.submit({id:d.id,expected_revision:1,request_id:request()});assert.equal((await a.effective({})).entries[0].title,'测试知识');
+ const rev=await b.submit({id:d.id,expected_revision:1,request_id:request()});assert.equal((await a.effective({})).entries[0].title,'测试知识');assert.equal((await a.list({scope:'pending',search:'新判断'})).entries[0].display_version_id,d.id);
  await a.endorse({proposal_id:rev.proposal_id,request_id:request()});f.advance(7*86400000);await assert.rejects(b.endorse({proposal_id:rev.proposal_id,request_id:request()}),{code:'PROPOSAL_ENDED'});
  assert.equal((await a.get({id:p.entry_id})).proposals.find(x=>x.id===rev.proposal_id).status,'expired');await expire(f.db,f.clock());await expire(f.db,f.clock());assert.equal(f.sqlite.prepare("SELECT count(*) n FROM kb_events WHERE kind='proposal.expired'").get().n,1);
  assert.equal((await a.effective({})).entries[0].id,p.version_id);assert.equal((await a.list({scope:'discarded'})).entries.length,0);
