@@ -44,8 +44,8 @@ export async function verifyEmptyKnowledgeChrome(page,out,documentUrl){
  assert.equal(await page.locator('.kb-branch-extra').count(),0);
  assert.equal(await page.locator('.kb-branch-box button').count(),0);
  assert.equal(await page.locator('.kb-branch-box option:checked').innerText(),'主分支');
- const geometry=await page.locator('.kb-detail-toolbar').evaluate(el=>{const box=el.getBoundingClientRect(),toggle=el.querySelector('.kb-view-switch').getBoundingClientRect();return {gap:box.right-toggle.right};});
- assert.ok(Math.abs(geometry.gap)<2,'view switch stays at the right edge without breadcrumb');
+ const geometry=await page.locator('.kb-detail-toolbar').evaluate(el=>{const box=el.getBoundingClientRect(),help=el.querySelector('.kb-help-button').getBoundingClientRect(),toggle=el.querySelector('.kb-view-switch').getBoundingClientRect();return {gap:box.right-help.right,toggleBeforeHelp:toggle.right<=help.left};});
+ assert.ok(Math.abs(geometry.gap)<2&&geometry.toggleBeforeHelp,'tutorial stays at the right edge next to the view switch');
  await page.screenshot({path:out+'/git-empty-desktop.png',fullPage:true});
  await page.getByRole('button',{name:'简',exact:true}).click();
  await page.locator('.kb-breadcrumb').filter({hasText:'知识条目'}).waitFor();
