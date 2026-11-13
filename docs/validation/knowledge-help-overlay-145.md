@@ -19,6 +19,7 @@
 - 页面滚动后重新定位；打开／关闭无知识库写请求，点击原“新条目”仅退出说明。
 - 焦点进入／恢复、Tab、Esc、点击空白退出、关闭后原布局与阅读位置恢复。
 - 夜间、空草稿、只读接收者、普通演示原型。
+- 分类侧栏打开时启动说明，保持侧栏与当前阅读状态，原位解释编辑、关闭和留言控件；退出说明后侧栏仍保留。
 - 原有完整编辑与提交页、评论批注、分类、三人同意、多候选与分支删除流程继续通过真实接口验收。
 
 实际截图已逐张核对：[桌面](screenshots/knowledge-workspace/overlay-desktop.png)、[手机](screenshots/knowledge-workspace/overlay-mobile.png)、[320px 窄屏](screenshots/knowledge-workspace/overlay-narrow.png)、[夜间](screenshots/knowledge-workspace/overlay-night.png)。机器结果保存在 `tmp/verification/knowledge-workspace/report.json`，真实双库完整流程、40 项共享 DOM 测试、类型检查、前端构建及历史原型对照通过，页面错误为零。云端发布记录另附于任务进展说明。

@@ -56,6 +56,11 @@ export async function verifyKnowledgeHelp(page,out,documentUrl){
   assert.equal(await page.getByRole('dialog',{name:'新条目',exact:true}).count(),0,'dismissal click must not trigger the underlying action');
   await page.getByRole('button',{name:'＋ 新条目',exact:true}).click();await page.getByRole('dialog',{name:'新条目',exact:true}).waitFor();await page.keyboard.press('Escape');
   await trigger(page).click();await page.mouse.click(900,1040);await tutorial(page).waitFor({state:'detached'});
+  await page.getByRole('button',{name:'分类：知性',exact:true}).click({button:'right'});
+  const category=page.getByRole('dialog',{name:'知性分类定义与留言',exact:true});await category.waitFor();
+  await trigger(page).click();await caption(page,'category-edit').waitFor();await caption(page,'category-comment').waitFor();await fitted(page);
+  await aligned(page,'category-close','.kb-category-drawer [aria-label="关闭分类侧栏"]');await page.screenshot({path:out+'/tutorial-category.png',fullPage:true});
+  await close(page);assert.equal(await category.isVisible(),true,'help preserves the open category sidebar');await page.keyboard.press('Escape');await category.waitFor({state:'detached'});
   await page.getByRole('button',{name:'繁',exact:true}).click();
   for(const [tab,id] of [['分支','new-branch'],['议题','new-issue'],['历史','history-row']]){
    await page.locator('.kb-content-tabs').getByRole('button',{name:tab,exact:true}).click();
@@ -83,7 +88,7 @@ export async function verifyKnowledgeHelp(page,out,documentUrl){
   }
   assert.deepEqual(writes,[]);
   await page.setViewportSize({width:1440,height:1080});await page.goto(documentUrl);await page.locator('.kb-article-title').waitFor();
-  return {desktop:true,mobile:true,narrow:true,context:true,anchored:true,resize:true,scroll:true,definitions:true,focusRestore:true,night:true,noWrites:true,noClickThrough:true};
+  return {desktop:true,mobile:true,narrow:true,context:true,categoryPreserved:true,anchored:true,resize:true,scroll:true,definitions:true,focusRestore:true,night:true,noWrites:true,noClickThrough:true};
  }finally{page.off('request',onRequest);}
 }
 
