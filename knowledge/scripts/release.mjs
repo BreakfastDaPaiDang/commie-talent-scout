@@ -53,7 +53,7 @@ const applied=await query('SELECT name FROM d1_migrations');if(applied.length!==
 if((await query('PRAGMA foreign_key_check')).length)throw new Error('Knowledge foreign keys invalid');
 const origin=target.vars.APP_ORIGIN;
 async function smoke(){
- const health=await fetch(origin+'/api/health',{redirect:'error',signal:AbortSignal.timeout(20000)});if(health.status!==200)throw new Error('Knowledge health failed');const data=await health.json();if(data.service!=='commie-knowledge'||data.environment!==environment||data.workspace!==1||data.version!=='0.3.1'||data.reviews!==1||data.category_annotations!==1)throw new Error('Wrong knowledge deployment');
+ const health=await fetch(origin+'/api/health',{redirect:'error',signal:AbortSignal.timeout(20000)});if(health.status!==200)throw new Error('Knowledge health failed');const data=await health.json();if(data.service!=='commie-knowledge'||data.environment!==environment||data.workspace!==1||data.version!=='0.3.2'||data.reviews!==1||data.category_annotations!==1||data.branch_deletion!==1)throw new Error('Wrong knowledge deployment');
  for(const path of ['/api/entries','/api/effective','/api/knowledge-workspace/branches','/mcp']){const r=await fetch(origin+path,{redirect:'error',signal:AbortSignal.timeout(20000)});if(r.status!==401||!r.headers.get('cache-control')?.includes('no-store'))throw new Error('Knowledge private access check failed');await r.arrayBuffer();}
  const rejected=await fetch(origin+'/api/identity',{headers:{Authorization:'Bearer knowledge-smoke-'+randomUUID()},redirect:'error',signal:AbortSignal.timeout(20000)});
  if(rejected.status!==401||(await rejected.json()).error?.code!=='IDENTITY_REJECTED')throw new Error('Knowledge identity service binding failed');
