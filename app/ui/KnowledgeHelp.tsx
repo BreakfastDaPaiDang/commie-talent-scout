@@ -19,7 +19,7 @@ const definitions:Definition[]=[
  {id:'share',selector:'.kb-detail-toolbar .share-link',text:'复制当前文档链接',side:'bottom'},
  {id:'branch',selector:'.kb-branch-box select',text:'切换当前查看的分支',side:'bottom'},
  {id:'back',selector:'.kb-mobile-back',text:'返回条目列表',side:'bottom'},
- {id:'category-add',selector:'.kb-category-add',text:'新建分类',side:'right'},
+ {id:'category-add',selector:'.kb-category-add',text:'查找已有分类，或新建分类',side:'right'},
  {id:'category',selector:'.kb-categories button[aria-label^="分类："]',text:'点击筛选；右键或长按查看分类解释与留言',side:'bottom',width:190},
  {id:'content',selector:'[data-kb-help="tab-content"]',text:'阅读当前文档正文',side:'bottom'},
  {id:'issues',selector:'[data-kb-help="tab-issues"], [data-kb-help="issues"]',text:'提出问题与修改建议',side:'bottom'},
