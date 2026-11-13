@@ -22,7 +22,7 @@ workspaceApp.get('/history/:id',async c=>c.json(await c.get('workspace').commitD
 workspaceApp.get('/requests/:id',async c=>c.json({result:await c.get('workspace').receipt(c.req.param('id'))}));
 const commands={
  '/branches':'createBranch','/branches/share':'shareBranch','/documents':'save','/documents/remove':'remove',
- '/categories/definition':'defineCategory','/merges':'propose','/merges/approve':'approve','/merges/accept':'accept',
+ '/categories/definition':'defineCategory','/categories':'editCategory','/reviews':'submitReview','/issues/from-comment':'issueFromComment','/merges':'propose','/merges/approve':'approve','/merges/accept':'accept',
  '/branches/resolve':'resolveConflict','/issues':'createIssue','/issues/state':'setIssueState','/comments':'comment',
 } as const;
 for(const [path,method] of Object.entries(commands))workspaceApp.post(path,async c=>c.json(await c.get('workspace')[method](await c.req.json())));
