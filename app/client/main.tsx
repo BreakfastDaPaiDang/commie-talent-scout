@@ -1,3 +1,4 @@
+import '../shared/browser-crypto';
 import {HomePage} from './HomePage';
 import {KnowledgePage} from './KnowledgePage';
 import {CatalogPage} from './CatalogPage';

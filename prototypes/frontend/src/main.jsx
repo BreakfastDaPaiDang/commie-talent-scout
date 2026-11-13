@@ -1,3 +1,4 @@
+import '../../../app/shared/browser-crypto';
 import HomePreview from './HomePreview';
 import {FeishuInvitation} from '../../../app/ui/FeishuInvitation';
 import KnowledgePreview from './KnowledgePreview';
