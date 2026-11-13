@@ -25,7 +25,7 @@ app.onError((error,c)=>{
  console.error(JSON.stringify({event:'knowledge.request.failed',path:c.req.path}));
  return c.json({error:{code:'RESULT_UNKNOWN',message:'结果未确认，请查询原请求再重试'}},500);
 });
-app.get('/api/health',c=>c.json({ok:true,service:'commie-knowledge',version:'0.3.1',catalog:1,workspace:1,reviews:1,category_annotations:1,environment:c.env.ENVIRONMENT}));
+app.get('/api/health',c=>c.json({ok:true,service:'commie-knowledge',version:'0.3.2',catalog:1,workspace:1,reviews:1,category_annotations:1,branch_deletion:1,environment:c.env.ENVIRONMENT}));
 app.route('/api/catalog',catalogApp);
 app.route('/api/knowledge-workspace',workspaceApp);
 app.all('/mcp',async c=>handleMcp(c.req.raw,c.env,c.executionCtx as ExecutionContext,await catalogIdentity(c.req.raw,c.env)));

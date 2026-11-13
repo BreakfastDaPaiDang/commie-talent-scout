@@ -12,7 +12,7 @@ export const guide=[...workspaceGuide,...catalogGuide];
 export async function handleMcp(request:Request,env:Env,ctx:ExecutionContext,actor:CatalogActor){
  const server=new McpServer({name:'commie-knowledge',version:'0.3.0'},{instructions:guide.join('\n')});
  function register(name:string,description:string,schema:z.ZodType,run:(args:any)=>Promise<unknown>,write=false){
-  server.registerTool(name,{description,inputSchema:schema,annotations:{readOnlyHint:!write,destructiveHint:false,idempotentHint:true,openWorldHint:false}},async(args:unknown)=>{
+  server.registerTool(name,{description,inputSchema:schema,annotations:{readOnlyHint:!write,destructiveHint:name==='knowledge_delete_branch',idempotentHint:true,openWorldHint:false}},async(args:unknown)=>{
    try{const data=await run(args);return {content:[{type:'text' as const,text:JSON.stringify(data)}],structuredContent:data as Record<string,unknown>};}
    catch(error){const known=error instanceof KnowledgeError,data={error:{code:known?error.code:error instanceof z.ZodError?'INVALID_INPUT':'RESULT_UNKNOWN',message:known?error.message:'请核对输入并先查询原请求结果'}};return {isError:true,content:[{type:'text' as const,text:JSON.stringify(data)}],structuredContent:data};}
   });

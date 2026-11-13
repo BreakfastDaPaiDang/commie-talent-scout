@@ -16,5 +16,7 @@ test('private import never appends to an already shared legacy branch or restore
   await assert.rejects(new KnowledgeWorkspace(f.db,f.actors[1]).list({branch_id:branch}),e=>e.code==='NOT_FOUND');
   await w.remove({branch_id:branch,expected_version:(await w.branch(branch)).version,document_id:entry.entry_id,message:'作者撤回',request_id:request()});
   assert.equal((await ensureWorkspaceDrafts(send,input)).imported,0);assert.equal((await w.list({branch_id:branch})).documents.length,0);
+  await w.deleteBranch({branch_id:branch,expected_version:(await w.branch(branch)).version,request_id:request()});
+  assert.equal((await ensureWorkspaceDrafts(send,input)).imported,0);assert.equal((await w.branches()).branches.some(b=>b.id===branch),false);
  }finally{f.close();}
 });

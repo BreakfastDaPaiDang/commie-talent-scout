@@ -21,7 +21,7 @@ workspaceApp.get('/history',async c=>c.json(await c.get('workspace').history(bra
 workspaceApp.get('/history/:id',async c=>c.json(await c.get('workspace').commitDetail(branch(c.req.query('branch_id')),c.req.param('id'))));
 workspaceApp.get('/requests/:id',async c=>c.json({result:await c.get('workspace').receipt(c.req.param('id'))}));
 const commands={
- '/branches':'createBranch','/branches/share':'shareBranch','/documents':'save','/documents/remove':'remove',
+ '/branches':'createBranch','/branches/share':'shareBranch','/branches/delete':'deleteBranch','/documents':'save','/documents/remove':'remove',
  '/categories/definition':'defineCategory','/categories':'editCategory','/reviews':'submitReview','/issues/from-comment':'issueFromComment','/merges':'propose','/merges/approve':'approve','/merges/accept':'accept',
  '/branches/resolve':'resolveConflict','/issues':'createIssue','/issues/state':'setIssueState','/comments':'comment',
 } as const;
