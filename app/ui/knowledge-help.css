@@ -12,5 +12,4 @@
 .kb-help-dismiss small{display:block;margin-top:2px;font-size:12px;font-weight:400;color:var(--muted)}
 .kb-help-dismiss:focus-visible{outline:2px solid var(--red);outline-offset:3px}
 .kb-help-control-name{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
-html[data-theme=night] .kb-help-overlay{--theme-help-bg:#302c27;--theme-help-border:#67564a}
 @media(max-width:700px){.kb-help-caption{padding:6px 8px;font-size:12px;line-height:1.5}.kb-help-dismiss small{font-size:11px}.kb-help-active .kb-list-head{margin-top:36px;row-gap:40px}.kb-help-active .kb-library-views{margin-bottom:114px}}

@@ -23,3 +23,5 @@
 - 原有完整编辑与提交页、评论批注、分类、三人同意、多候选与分支删除流程继续通过真实接口验收。
 
 实际截图已逐张核对：[桌面](screenshots/knowledge-workspace/overlay-desktop.png)、[手机](screenshots/knowledge-workspace/overlay-mobile.png)、[320px 窄屏](screenshots/knowledge-workspace/overlay-narrow.png)、[夜间](screenshots/knowledge-workspace/overlay-night.png)。机器结果保存在 `tmp/verification/knowledge-workspace/report.json`，真实双库完整流程、40 项共享 DOM 测试、类型检查、前端构建及历史原型对照通过，页面错误为零。云端发布记录另附于任务进展说明。
+
+说明框的日间／夜间颜色登记在全站 `themes.css`。真实工作台验收（含全站主题变量、手机布局、表单保存与共享原型）通过。

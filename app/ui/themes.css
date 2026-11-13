@@ -1,4 +1,5 @@
 /* Existing light colors remain the fallbacks in shared component styles. */
+html{--theme-help-bg:#fffaf3;--theme-help-border:#ead0b8}
 /* Low-chroma charcoal / burgundy / old gold; photos and semantic chart hues stay intact. */
 html[data-theme=night]{
  --ink:#e0dfd9;--muted:#aaa79f;--paper:#242526;--page-bg:#1b1c1d;--wash:#303031;--line:#424242;--red:#c29a96;
@@ -7,6 +8,7 @@ html[data-theme=night]{
  --theme-green-soft:#30372f;--theme-green-text:#b1bfaa;--theme-blue-soft:#303438;--theme-blue-text:#b3bcc6;
  --theme-violet-soft:#363238;--theme-violet-text:#c0b6c3;--theme-header:#191a1b;--theme-on-header:#e6e4dc;
  --theme-raised:#2c2d2e;--theme-field:#202122;--theme-hover:#353536;--theme-focus:#c5b78f;
+ --theme-help-bg:#302c27;--theme-help-border:#67564a;
  --jelly-fill:linear-gradient(155deg,#ffffff0e,#ffffff00 55%);--jelly-edge:#4a4545;--jelly-shadow:inset 0 1px 0 #ffffff10,0 5px 16px #00000018;--jelly-selected:#332d2e;--jelly-rail:#956765;
  --surface:var(--paper);--accent:var(--theme-warm-text);
 }
