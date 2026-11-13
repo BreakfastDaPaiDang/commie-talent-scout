@@ -18,4 +18,10 @@ test('main MCP discovers and invokes the same workspace service without gaining 
  const init=await rpc('initialize',{protocolVersion:'2025-03-26',capabilities:{},clientInfo:{name:'workspace-test',version:'1'}});headers['MCP-Protocol-Version']=init.protocolVersion;
  const list=await rpc('tools/list',{});assert.ok(list.tools.some(t=>t.name==='knowledge_create_branch'));const branch=await rpc('tools/call',{name:'knowledge_create_branch',arguments:{name:'MCP 知识修改',request_id:request()}});assert.ok(!branch.isError,JSON.stringify(branch));const stored=await f.call('/api/knowledge-workspace/branches');assert.ok(stored.body.branches.some(b=>b.id===branch.structuredContent.id));
  const main=await f.call('/api/knowledge-workspace/documents');assert.equal(main.body.documents.length,0);
+ const invoke=async(name,args)=>{const r=await rpc('tools/call',{name,arguments:{...args,request_id:request()}});assert.ok(!r.isError,JSON.stringify(r));return r.structuredContent;};
+ const category=await invoke('knowledge_edit_category',{name:'MCP 独立分类',definition:'分类可独立讨论。'});
+ const annotation=await invoke('knowledge_comment',{category_id:category.id,version_id:category.definition_version_id,quote:'分类可独立讨论。',start_offset:0,end_offset:8,body:'需要补充适用范围。'});
+ const issue=await invoke('knowledge_issue_from_annotation',{comment_id:annotation.id,title:'讨论适用范围',body:'补充示例与边界。'});assert.ok(f.k.sqlite.prepare('SELECT source_json FROM kw_issues WHERE id=?').get(issue.id).source_json);
+ const saved=await invoke('knowledge_save_document',{branch_id:branch.structuredContent.id,expected_version:1,title:'MCP 候审文档',body:'审核当前版本。',category:'MCP 独立分类',message:'准备审核'});
+ const review=await invoke('knowledge_submit_review',{branch_id:branch.structuredContent.id,expected_version:saved.version,document_id:saved.id,version_id:saved.version_id});assert.equal(f.k.sqlite.prepare('SELECT auto_promote FROM kw_merges WHERE id=?').get(review.id).auto_promote,1);
 }finally{await f.close();}});

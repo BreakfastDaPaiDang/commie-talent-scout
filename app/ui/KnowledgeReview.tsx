@@ -1,0 +1,12 @@
+import React,{useState} from 'react';
+import type {KnowledgeApi,KnowledgeBranch,KnowledgeMerge,KnowledgeVersion} from '../shared/knowledge';
+import {Modal,ModalActions} from './Modal';
+
+export function KnowledgeReviewBar({api,branch,document,merge,onSubmitted,onMerged,onChanged,onBranches}:{api:KnowledgeApi;branch:KnowledgeBranch;document:KnowledgeVersion;merge?:KnowledgeMerge;onSubmitted:(branch:string)=>void;onMerged:()=>void;onChanged:()=>void;onBranches:()=>void}){
+ const [submitting,setSubmitting]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState(''),[pending,setPending]=useState('');
+ if(branch.id==='main'||branch.state!=='open')return null;
+ const current=merge?.state==='open'&&merge.head_id===branch.head_id;
+ return <footer className="kb-review-bar">{error&&<p role="alert" className="form-error">{error}</p>}{current?<><div className="kb-review-progress"><span>公开候审 · {merge.approval_count} / 3 人点赞</span><button className="text-button" onClick={onBranches}>查看审核</button></div><button className="button primary" disabled={busy||!!merge.approved_by_me} onClick={async()=>{setBusy(true);setError('');try{const r=await api.write('/merges/approve',{id:merge.id,head_id:merge.head_id});if(r.merged)onMerged();else {setPending(r.pending??'');onChanged();}}catch(e){setError((e as Error).message);}finally{setBusy(false);}}}>{merge.approved_by_me?'已点赞':'点赞同意'}</button>{(pending||merge.approval_count>=3)&&<p className="kb-muted">{pending==='conflict'?'主要版本也有修改，请先处理冲突。':'已达三人同意，请查看审核处理尚未合入的事项。'}</p>}</>:<button className="button primary" onClick={()=>setSubmitting(true)}>提交到审核</button>}
+ {submitting&&<Modal title="提交到审核" onClose={()=>setSubmitting(false)} wide busy={busy}><form className="kb-form kb-review-preview" onSubmit={async e=>{e.preventDefault();const f=new FormData(e.currentTarget);setBusy(true);setError('');try{const r=await api.write('/reviews',{branch_id:branch.id,expected_version:branch.version,document_id:document.document_id,version_id:document.id,reason:String(f.get('reason')??'')});setSubmitting(false);onSubmitted(r.branch_id);}catch(e){setError((e as Error).message);}finally{setBusy(false);}}}><h3>{document.title}</h3><p className="kb-muted">只公开这篇文档，供正式成员审核；三人点赞通过后进入主要知识库。</p><div className="kb-review-copy">{document.body}</div><label>提交说明（可选）<textarea name="reason" rows={2} maxLength={4000}/></label>{error&&<p role="alert" className="form-error">{error}</p>}<ModalActions><button className="button primary" disabled={busy}>公开并提交审核</button></ModalActions></form></Modal>}
+ </footer>;
+}
