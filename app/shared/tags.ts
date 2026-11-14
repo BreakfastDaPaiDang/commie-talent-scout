@@ -1,0 +1,47 @@
+export type Evidence = {
+  kind: 'observation' | 'self_statement' | 'member_instruction';
+  note: string;
+  observation_id?: string;
+  content_version?: number;
+};
+export type TagBinding = {
+  tag_id: string;
+  category_id: string;
+  type: 'person' | 'org';
+  category_name: string;
+  category_description?: string;
+  name: string;
+  description: string;
+  definition_version: number;
+  category_version: number;
+  color: string;
+  enabled: number;
+  category_enabled: number;
+  deleted?: number;
+  category_deleted?: number;
+  merged_into: string | null;
+  added_by: string;
+  added_at: string;
+  confirmed_by: string;
+  confirmed_at: string;
+  evidence: Evidence[];
+  focus: number;
+};
+export type TagLabel = Pick<TagBinding, 'tag_id' | 'category_name' | 'name' | 'color' | 'focus'>;
+export type TagDefinition = {
+  id: string;
+  category_id: string;
+  category_name: string;
+  category_description: string;
+  category_version: number;
+  category_enabled: number;
+  category_deleted: number;
+  deleted: number;
+  type: 'person' | 'org';
+  name: string;
+  description: string;
+  color: string;
+  version: number;
+  enabled: number;
+  merged_into: string | null;
+};

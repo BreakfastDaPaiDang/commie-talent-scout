@@ -1,7 +1,7 @@
 import React,{useEffect,useRef,useState,type ReactNode} from 'react';
 import type {KnowledgeApi,KnowledgeComment,KnowledgeIdentity,KnowledgeVersion} from '../shared/knowledge';
 import {locateAnnotation} from '../shared/knowledge';
-import {Avatar} from '../client/Avatar';
+import {Avatar} from './Avatar';
 import {Icon} from './icons';
 import {Modal,ModalActions} from './Modal';
 

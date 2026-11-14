@@ -5,8 +5,10 @@ import {TabList} from '../ui/Workspace';
 import {api} from './api';
 import {Modal,ModalActions} from './Modal';
 import {PageError} from './ConnectionPages';
-import {TagChip,TagEvidence,TagChooser} from './TagsSection';
-import type {TagBinding} from '../server/tag-state';
+import {TagChip} from '../ui/TagCatalog';
+import {TagEvidence} from './TagEvidence';
+import {TagPicker as TagChooser} from './TagPicker';
+import type {TagBinding} from '../shared/tags';
 
 type Kind='person'|'org';
 type Definition={id:string;type:Kind;name:string;description:string;category_id?:string;category_name?:string;color:string;version:number;enabled:number;deleted?:number;category_deleted?:number;merged_into?:string|null};

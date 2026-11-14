@@ -1,6 +1,6 @@
 import {storedMemberStatus,archiveStateLabel,isClosedState,isWorkState,statesFor,isMemberArchive,type MemberBasicState} from './archive-states.ts';
 import {Failure,uid} from '../server/types.ts';
-import type {Archive,BoundMember} from '../server/archives.ts';
+import type {Archive,BoundMember} from '../shared/archives';
 import type {TagState} from '../server/tag-state.ts';
 import type {Source} from '../server/commands.ts';
 import {planRules,type RuleModule} from './contract.ts';
@@ -145,7 +145,7 @@ export const archiveTransitionRules=[
 
 export const archiveLifecycleModule:RuleModule<Effects,D1PreparedStatement>={
  id:'archive-lifecycle',source:'app/rules/archive-lifecycle.ts',
- triggers:[{file:'app/server/archives.ts',entry:'transition'},{file:'app/server/work-tasks.ts',entry:'restoreCancelledAudit'},{file:'app/server/work-tasks.ts',entry:'completePersonnelStage'}],
+ triggers:[{file:'app/server/archives.ts',entry:'transition'},{file:'app/server/work-tasks/delivery.ts',entry:'planAuditRestoration'},{file:'app/server/work-tasks/delivery.ts',entry:'planPersonnelDelivery'}],
  rules:archiveTransitionRules,
  verification:{
   transaction:{file:'app/server/commands.ts',entry:'command'},

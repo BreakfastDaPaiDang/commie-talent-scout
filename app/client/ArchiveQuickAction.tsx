@@ -7,7 +7,7 @@ import {Icon} from '../ui/icons';
 import {Modal,ModalActions} from './Modal';
 import {api} from './api';
 import {PageError} from './ConnectionPages';
-import type {Archive} from '../server/archives';
+import type {Archive} from '../shared/archives';
 
 export function ArchiveQuickAction({archive,openTaskCount,onChanged}:{archive:Archive;openTaskCount:number;onChanged:()=>void}){
  const[confirm,setConfirm]=useState(false),action=archivePrimaryAction(archive);

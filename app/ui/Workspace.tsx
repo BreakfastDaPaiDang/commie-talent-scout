@@ -1,3 +1,5 @@
+import {IconButton} from './IconButton';
+export {IconButton} from './IconButton';
 import './workspace-refinement.css';
 import {ThemePicker} from './ThemePicker';
 import {ShareLink} from './ShareLink';
@@ -7,9 +9,7 @@ import {Icon,Mark} from './icons';
 
 // Promoted from the approved prototype (531ab51). Both applications render these
 // components; persistence, permissions and data loading belong to their adapters.
-export function IconButton({name,label,...props}:{name:string;label:string}&React.ButtonHTMLAttributes<HTMLButtonElement>){
- return <button type="button" className="icon-button" aria-label={label} title={label} {...props}><Icon name={name}/></button>;
-}
+
 export function AgentNav({active=false,onClick,label='Agent 接入'}:{active?:boolean;onClick:()=>void;label?:string}){
  return <button type="button" className={'tool-link agent-nav '+(active?'active':'')} aria-current={active?'page':undefined} onClick={onClick}><Icon name="agent"/><span>{label}</span></button>;
 }

@@ -1,6 +1,6 @@
 import React,{useEffect,useRef,useState,lazy,Suspense} from 'react';
 import {api,type Member} from './api';
-import type {Archive} from '../server/archives';
+import type {Archive} from '../shared/archives';
 import type {MaterialInfo,MaterialCapacity} from '../server/materials';
 import {MaterialList,MaterialEditForm,MaterialQuotaForm,fileSize} from '../ui/Materials';
 import {Modal} from './Modal';

@@ -1,0 +1,70 @@
+export type ArchivePreview = {
+  person_role?: 'external' | 'member';
+  id: string;
+  type: 'person' | 'org';
+  name: string;
+  status: string;
+  version: number;
+  updated_at: string;
+  observation_count: number;
+  latest_observation: string | null;
+  members: {
+    id: string;
+    name: string;
+    frozen: boolean;
+  }[];
+  tag_summary: {
+    tags: {
+      tag_id: string;
+      category_name: string;
+      name: string;
+      color: string;
+      focus: number;
+    }[];
+    total: number;
+  };
+};
+export type Task = {
+  id: string;
+  archive_id: string | null;
+  archive_preview?: ArchivePreview;
+  source?: 'manual' | 'rule';
+  kind: 'audit' | 'onboarding' | 'monthly' | 'cooperation' | 'custom';
+  labels?: string[];
+  label_keys?: string[];
+  priority?: 'P0' | 'P1' | 'P2';
+  title: string;
+  purpose: string;
+  delivery: string;
+  status: 'open' | 'completed' | 'expired' | 'cancelled';
+  owner_id: string | null;
+  owner_name?: string | null;
+  owner_version?: number | null;
+  initiator_kind?: 'member' | 'system';
+  initiator_id?: string | null;
+  initiator_name?: string | null;
+  initiator_version?: number | null;
+  created_by: string;
+  deadline_at: string;
+  created_at: string;
+  updated_at?: string;
+  version: number;
+  overdue?: boolean;
+  ready_to_submit?: boolean;
+  requires_observation_reference?: boolean;
+  round_started_at?: string;
+  result_kind?: string | null;
+  result_text?: string | null;
+  result_references?: {
+    observation_id: string;
+    archive_id: string;
+    content_version: number;
+  }[];
+  result_references_restricted?: boolean;
+  completed_at?: string | null;
+  closed_at?: string | null;
+  closed_reason?: string | null;
+  period_key?: string | null;
+  candidate_count?: number;
+  push_stage?: string;
+};
