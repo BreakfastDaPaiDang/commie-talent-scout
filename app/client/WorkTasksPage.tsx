@@ -1,247 +1,108 @@
-import {notifyMembershipJoined} from './MembershipNotice';
-import type {MembershipResult} from '../shared/feishu-invitation';
-import {MemberPicker} from './ArchiveStateForm';
-import type {BoundMember} from '../shared/archives';
-import {observationRequiredMessage,personnelDeliveryKind,taskResultLabel} from '../rules/task-delivery';
-import {TaskCompletionChoice} from '../ui/TaskCompletionChoice';
-import {TaskLabels} from './TaskLabels';
-import {taskLabelKeys,taskMatchesLabels} from '../rules/task-labels';
-import {archiveStateLabel} from '../rules/archive-states';
-import {compareTaskBook,taskProcessingState,personalTaskCompletions,monthStartInBeijing} from '../rules/task-book';
-import {taskLabelNames,taskCanReopen} from '../rules/task-policy.ts';
-import React,{useEffect,useRef,useState,type FormEvent} from 'react';
-import {TaskObservationComposer,type TaskObservation} from './TaskObservationComposer';
-import {api,type Member} from './api';
-import {PageError} from './ConnectionPages';
-import {Modal,ModalActions} from './Modal';
-import {Avatar} from './Avatar';
-import {avatarUrl} from './AvatarEditor';
-import {Icon} from '../ui/icons';
-import {ArchiveHead,RecordBody,ScopeToolbar} from '../ui/Workspace';
-import {ObservationReferenceOption,TaskCompletionRecord,TaskBookLayout,TaskRecommendationCard,TaskDetailCard,TaskListRow,TaskBoardColumn,TaskBoardCard,type TaskStage} from '../ui/TaskBook';
-
-export type ArchivePreview={person_role?:'external'|'member';id:string;type:'person'|'org';name:string;status:string;version:number;updated_at:string;observation_count:number;latest_observation:string|null;members:{id:string;name:string;frozen:boolean}[];tag_summary:{tags:{tag_id:string;category_name:string;name:string;color:string;focus:number}[];total:number}};
-export type Task={id:string;archive_id:string|null;archive_preview?:ArchivePreview;source?:'manual'|'rule';kind:'audit'|'onboarding'|'monthly'|'cooperation'|'custom';labels?:string[];label_keys?:string[];priority?:'P0'|'P1'|'P2';title:string;purpose:string;delivery:string;status:'open'|'completed'|'expired'|'cancelled';owner_id:string|null;owner_name?:string|null;owner_version?:number|null;initiator_kind?:'member'|'system';initiator_id?:string|null;initiator_name?:string|null;initiator_version?:number|null;created_by:string;deadline_at:string;created_at:string;updated_at?:string;version:number;overdue?:boolean;ready_to_submit?:boolean;requires_observation_reference?:boolean;round_started_at?:string;result_kind?:string|null;result_text?:string|null;result_references?:{observation_id:string;archive_id:string;content_version:number}[];result_references_restricted?:boolean;completed_at?:string|null;closed_at?:string|null;closed_reason?:string|null;period_key?:string|null;candidate_count?:number;push_stage?:string};
-type ObservationOption={id:string;content_version:number;author_name:string;created_at:string;body:string;deleted:boolean};
-const labels=taskLabelNames;
-const recentlyUpdated=(a:Task,b:Task)=>Date.parse(b.updated_at??b.created_at)-Date.parse(a.updated_at??a.created_at)||a.id.localeCompare(b.id);
-const priorityFirst=(a:Task,b:Task)=>(a.priority??'P2').localeCompare(b.priority??'P2')||recentlyUpdated(a,b);
-
-const deadlineDefault=()=>{const d=new Date(Date.now()+7*86400000);return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,16);};
-const iso=(value:string)=>new Date(value).toISOString();
-const localDateTime=(value:string)=>{const date=new Date(value);return new Date(date.getTime()-date.getTimezoneOffset()*60000).toISOString().slice(0,16);};
-const displayDate=(value:string)=>new Date(value).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai',hour12:false,month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
-const purposeDefault='说明本次要处理的对象、判断或行动。';
-const deliveryDefault='结果写回关联档案；没有关联档案时，在任务结果中交代。';
-const taskStage=taskProcessingState;
-async function fetchTaskList(query=''){
- const tasks:Task[]=[];let offset:number|null=0;
- while(offset!==null){
-  const page:{tasks:Task[];next_offset?:number|null}=await api('/work-tasks?'+new URLSearchParams({scope:'all',state:'all',limit:'100',offset:String(offset),...(query?{query}:{})}));
-  tasks.push(...page.tasks);offset=page.next_offset??null;
- }
- return tasks;
-}
-function remainingTime(task:Task,at=Date.now()){
- if(task.status!=='open')return undefined;
- const ms=Date.parse(task.deadline_at)-at;
- if(ms<=0)return '已逾期';
- if(ms<3600000)return `剩余 ${Math.ceil(ms/60000)} 分钟`;
- if(ms<86400000)return `剩余 ${Math.ceil(ms/3600000)} 小时`;
- return `剩余 ${Math.ceil(ms/86400000)} 天`;
-}
-
-function CreateTask({onSaved}:{onSaved:()=>void}){
- const requestedArchive=new URLSearchParams(location.search).get('create_for');
- const [followUp,setFollowUp]=useState(new URLSearchParams(location.search).get('work')!=='specific');
- const createAttempts=useRef(new Map<string,string>());
- function clearAssociation(){history.replaceState(null,'','/tasks');setLinkedArchive(null);}
- const [linkedArchive,setLinkedArchive]=useState<{id:string;name:string}|null>(null);
- useEffect(()=>{let active=true;if(requestedArchive)api<{archive:{id:string;name:string}}>('/archives/'+requestedArchive).then(r=>{if(active){setLinkedArchive(r.archive);setTitle(followUp?'联系跟进':'具体工作');setPurpose(followUp?'了解近期情况并新增观察，更新本次联系结果。':'');}}).catch(e=>{if(active)setError(e.message);});return()=>{active=false;};},[requestedArchive]);
- const[selectedLabels,setSelectedLabels]=useState<string[]>(['custom']);
- const[open,setOpen]=useState(!!requestedArchive),[priority,setPriority]=useState<'P0'|'P1'|'P2'>('P2'),[title,setTitle]=useState(labels.custom),[purpose,setPurpose]=useState(''),[delivery,setDelivery]=useState(deliveryDefault),[deadline,setDeadline]=useState(deadlineDefault),[error,setError]=useState(''),[busy,setBusy]=useState(false),[advanced,setAdvanced]=useState(false);
- async function submit(e:FormEvent){e.preventDefault();setBusy(true);setError('');try{const input={...(linkedArchive?{archive_id:linkedArchive.id,follow_up:followUp}:{}),labels:selectedLabels,priority,title,purpose:purpose||purposeDefault,delivery,deadline_at:iso(deadline)},key=JSON.stringify(input),request_id=createAttempts.current.get(key)??crypto.randomUUID();createAttempts.current.set(key,request_id);await api('/work-tasks/create',{...input,request_id});createAttempts.current.delete(key);clearAssociation();onSaved();setOpen(false);setTitle(labels.custom);setSelectedLabels(['custom']);setPurpose('');setDelivery(deliveryDefault);setDeadline(deadlineDefault());setAdvanced(false);}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
- return <>{<button className="button primary work-task-create-button" onClick={()=>{setError('');setOpen(true);}}><Icon name="plus"/>新建</button>}{open&&<Modal title="发布任务" busy={busy} onClose={()=>{clearAssociation();setOpen(false);}}><form className="manage-form modal-form work-task-create" onSubmit={submit}>{requestedArchive&&<p className="task-defaults">关联档案：{linkedArchive?.name??'正在读取…'}</p>}{linkedArchive&&<label>工作性质<select value={followUp?'followup':'specific'} onChange={e=>setFollowUp(e.target.value==='followup')}><option value="followup">沟通跟进</option><option value="specific">具体工作</option></select></label>}<TaskLabels value={selectedLabels} onChange={setSelectedLabels}/><label>优先级<select value={priority} onChange={e=>setPriority(e.target.value as 'P0'|'P1'|'P2')}><option value="P0">P0 · 最高</option><option value="P1">P1 · 重要</option><option value="P2">P2 · 常规</option></select></label><label>标题<input required maxLength={160} value={title} onChange={e=>setTitle(e.target.value)}/></label><label>要处理什么<textarea required maxLength={4000} rows={4} value={purpose} placeholder={purposeDefault} onChange={e=>setPurpose(e.target.value)}/></label><p className="task-defaults">默认交付：{deliveryDefault}<br/>默认接取期限：7 天</p><details className="task-advanced" open={advanced} onToggle={e=>setAdvanced(e.currentTarget.open)}><summary>调整交付和期限</summary><label>交付要求<textarea required maxLength={4000} rows={3} value={delivery} onChange={e=>setDelivery(e.target.value)}/></label><label>接取期限<input required type="datetime-local" value={deadline} onChange={e=>setDeadline(e.target.value)}/></label></details><PageError error={error}/><ModalActions><button className="button primary" disabled={busy||!!requestedArchive&&!linkedArchive}>{busy?'正在创建…':'发布任务'}</button></ModalActions></form></Modal>}</>;
-}
-
-
-function CompleteForm({task,onSaved,onBusyChange}:{task:Task;onSaved:(result:MembershipResult,requestId:string)=>void;onBusyChange:(busy:boolean)=>void}){
- const[kind,setKind]=useState(personnelDeliveryKind(task)?'':'completed'),[text,setText]=useState(''),[references,setReferences]=useState<{observation_id:string;content_version:number}[]>([]),[observations,setObservations]=useState<ObservationOption[]>([]),[cursor,setCursor]=useState<string|null>(null),[loadingReferences,setLoadingReferences]=useState(false),[error,setError]=useState(''),[referenceError,setReferenceError]=useState(''),[busy,setBusy]=useState(false);
- const [nextContact,setNextContact]=useState(deadlineDefault);const attempts=useRef(new Map<string,string>());const continuing=!!task.requires_observation_reference&&kind==='unable_to_contact';
- const createdObservations=useRef<TaskObservation[]>([]),referenceSequence=useRef(0),[savingObservation,setSavingObservation]=useState(false);
- function observationCreated(observation:TaskObservation){createdObservations.current=[observation,...createdObservations.current.filter(o=>o.id!==observation.id)];setObservations(old=>[observation,...old.filter(o=>o.id!==observation.id)]);setReferences(old=>[...old.filter(r=>r.observation_id!==observation.id),{observation_id:observation.id,content_version:observation.content_version}]);setError('');}
- async function loadReferences(before?:string){if(!task.archive_id)return;const sequence=++referenceSequence.current;setLoadingReferences(true);setReferenceError('');try{const r=await api<{observations:ObservationOption[];next_cursor:string|null}>('/observations?'+new URLSearchParams({archive_id:task.archive_id,deleted:'false',limit:'20',...(before?{before}:{})}));if(sequence!==referenceSequence.current)return;setObservations(old=>[...new Map((before?[...old,...r.observations]:[...createdObservations.current,...r.observations]).filter(o=>!o.deleted&&(!task.requires_observation_reference||o.created_at>=(task.round_started_at??task.created_at))).map(o=>[o.id,o])).values()]);setCursor(r.next_cursor);}catch(e){if(sequence===referenceSequence.current)setReferenceError((e as Error).message);}finally{if(sequence===referenceSequence.current)setLoadingReferences(false);}}
- useEffect(()=>{createdObservations.current=[];setObservations([]);setCursor(null);void loadReferences();return()=>{referenceSequence.current++;};},[task.archive_id]);
- function toggleReference(observation:ObservationOption){setError(current=>current===observationRequiredMessage?'':current);setReferences(current=>current.some(ref=>ref.observation_id===observation.id)?current.filter(ref=>ref.observation_id!==observation.id):[...current,{observation_id:observation.id,content_version:observation.content_version}]);}
- async function submit(e:FormEvent){e.preventDefault();if(busy||savingObservation)return;if(!kind){setError('请选择交付结论');return;}if(task.requires_observation_reference&&!references.length){setError(observationRequiredMessage);return;}setBusy(true);onBusyChange(true);setError('');try{const input={id:task.id,expected_version:task.version,result_kind:kind,result_text:text,references,...(continuing?{next_contact_at:iso(nextContact)}:{})},key=JSON.stringify(input),request_id=attempts.current.get(key)??crypto.randomUUID();attempts.current.set(key,request_id);let result:MembershipResult;try{result=await api<MembershipResult>('/work-tasks/complete',{...input,request_id});}catch(error){const receipt=await api<{status:string;result:MembershipResult}>('/commands/'+request_id).catch(()=>null);if(receipt?.status!=='completed')throw error;result=receipt.result;}attempts.current.delete(key);onSaved(result,request_id);}catch(e){setError((e as Error).message);}finally{setBusy(false);onBusyChange(false);}}
- return <form className="work-task-result" onSubmit={submit}><TaskCompletionChoice task={task} value={kind} onChange={value=>{setKind(value);setError('');}}/>{task.archive_id&&<TaskObservationComposer disabled={busy} key={task.archive_id} archiveId={task.archive_id} initialBody={text} onCreated={observationCreated} onBusyChange={value=>{setSavingObservation(value);onBusyChange(value);}}/>}<label>结果说明<textarea required rows={3} maxLength={5000} value={text} onChange={e=>setText(e.target.value)} placeholder="如实交代做了什么、结果是什么、还需要什么"/></label>{task.archive_id&&<fieldset className="task-result-references"><legend>引用已有观察（{task.requires_observation_reference?'必选':'可选'}）</legend><p className="task-reference-selection" role="status">已选 {references.length} 条</p>{loadingReferences&&!observations.length?<p className="history-loading">正在读取观察…</p>:observations.length?observations.map(observation=><ObservationReferenceOption key={observation.id} id={observation.id} author={observation.author_name} time={displayDate(observation.created_at)} preview={observation.body?(observation.body.slice(0,160)+(observation.body.length>160?'…':'')):'（图片观察）'} checked={references.some(ref=>ref.observation_id===observation.id)} onChange={()=>toggleReference(observation)}/>):<p className="history-loading">暂无可引用的观察</p>}{referenceError&&<PageError error={referenceError} retry={()=>void loadReferences(cursor??undefined)}/>} {loadingReferences&&observations.length>0&&<p className="history-loading">正在读取更多观察…</p>}{!loadingReferences&&cursor&&<button type="button" className="text-button" onClick={()=>void loadReferences(cursor)}>加载更早观察</button>}</fieldset>}{continuing&&<label>下一次联系时间<input type="datetime-local" required value={nextContact} onChange={e=>setNextContact(e.target.value)}/></label>}<PageError error={error}/><button className="button primary" disabled={busy||savingObservation}>{busy?'正在提交…':continuing?'记录尝试并继续跟进':'提交结果并结束任务'}</button></form>;
-}
-
-const taskUi={member:'\u6210\u5458',system:'\u7cfb\u7edf',edit:'\u7f16\u8f91',remove:'\u5220\u9664',restore:'\u6062\u590d',deleted:'\u8bc4\u8bba\u5df2\u5220\u9664',hidden:'\u90e8\u5206\u89c2\u5bdf\u5f15\u7528\u5f53\u524d\u4e0d\u53ef\u89c1',editPrompt:'\u4fee\u6539\u8bc4\u8bba',confirmDelete:'\u5220\u9664\u540e\u4ecd\u53ef\u6062\u590d\uff0c\u7ee7\u7eed\u5417\uff1f',hideHistory:'\u6536\u8d77\u5386\u53f2',showHistory:'\u67e5\u770b\u64cd\u4f5c\u5386\u53f2\u4e0e\u8bc4\u8bba',loading:'\u6b63\u5728\u8bfb\u53d6\u2026',comments:'\u5de5\u4f5c\u8bc4\u8bba',placeholder:'\u8bb0\u5f55\u8fdb\u5c55\u3001\u56f0\u96be\u6216\u4e0b\u4e00\u6b65',saving:'\u6b63\u5728\u4fdd\u5b58\u2026',add:'\u53d1\u8868\u8bc4\u8bba',readonly:'\u4efb\u52a1\u5df2\u5173\u95ed\uff0c\u5386\u53f2\u53ea\u8bfb\uff1b\u91cd\u65b0\u5f00\u542f\u540e\u53ef\u7ee7\u7eed\u8ba8\u8bba'};
-const taskUiExtended={versionHistory:'编辑历史',references:'引用观察',change:'变更'};
-type TaskEvent={references?:{observation_id:string;archive_id:string;content_version:number}[];references_restricted?:boolean;kind:string;actor_name?:string|null;reason?:string|null;created_at:string;before_json?:string|null;after_json?:string|null};
-type CommentVersion={version:number;body:string|null;deleted:boolean;deleted_at?:string|null;references:{observation_id:string;archive_id:string;content_version:number}[];references_restricted?:boolean;actor_id?:string|null;source?:string;created_at:string};
-type TaskComment={id:string;task_id:string;author_id:string;author_name?:string|null;body:string|null;references:{observation_id:string;archive_id:string;content_version:number}[];history:CommentVersion[];created_at:string;updated_at:string;deleted:boolean;version:number;references_restricted?:boolean};
-const eventLabels:Record<string,string>={contact_attempted:'记录联系尝试',created:'创建任务',claimed:'领取任务',assigned:'指派任务',released:'交还任务',cancelled:'取消任务',edited:'修改任务',deadline_changed:'延长截止时间',reopened:'重新开启任务',expired:'任务到期',completed:'提交结果并完成',archive_status_changed:'档案状态变化',comment_created:'发表评论',comment_updated:'编辑评论',comment_deleted:'删除评论',comment_restored:'恢复评论'};
-const fieldLabels:Record<string,string>={title:'标题',purpose:'目的',delivery:'交付要求',deadline_at:'截止时间',owner_id:'负责人',status:'状态',result_kind:'结果类型',result_text:'结果说明',completed_at:'完成时间',closed_reason:'关闭原因',result_reference_count:'引用数量',version:'版本',reference_count:'引用数量',comment_id:'评论'};
-function parseEvent(value:string|null|undefined){if(!value)return null;try{const parsed=JSON.parse(value);return parsed&&typeof parsed==='object'?parsed as Record<string,unknown>:null;}catch{return null;}}
-function eventValue(key:string,value:unknown){if(key==='result_kind'&&typeof value==='string')return taskResultLabel(value);if(key==='archive_status'&&typeof value==='string')return archiveStateLabel(value);if(value===null||value===undefined||value==='')return '无';if(['deadline_at','completed_at'].includes(key)&&typeof value==='string')return displayDate(value);if(key==='owner_id')return typeof value==='string'?value.slice(0,8):'无人负责';if(key==='status'){const labels:Record<string,string>={open:'进行中',completed:'已完成',expired:'已过期',cancelled:'已取消'};return labels[String(value)]??String(value);}return String(value);}
-function eventChanges(event:TaskEvent){const before=parseEvent(event.before_json),after=parseEvent(event.after_json);if(!before&&!after)return [];const keys=[...new Set([...Object.keys(before??{}),...Object.keys(after??{})])].filter(key=>!['version','comment_id','reference_count'].includes(key));return keys.filter(key=>JSON.stringify(before?.[key])!==JSON.stringify(after?.[key])).map(key=>({key,before:eventValue(key,before?.[key]),after:eventValue(key,after?.[key])}));}
-function TaskCommentItem({item,task,actor,busy,onEdit,onDelete,onRestore,onReference}:{item:TaskComment;task:Task;actor:Member;busy:boolean;onEdit:(item:TaskComment)=>void;onDelete:(item:TaskComment)=>void;onRestore:(item:TaskComment)=>void;onReference:(reference:{observation_id:string;archive_id:string;content_version:number})=>void}){
- const canChange=item.author_id===actor.id||actor.role==='admin';
- return <article className="work-task-comment"><header><Avatar name={item.author_name??taskUi.member} size="micro"/><strong>{item.author_name??taskUi.member}</strong><time>{displayDate(item.created_at)}</time></header>{item.deleted&&item.body===null?<p className="comment-deleted">{taskUi.deleted}</p>:<><RecordBody body={item.body??''}/>{item.references.length>0&&<div className="task-comment-references"><small>{taskUiExtended.references}</small>{item.references.map(reference=><button type="button" className="text-button" key={reference.observation_id+'-'+reference.content_version} onClick={()=>onReference(reference)}>观察版本 {reference.content_version}</button>)}</div>}{item.references_restricted&&<small className="comment-reference-hidden">{taskUi.hidden}</small>}</>} {item.history.length>1&&<details className="task-comment-history"><summary>{taskUiExtended.versionHistory}（{item.history.length}）</summary><ol>{item.history.map(version=><li key={version.version}><header><strong>版本 {version.version}</strong><time>{displayDate(version.created_at)}</time></header>{version.body===null?<p className="comment-deleted">{taskUi.deleted}</p>:<p>{version.body}</p>}{version.references.length>0&&<small>{taskUiExtended.references} {version.references.map(reference=>`观察版本 ${reference.content_version}`).join('、')}</small>}{version.references_restricted&&<small className="comment-reference-hidden">{taskUi.hidden}</small>}</li>)}</ol></details>}<footer>{!item.deleted&&canChange&&<button type="button" className="text-button" disabled={busy||task.status!=='open'} onClick={()=>onEdit(item)}>{taskUi.edit}</button>}{!item.deleted&&canChange&&<button type="button" className="text-button" disabled={busy||task.status!=='open'} onClick={()=>onDelete(item)}>{taskUi.remove}</button>}{item.deleted&&canChange&&<button type="button" className="text-button" disabled={busy||task.status!=='open'} onClick={()=>onRestore(item)}>{taskUi.restore}</button>}</footer></article>;
-}
-function TaskHistory({task,actor,onOpenArchive}:{task:Task;actor:Member;onOpenArchive:(archive:ArchivePreview,taskId:string,observationId?:string,contentVersion?:number)=>void}){
- const[events,setEvents]=useState<TaskEvent[]>([]),[comments,setComments]=useState<TaskComment[]>([]),[comment,setComment]=useState(''),[loading,setLoading]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState('');
- const loadSequence=React.useRef(0);
- const[cursors,setCursors]=useState<{comments:string|null;events:string|null}>({comments:null,events:null});
- async function load(){const sequence=++loadSequence.current;setLoading(true);setError('');try{const r=await api<{events:TaskEvent[];comments:TaskComment[];events_next_cursor?:string|null;comments_next_cursor?:string|null}>('/work-tasks/'+task.id);if(sequence!==loadSequence.current)return;setEvents(r.events??[]);setComments(r.comments??[]);setCursors({comments:r.comments_next_cursor??null,events:r.events_next_cursor??null});}catch(e){if(sequence===loadSequence.current)setError((e as Error).message);}finally{if(sequence===loadSequence.current)setLoading(false);}}
- useEffect(()=>{setEvents([]);setComments([]);setCursors({comments:null,events:null});void load();return()=>{loadSequence.current++;};},[task.id,task.version]);
- async function loadMore(){const sequence=loadSequence.current;setBusy(true);setError('');try{for(const section of ['comments','events'] as const){const cursor=cursors[section];if(!cursor)continue;const r=await api<{items:TaskComment[]|TaskEvent[];next_cursor:string|null}>('/work-tasks/'+task.id+'/history?'+new URLSearchParams({section,cursor}));if(sequence!==loadSequence.current)return;if(section==='comments')setComments(old=>[...old,...r.items as TaskComment[]]);else setEvents(old=>[...old,...r.items as TaskEvent[]]);setCursors(old=>({...old,[section]:r.next_cursor}));}}catch(e){if(sequence===loadSequence.current)setError((e as Error).message);}finally{setBusy(false);}}
- async function add(e:FormEvent){e.preventDefault();if(!comment.trim())return;setBusy(true);setError('');try{await api('/work-tasks/comments/create',{task_id:task.id,body:comment.trim(),request_id:crypto.randomUUID()});setComment('');await load();}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
- async function edit(item:TaskComment){const body=window.prompt(taskUi.editPrompt,item.body??'');if(body===null||!body.trim())return;setBusy(true);setError('');try{await api('/work-tasks/comments/edit',{id:item.id,expected_version:item.version,body:body.trim(),request_id:crypto.randomUUID()});await load();}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
- async function remove(item:TaskComment){if(!window.confirm(taskUi.confirmDelete))return;setBusy(true);setError('');try{await api('/work-tasks/comments/delete',{id:item.id,expected_version:item.version,request_id:crypto.randomUUID()});await load();}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
- async function restore(item:TaskComment){setBusy(true);setError('');try{await api('/work-tasks/comments/restore',{id:item.id,expected_version:item.version,request_id:crypto.randomUUID()});await load();}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
- const entries=[...events.map((event,index)=>({kind:'event' as const,at:event.created_at,event,index})),...comments.map(item=>({kind:'comment' as const,at:item.created_at,item}))].sort((a,b)=>Date.parse(b.at)-Date.parse(a.at));
- return <section className="work-task-history" aria-label="评论与历史">
-  <h3 className="task-history-title"><Icon name="file"/>评论与历史 <span>{cursors.comments?'已加载 ':''}{comments.length} 条评论</span></h3>
-  {task.status==='open'?<form className="task-comment-compose" onSubmit={e=>void add(e)}><Icon name="plus"/><textarea aria-label="任务评论" rows={2} maxLength={5000} value={comment} onChange={e=>setComment(e.target.value)} placeholder="写下新的进展、困难或下一步…" required/><button className="button primary" disabled={busy||!comment.trim()}>{busy?taskUi.saving:taskUi.add}</button></form>:<p className="task-scene-readonly">{taskUi.readonly}</p>}
-  <PageError error={error} retry={()=>void load()}/>{loading&&<p className="task-history-loading">正在读取评论与历史…</p>}
-  <div className="task-activity">{entries.map(entry=>{
-   if(entry.kind==='comment')return <div className="task-activity-entry" key={entry.item.id}><TaskCommentItem item={entry.item} task={task} actor={actor} busy={busy} onEdit={item=>void edit(item)} onDelete={item=>void remove(item)} onRestore={item=>void restore(item)} onReference={reference=>task.archive_preview&&onOpenArchive(task.archive_preview,task.id,reference.observation_id,reference.content_version)}/></div>;
-   const event=entry.event,changes=eventChanges(event);
-   return <article className="task-activity-entry task-event-entry" key={'event-'+entry.index}><header><strong>{eventLabels[event.kind.replace('task.','')]??event.kind.replace('task.','')}</strong><span>{event.actor_name??taskUi.system} · {displayDate(event.created_at)}</span></header>{event.reason&&<small>{event.reason}</small>}{changes.length>0&&<details><summary>查看变化</summary><ul>{changes.map(change=><li key={change.key}>{fieldLabels[change.key]??change.key}：{change.before} → {change.after}</li>)}</ul></details>}{event.references?.map(reference=><button type="button" className="text-button" key={reference.observation_id+'-'+reference.content_version} onClick={()=>task.archive_preview&&onOpenArchive(task.archive_preview,task.id,reference.observation_id,reference.content_version)}>观察版本 {reference.content_version}</button>)}{event.references_restricted&&<small className="comment-reference-hidden">部分观察引用当前不可见</small>}</article>;
-  })}</div>
-  {(cursors.comments||cursors.events)&&<button type="button" className="button outline" disabled={busy||loading} onClick={()=>void loadMore()}>{busy?'正在加载…':'加载更早记录'}</button>}
- </section>;
-}
-
-function taskActionTitle(task:Task){
- const name=task.archive_preview?.name;
-  return name&&task.title.startsWith(`${name} ${'\u00b7'} `)?task.title.slice(name.length+3):task.title;
-}
-
-export function TaskIndexItem({task,actor,selected,onSelect,onDismiss,compact=false}:{compact?:boolean;task:Task;actor:Member;selected:boolean;onSelect:()=>void;onDismiss?:()=>void}){
- const stage=taskStage(task),closed=stage==='failed'||stage==='cancelled';
- return <TaskListRow compact={compact} stage={stage} title={taskActionTitle(task)} kind={task.labels?.[0]??labels[task.kind]} labels={task.labels} priority={task.priority??'P2'} subject={task.archive_preview?<><Avatar name={task.archive_preview.name} type={task.archive_preview.type} size="micro" src={avatarUrl('archive',task.archive_preview.id,task.archive_preview.version)}/>{task.archive_preview.name}</>:'未关联档案'} owner={task.owner_id?<><Avatar name={task.owner_name??'任务负责人'} size="micro" src={task.owner_version?avatarUrl('member',task.owner_id,task.owner_version):undefined}/>{task.owner_id===actor.id?'我':task.owner_name??'已接取'}</>:undefined} deadline={displayDate(task.deadline_at)} remaining={remainingTime(task)} urgent={task.status==='open'&&Date.parse(task.deadline_at)-Date.now()<86400000} selected={selected} onSelect={onSelect} onDismiss={closed?onDismiss:undefined}/>;
-}
-function TaskRecommendation({task,onSelect,onRefresh}:{task:Task|null;onSelect:(id:string)=>void;onRefresh?:()=>void}){
- return <TaskRecommendationCard title={task?taskActionTitle(task):undefined} labels={task?.labels??(task?[labels[task.kind]]:[])} subject={task?.archive_preview?.name??'未关联档案'} deadline={task?remainingTime(task):undefined} purpose={task?.purpose} portrait={task?.archive_preview?<Avatar name={task.archive_preview.name} type={task.archive_preview.type} size="small" src={avatarUrl('archive',task.archive_preview.id,task.archive_preview.version)}/>:undefined} onSelect={()=>task&&onSelect(task.id)} onRefresh={onRefresh}/>;
-}
-
-function TaskInitiator({task}:{task:Task}){
- const name=task.initiator_name??'未知发起人';
- return <span className="task-owner-value">{task.initiator_id&&<Avatar name={name} size="micro" src={avatarUrl('member',task.initiator_id,task.initiator_version??0)}/>} {name}</span>;
-}
-
-function TaskAssignmentForm({busy,error,submit}:{busy:boolean;error:string;submit:(member_id:string,reason:string)=>Promise<void>}){
- const [members,setMembers]=useState<BoundMember[]>([]),[reason,setReason]=useState('');
- return <form className="manage-form modal-form" onSubmit={e=>{e.preventDefault();if(!busy&&members.length===1)void submit(members[0].id,reason);}}><MemberPicker label="负责人" multiple={false} value={members} onChange={setMembers}/><label>指派说明<textarea aria-label="指派说明" required maxLength={500} rows={3} value={reason} onChange={e=>setReason(e.target.value)}/></label><PageError error={error}/><ModalActions><button className="button primary" disabled={busy||members.length!==1||!reason.trim()}>{busy?'正在指派…':'确认指派'}</button></ModalActions></form>;
-}
-
-function TaskScene({task,actor,onChanged,onOpenArchive}:{task:Task;actor:Member;onChanged:()=>void;onOpenArchive:(archive:ArchivePreview,taskId:string,observationId?:string,contentVersion?:number)=>void}){
- const[dialog,setDialog]=useState<'edit'|'extend'|'reopen'|'release'|'complete'|'assign'|null>(null),[error,setError]=useState(''),[busy,setBusy]=useState(false),[days,setDays]=useState(3);
- const[title,setTitle]=useState(task.title),[purpose,setPurpose]=useState(task.purpose),[delivery,setDelivery]=useState(task.delivery),[selectedLabels,setSelectedLabels]=useState<string[]>(taskLabelKeys(task.label_keys??task.labels??[task.kind])),[priority,setPriority]=useState<'P0'|'P1'|'P2'>(task.priority??'P2'),[deadline,setDeadline]=useState(localDateTime(task.deadline_at)),[cancelReason,setCancelReason]=useState('');
- const mine=task.owner_id===actor.id,canEdit=task.status==='open'&&(actor.role==='admin'||task.created_by===actor.id||mine),canCancel=task.status==='open'&&(actor.role==='admin'||task.created_by===actor.id&&!task.owner_id||mine),canReopen=taskCanReopen(task,actor);
- const newDeadline=new Date((dialog==='reopen'?Date.now():Date.parse(task.deadline_at))+days*86400000).toISOString();
- function openDialog(value:typeof dialog){setError('');setTitle(task.title);setPurpose(task.purpose);setDelivery(task.delivery);setSelectedLabels(taskLabelKeys(task.label_keys??task.labels??[task.kind]));setPriority(task.priority??'P2');setDeadline(localDateTime(task.deadline_at));setDays(3);setCancelReason('');setDialog(value);}
- async function command(action:string,data:Record<string,unknown>={}){setBusy(true);setError('');try{await api('/work-tasks/'+action,{id:task.id,expected_version:task.version,request_id:crypto.randomUUID(),...data});setDialog(null);onChanged();}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
- const archive=task.archive_preview;
- return <TaskDetailCard sharePath={'/tasks?task='+encodeURIComponent(task.id)} stage={taskStage(task)} title={taskActionTitle(task)} kind={task.labels?.[0]??labels[task.kind]} code={task.id.slice(0,8).toUpperCase()} assignment={actor.role==='admin'&&task.status==='open'&&<button className="button quiet" disabled={busy} onClick={()=>openDialog('assign')}>指派负责人</button>} claim={task.status==='open'&&!task.owner_id&&<button className="button primary" disabled={busy} onClick={()=>void command('claim')}><Icon name="plus"/>{busy?'正在领取…':'领取任务'}</button>} edit={canEdit&&<button className="task-edit-button" onClick={()=>openDialog('edit')} disabled={busy}><Icon name="edit" size={17}/>编辑任务</button>} labels={task.labels?.length?task.labels:[labels[task.kind]]} priority={task.priority??'P2'} metadata={[
-  {label:'相关对象',icon:'people',value:archive?<button className="task-object-link" onClick={()=>onOpenArchive(archive,task.id)}><Avatar name={archive.name} type={archive.type} size="micro" src={avatarUrl('archive',archive.id,archive.version)}/>{archive.name}</button>:'未关联档案'},
-  {label:'截止时间',icon:'history',value:<><time>{displayDate(task.deadline_at)}</time><small>{remainingTime(task)}</small></>},
-  {label:'任务负责人',icon:'people',value:task.owner_id?<span className="task-owner-value"><Avatar name={task.owner_name??'任务负责人'} size="micro" src={task.owner_version?avatarUrl('member',task.owner_id,task.owner_version):undefined}/>{task.owner_name??(task.owner_id===actor.id?'我':'已接取')}</span>:'—'},
-  {label:'发起人',icon:'people',value:<TaskInitiator task={task}/>}
- ]} purpose={task.purpose} delivery={task.delivery} result={task.status!=='open'&&<section className="task-scene-section"><h3><Icon name="file"/>任务结果</h3>{task.result_kind&&<p>{taskResultLabel(task.result_kind)}</p>}<p>{task.result_text||task.closed_reason||'任务已关闭'}</p>{!!task.result_references?.length&&archive&&<div className="task-result-links">{task.result_references.map(reference=><button className="text-button" key={reference.observation_id} onClick={()=>onOpenArchive(archive,task.id,reference.observation_id,reference.content_version)}>观察版本 {reference.content_version}</button>)}</div>}{task.result_references_restricted&&<small className="comment-reference-hidden">部分观察引用当前不可见</small>}</section>} actions={<>
-  {!dialog&&<PageError error={error}/>}
-  {mine&&task.status==='open'&&<><button className="button primary" disabled={busy} onClick={()=>openDialog('complete')}><Icon name="check"/>提交交付</button><button className="button quiet" disabled={busy} onClick={()=>openDialog('extend')}><Icon name="history"/>延期</button><button className="button quiet" disabled={busy} onClick={()=>openDialog('release')}><Icon name="close"/>放弃</button></>}
-  {canReopen&&<button className="button primary" disabled={busy} onClick={()=>openDialog('reopen')}>重新开启</button>}
- </>}>
- <TaskHistory task={task} actor={actor} onOpenArchive={onOpenArchive}/>
- {dialog==='edit'&&<Modal title="编辑任务" busy={busy} onClose={()=>setDialog(null)}><form className="task-editor-form" onSubmit={e=>{e.preventDefault();void command('edit',{title,purpose,delivery,labels:selectedLabels,priority,deadline_at:iso(deadline)});}}><label>任务标题<input required maxLength={160} value={title} onChange={e=>setTitle(e.target.value)}/></label><TaskLabels value={selectedLabels} onChange={setSelectedLabels} initialOptions={(task.label_keys??[]).map((key,i)=>({key,name:task.labels?.[i]??key}))}/><label>优先级<select value={priority} onChange={e=>setPriority(e.target.value as 'P0'|'P1'|'P2')}><option value="P0">P0 · 最高</option><option value="P1">P1 · 重要</option><option value="P2">P2 · 常规</option></select></label><label>任务目的<textarea rows={4} required maxLength={4000} value={purpose} onChange={e=>setPurpose(e.target.value)}/></label><label>交付要求<textarea rows={4} required maxLength={4000} value={delivery} onChange={e=>setDelivery(e.target.value)}/></label><label>截止时间<input required type="datetime-local" value={deadline} onChange={e=>setDeadline(e.target.value)}/></label><section className="task-editor-actions" aria-label="任务操作"><h3>任务操作</h3><div className="task-editor-actions-row">{task.status==='open'&&!task.owner_id&&<button type="button" className="button primary" disabled={busy} onClick={()=>void command('claim')}><Icon name="plus" size={16}/>领取任务</button>}{mine&&task.status==='open'&&<><button type="button" className="button primary" disabled={busy} onClick={()=>openDialog('complete')}><Icon name="check" size={16}/>提交交付</button><button type="button" className="button quiet" disabled={busy} onClick={()=>openDialog('extend')}><Icon name="history" size={16}/>延期</button><button type="button" className="button quiet" disabled={busy} onClick={()=>openDialog('release')}><Icon name="close" size={16}/>放弃</button></>}{canReopen&&<button type="button" className="button primary" disabled={busy} onClick={()=>openDialog('reopen')}>重新开启</button>}</div></section><PageError error={error}/><ModalActions><button className="button primary" disabled={busy}>{busy?'正在保存…':'保存任务'}</button></ModalActions>{canCancel&&<details className="task-editor-danger"><summary>取消这项任务</summary><label>取消原因<input value={cancelReason} onChange={e=>setCancelReason(e.target.value)} maxLength={500}/></label><button type="button" className="text-button" disabled={busy||!cancelReason.trim()} onClick={()=>void command('cancel',{reason:cancelReason.trim()})}>确认取消任务</button></details>}</form></Modal>}
- {(dialog==='extend'||dialog==='reopen')&&<Modal title={dialog==='extend'?'延长任务期限':'重新开启任务'} busy={busy} onClose={()=>setDialog(null)}><form onSubmit={e=>{e.preventDefault();void command(dialog==='extend'?'extend':'reopen',{deadline_at:newDeadline,...dialog==='reopen'?{owner_mode:mine?'keep':'unassigned'}:{reason:`负责人延期 ${days} 天`}});}}>{dialog==='reopen'&&<p>{mine?'由你继续负责。':'任务将回到待接取。'}原交付结果和讨论保留在历史中。</p>}<fieldset className="task-delay-options"><legend>{dialog==='extend'?'在原截止时间上延长':'新的任务期限'}</legend>{[1,3,7,14].map(value=><label key={value}><input type="radio" name="delay" checked={days===value} onChange={()=>setDays(value)}/>{value} 天</label>)}</fieldset><p className="task-delay-preview">{dialog==='extend'&&<>原截止：{displayDate(task.deadline_at)}<br/></>}新截止：<strong>{displayDate(newDeadline)}</strong></p><PageError error={error}/><ModalActions><button className="button primary" disabled={busy}>{busy?'正在保存…':dialog==='extend'?'确认延期':'重新开启'}</button></ModalActions></form></Modal>}
- {dialog==='assign'&&<Modal title="指派负责人" busy={busy} onClose={()=>setDialog(null)}><TaskAssignmentForm busy={busy} error={error} submit={(member_id,reason)=>command('assign',{member_id,reason})}/></Modal>}
- {dialog==='release'&&<Modal title="放弃任务" busy={busy} onClose={()=>setDialog(null)}><p>任务将回到待接取，交给其他成员继续。已经留下的评论和历史都会保留。</p><PageError error={error}/><ModalActions><button className="button primary" disabled={busy} onClick={()=>void command('release',{deadline_at:task.deadline_at})}>交还任务</button></ModalActions></Modal>}
- {dialog==='complete'&&<Modal title="提交交付" busy={busy} onClose={()=>setDialog(null)}><CompleteForm task={task} onBusyChange={setBusy} onSaved={(result,requestId)=>{setDialog(null);onChanged();notifyMembershipJoined(result,requestId);}}/></Modal>}
- </TaskDetailCard>;
-}
-
-export function TaskDetailModal({onClose,...props}:React.ComponentProps<typeof TaskScene>&{onClose:()=>void}){
- return <Modal title="任务详情" wide onClose={onClose}><TaskScene key={props.task.id} {...props}/></Modal>;
-}
-
-function boardCardStage(task:Task):TaskStage{
- return task.status==='cancelled'?'cancelled':task.status==='expired'?'failed':task.status==='completed'?'closed':task.owner_id?'active':'waiting';
-}
-function closedResult(task:Task){
- if(task.status==='completed')return '已完成';
- if(task.status==='cancelled')return '已取消';
- if(task.status==='expired')return '未完成关闭';
- return undefined;
-}
-function BoardHall({tasks,searchTasks,actor,selectedTask,onSelect,onChanged,onOpenArchive}:{tasks:Task[];searchTasks:Task[]|null;actor:Member;selectedTask:Task|null;onSelect:(id:string|null)=>void;onChanged:()=>void;onOpenArchive:(archive:ArchivePreview,taskId?:string,observationId?:string,contentVersion?:number)=>void}){
- const[closedRange,setClosedRange]=useState<'30'|'90'|'all'>('30');
- const[labelFilter,setLabelFilter]=useState<string[]>([]),[priorityFilter,setPriorityFilter]=useState('all'),[sort,setSort]=useState<'priority'|'updated'|'deadline'>('priority'),[filtersOpen,setFiltersOpen]=useState(false);
- const start=monthStartInBeijing(),closedCutoff=Date.now()-Number(closedRange)*86400000,monthTasks=tasks.filter(task=>Date.parse(task.updated_at??task.created_at)>=start);
- // The hall is an operational view: all open work remains visible, while
- // closed history is intentionally bounded to keep the default view useful.
- const source=(searchTasks??tasks).filter(task=>task.status==='open'||closedRange==='all'||(!!task.closed_at&&Date.parse(task.closed_at)>=closedCutoff));
- const filtered=source.filter(task=>taskMatchesLabels(task.label_keys??[task.kind],labelFilter)&&(priorityFilter==='all'||task.priority===priorityFilter)).sort((a,b)=>sort==='priority'?priorityFirst(a,b):sort==='updated'?recentlyUpdated(a,b):Date.parse(a.deadline_at)-Date.parse(b.deadline_at)||recentlyUpdated(a,b));
- const waiting=filtered.filter(task=>task.status==='open'&&!task.owner_id),active=filtered.filter(task=>task.status==='open'&&!!task.owner_id),closed=filtered.filter(task=>task.status!=='open');
- const monthCompleted=monthTasks.filter(task=>task.status==='completed'&&task.completed_at&&Date.parse(task.completed_at)>=start).length;
- const overdue=tasks.filter(task=>task.status==='open'&&Date.parse(task.deadline_at)<=Date.now()).length;
- const column=(stage:TaskStage,title:string,subtitle:string,rows:Task[])=> <TaskBoardColumn stage={stage} title={title} subtitle={subtitle} count={rows.length}>{rows.length?rows.map(task=><TaskBoardCard key={task.id} stage={boardCardStage(task)} title={taskActionTitle(task)} subject={task.archive_preview?<><Avatar name={task.archive_preview.name} type={task.archive_preview.type} size="micro" src={avatarUrl('archive',task.archive_preview.id,task.archive_preview.version)}/>{task.archive_preview.name}</>:'未关联档案'} owner={task.owner_id?<><Avatar name={task.owner_name??'任务负责人'} size="micro" src={task.owner_version?avatarUrl('member',task.owner_id,task.owner_version):undefined}/>{task.owner_id===actor.id?'我':task.owner_name??'已接取'}</>:<span className="task-board-unassigned">尚未领取</span>} initiator={<TaskInitiator task={task}/>} labels={task.labels??[labels[task.kind]]} priority={task.priority??'P2'} deadline={displayDate(task.deadline_at)} overdue={task.overdue} result={closedResult(task)} selected={selectedTask?.id===task.id} onSelect={()=>onSelect(task.id)}/>):<p className="task-board-empty">这一栏暂时没有任务。</p>}</TaskBoardColumn>;
- return <div className="task-hall">
-  <section className="task-hall-board">
-  <div className="task-hall-metrics"><div><strong>{monthTasks.length}</strong><span>本月更新</span></div><div><strong>{monthCompleted}</strong><span>本月完成</span></div><div><strong>{tasks.filter(task=>task.status==='open'&&!task.owner_id).length}</strong><span>当前待领取</span></div><div className={overdue?'urgent':''}><strong>{overdue}</strong><span>当前逾期</span></div></div>
-  <div className="task-board-toolbar"><ScopeToolbar heading={<strong>全组看板</strong>} scopeItems={[]} scope="all" onScope={()=>{}} filtersOpen={filtersOpen} onFilters={()=>setFiltersOpen(value=>!value)} activeFilters={closedRange!=='all'||labelFilter.length>0||priorityFilter!=='all'||sort!=='priority'} resetLabel="重置筛选" onReset={()=>{setLabelFilter([]);setPriorityFilter('all');setSort('priority');setClosedRange('30');}} filters={<><label>已关闭任务<select aria-label="已关闭任务范围" value={closedRange} onChange={e=>setClosedRange(e.target.value as typeof closedRange)}><option value="30">最近 30 天</option><option value="90">最近 90 天</option><option value="all">全部</option></select></label><TaskLabels filter value={labelFilter} onChange={setLabelFilter}/><label>优先级<select aria-label="任务优先级" value={priorityFilter} onChange={e=>setPriorityFilter(e.target.value)}><option value="all">全部优先级</option><option value="P0">P0</option><option value="P1">P1</option><option value="P2">P2</option></select></label><label>排序<select aria-label="任务排序" value={sort} onChange={e=>setSort(e.target.value as 'priority'|'updated'|'deadline')}><option value="priority">优先级从高到低</option><option value="updated">最近更新</option><option value="deadline">截止时间</option></select></label></>}/></div>
-  <div className="task-board-columns">{column('waiting','待领取','还没有负责人，等待成员接取',waiting)}{column('active','进行中','已有负责人正在推进',active)}{column('closed','已关闭',closedRange==='all'?'全部已关闭任务':'最近 '+closedRange+' 天内关闭的任务',closed)}</div>
-  <footer className="task-hall-footer"><span>点击任务卡查看目的、交付要求和评论历史。</span></footer>
-  </section>
-  {selectedTask&&<TaskDetailModal task={selectedTask} actor={actor} onChanged={onChanged} onOpenArchive={onOpenArchive} onClose={()=>onSelect(null)}/>}
- </div>;
-}
-function taskLabelName(key:string){return labels[key as Task['kind']]??key;}
-
-export function WorkTasksPage({actor,onOpenArchive}:{actor:Member;onOpenArchive:(archive:ArchivePreview,taskId?:string,observationId?:string,contentVersion?:number)=>void}){
- const[tasks,setTasks]=useState<Task[]>([]),[loading,setLoading]=useState(true),[error,setError]=useState(''),[revision,setRevision]=useState(0),[view,setView]=useState<'book'|'hall'>('book'),[listStatus,setListStatus]=useState('all'),[listLabel,setListLabel]=useState<string[]>([]),[filtersOpen,setFiltersOpen]=useState(false),[dismissed,setDismissed]=useState<string[]>(()=>{try{return JSON.parse(localStorage.getItem(`task-book-dismissed:${actor.id}`)??'[]') as string[];}catch{return [];}});
- const[query,setQuery]=useState(''),[searchTasks,setSearchTasks]=useState<Task[]|null>(null),[searching,setSearching]=useState(false),[searchError,setSearchError]=useState('');
- const[selectedId,setSelectedId]=useState<string|null>(()=>new URLSearchParams(location.search).get('task'));
- useEffect(()=>{const sync=()=>setSelectedId(new URLSearchParams(location.search).get('task'));window.addEventListener('popstate',sync);return()=>window.removeEventListener('popstate',sync);},[]);
- const loadSequence=React.useRef(0);
- async function load(){const sequence=++loadSequence.current;setLoading(true);setError('');try{const rows=await fetchTaskList();if(sequence===loadSequence.current)setTasks(rows);}catch(e){if(sequence===loadSequence.current)setError((e as Error).message);}finally{if(sequence===loadSequence.current)setLoading(false);}}
- useEffect(()=>{void load();return()=>{loadSequence.current++;};},[revision]);
- useEffect(()=>{const timer=window.setInterval(()=>setClock(Date.now()),60000);return()=>window.clearInterval(timer);},[]);
- const[,setClock]=useState(Date.now());
- useEffect(()=>{
-  let cancelled=false;
-  setSearchError('');setSearchTasks(query.trim()?[]:null);setSearching(!!query.trim());
-  if(!query.trim())return;
-  const timer=window.setTimeout(async()=>{
-   try{const rows=await fetchTaskList(query.trim());if(!cancelled)setSearchTasks(rows);}
-   catch(e){if(!cancelled)setSearchError((e as Error).message);}
-   finally{if(!cancelled)setSearching(false);}
-  },200);
-  return()=>{cancelled=true;window.clearTimeout(timer);};
- },[query,revision]);
- const selectedTask=tasks.find(task=>task.id===selectedId)??searchTasks?.find(task=>task.id===selectedId)??null;
- const updateSelection=(id:string|null)=>{setSelectedId(id);const params=new URLSearchParams(location.search);if(id)params.set('task',id);else params.delete('task');history.pushState(null,'',location.pathname+(params.size?'?'+params.toString():''));};
- const personal=(searchTasks??tasks).filter(task=>{if(task.status==='completed'||((task.status==='expired'||task.status==='cancelled')&&dismissed.includes(task.id+':'+task.version)))return false;return task.status==='open'?(task.owner_id===actor.id||task.owner_id===null):(task.owner_id===actor.id||task.created_by===actor.id);});
- const completions=personalTaskCompletions(tasks,actor.id);
- const visiblePersonal=personal.filter(task=>listStatus==='all'||taskStage(task)===listStatus).filter(task=>taskMatchesLabels(task.label_keys??[task.kind],listLabel)).sort(compareTaskBook);
- const dismiss=(id:string)=>setDismissed(current=>{const next=[...new Set([...current,id])];try{localStorage.setItem(`task-book-dismissed:${actor.id}`,JSON.stringify(next));}catch{}return next;});
- const recommendationPool=personal.filter(task=>task.status==='open'&&!task.owner_id).sort(priorityFirst);
- const[recommendationIndex,setRecommendationIndex]=useState(0);
- const recommendation=recommendationPool.length?recommendationPool[recommendationIndex%recommendationPool.length]??null:null;
- return <main className="account-content work-tasks-page task-workspace"><div className="task-workspace-head"><ArchiveHead label="任务" count="" query={query} onQuery={value=>{setQuery(value);updateSelection(null);}} searchLabel="搜索任务" searchPlaceholder="搜索任务、相关对象" createControl={<CreateTask onSaved={()=>setRevision(n=>n+1)}/>}/></div><nav className="task-page-tabs" aria-label="任务页面"><button className={view==='book'?'active':''} onClick={()=>{setView('book');updateSelection(null);}}>任务簿</button><button className={view==='hall'?'active':''} onClick={()=>{setView('hall');updateSelection(null);}}>看板大厅</button></nav>
- <PageError error={searchError}/>{searching&&<p role="status">正在搜索任务…</p>}
- {selectedId&&!loading&&!error&&!selectedTask&&<p className="form-error" role="alert">该任务不存在或当前不可见。<button className="text-button" onClick={()=>updateSelection(null)}>返回任务簿</button></p>}
- {view==='hall'?<><PageError error={error} retry={()=>void load()}/>{loading&&!tasks.length?<p role="status">正在读取任务…</p>:<BoardHall tasks={tasks} searchTasks={searchTasks} actor={actor} selectedTask={selectedTask} onSelect={updateSelection} onChanged={()=>setRevision(n=>n+1)} onOpenArchive={onOpenArchive}/>}</>:<><PageError error={error} retry={()=>void load()}/>{loading&&!tasks.length?<p role="status">正在读取任务…</p>:<TaskBookLayout selected={!!selectedTask} left={<>
- <TaskCompletionRecord {...completions}/>
- <TaskRecommendation task={recommendation} onSelect={updateSelection} onRefresh={recommendationPool.length>1?()=>setRecommendationIndex(index=>index+1):undefined}/>
- <section className="task-index-panel" aria-label="任务簿"><div className="task-book-toolbar"><strong>我的任务</strong><small>（{personal.length}）</small><div className="task-book-controls"><button aria-expanded={filtersOpen} onClick={()=>setFiltersOpen(v=>!v)}><Icon name="filter" size={16}/>{listStatus!=='all'||listLabel.length>0?'已筛选':'筛选'}</button><button aria-label="刷新任务" title="刷新任务" disabled={loading} onClick={()=>setRevision(n=>n+1)}><Icon name="history" size={17}/></button></div></div>
- {filtersOpen&&<div className="task-book-filters"><label>状态<select aria-label="任务状态" value={listStatus} onChange={e=>setListStatus(e.target.value)}><option value="all">全部状态</option><option value="failed">未完成关闭</option><option value="ready">待提交</option><option value="active">进行中</option><option value="waiting">待接取</option><option value="cancelled">已取消</option></select></label><TaskLabels filter value={listLabel} onChange={setListLabel}/><button className="text-button" onClick={()=>{setListStatus('all');setListLabel([]);}}>清除</button></div>}
- <div className="task-index">{visiblePersonal.length?visiblePersonal.map(task=><TaskIndexItem key={task.id} task={task} actor={actor} selected={selectedId===task.id} onSelect={()=>updateSelection(task.id)} onDismiss={()=>dismiss(task.id+':'+task.version)}/>):<p className="task-index-empty">{query.trim()?'没有匹配的任务':'暂时没有需要处理的任务'}</p>}</div></section>
- </>} detail={selectedTask?<div className="task-detail-column"><button className="text-button task-detail-back" onClick={()=>updateSelection(null)}><Icon name="back" size={16}/>返回任务簿</button><TaskScene key={selectedTask.id} task={selectedTask} actor={actor} onChanged={()=>setRevision(n=>n+1)} onOpenArchive={onOpenArchive}/></div>:<aside className="task-scene-empty"><h2>选择一项任务</h2><p>查看任务目的、交付要求与工作进展。</p></aside>}/>}</>}
+import { useTaskList } from './work-tasks/useTaskList';
+import { TaskLabels } from "./TaskLabels";
+import { taskMatchesLabels } from "../rules/task-labels";
+import { compareTaskBook, personalTaskCompletions } from "../rules/task-book";
+import { useEffect, useState } from 'react';
+import { type Member } from "./api";
+import { PageError } from "./ConnectionPages";
+import { Icon } from "../ui/icons";
+import { ArchiveHead } from "../ui/Workspace";
+import { TaskCompletionRecord, TaskBookLayout } from "../ui/TaskBook";
+import { type ArchivePreview, type Task } from '../shared/work-tasks';
+import { priorityFirst, taskStage } from './work-tasks/presentation';
+import { CreateTask } from './work-tasks/TaskCreation';
+import { TaskIndexItem, TaskRecommendation } from './work-tasks/TaskCards';
+import { TaskScene } from './work-tasks/TaskDetail';
+import { BoardHall } from './work-tasks/TaskBoard';
+export function WorkTasksPage({
+  actor,
+  onOpenArchive
+}: {
+  actor: Member;
+  onOpenArchive: (archive: ArchivePreview, taskId?: string, observationId?: string, contentVersion?: number) => void;
+}) {
+  const {
+    tasks,
+    loading,
+    error,
+    query,
+    setQuery,
+    searchTasks,
+    searching,
+    searchError,
+    load,
+    refresh
+  } = useTaskList();
+  const [view, setView] = useState<'book' | 'hall'>('book'),
+    [listStatus, setListStatus] = useState('all'),
+    [listLabel, setListLabel] = useState<string[]>([]),
+    [filtersOpen, setFiltersOpen] = useState(false),
+    [dismissed, setDismissed] = useState<string[]>(() => {
+      try {
+        return JSON.parse(localStorage.getItem(`task-book-dismissed:${actor.id}`) ?? '[]') as string[];
+      } catch {
+        return [];
+      }
+    });
+  const [selectedId, setSelectedId] = useState<string | null>(() => new URLSearchParams(location.search).get('task'));
+  useEffect(() => {
+    const sync = () => setSelectedId(new URLSearchParams(location.search).get('task'));
+    window.addEventListener('popstate', sync);
+    return () => window.removeEventListener('popstate', sync);
+  }, []);
+  useEffect(() => {
+    const timer = window.setInterval(() => setClock(Date.now()), 60000);
+    return () => window.clearInterval(timer);
+  }, []);
+  const [, setClock] = useState(Date.now());
+  const selectedTask = tasks.find(task => task.id === selectedId) ?? searchTasks?.find(task => task.id === selectedId) ?? null;
+  const updateSelection = (id: string | null) => {
+    setSelectedId(id);
+    const params = new URLSearchParams(location.search);
+    if (id) params.set('task', id);else params.delete('task');
+    history.pushState(null, '', location.pathname + (params.size ? '?' + params.toString() : ''));
+  };
+  const personal = (searchTasks ?? tasks).filter(task => {
+    if (task.status === 'completed' || (task.status === 'expired' || task.status === 'cancelled') && dismissed.includes(task.id + ':' + task.version)) return false;
+    return task.status === 'open' ? task.owner_id === actor.id || task.owner_id === null : task.owner_id === actor.id || task.created_by === actor.id;
+  });
+  const completions = personalTaskCompletions(tasks, actor.id);
+  const visiblePersonal = personal.filter(task => listStatus === 'all' || taskStage(task) === listStatus).filter(task => taskMatchesLabels(task.label_keys ?? [task.kind], listLabel)).sort(compareTaskBook);
+  const dismiss = (id: string) => setDismissed(current => {
+    const next = [...new Set([...current, id])];
+    try {
+      localStorage.setItem(`task-book-dismissed:${actor.id}`, JSON.stringify(next));
+    } catch {}
+    return next;
+  });
+  const recommendationPool = personal.filter(task => task.status === 'open' && !task.owner_id).sort(priorityFirst);
+  const [recommendationIndex, setRecommendationIndex] = useState(0);
+  const recommendation = recommendationPool.length ? recommendationPool[recommendationIndex % recommendationPool.length] ?? null : null;
+  return <main className="account-content work-tasks-page task-workspace"><div className="task-workspace-head"><ArchiveHead label="任务" count="" query={query} onQuery={value => {
+        setQuery(value);
+        updateSelection(null);
+      }} searchLabel="搜索任务" searchPlaceholder="搜索任务、相关对象" createControl={<CreateTask onSaved={refresh} />} /></div><nav className="task-page-tabs" aria-label="任务页面"><button className={view === 'book' ? 'active' : ''} onClick={() => {
+        setView('book');
+        updateSelection(null);
+      }}>任务簿</button><button className={view === 'hall' ? 'active' : ''} onClick={() => {
+        setView('hall');
+        updateSelection(null);
+      }}>看板大厅</button></nav>
+ <PageError error={searchError} />{searching && <p role="status">正在搜索任务…</p>}
+ {selectedId && !loading && !error && !selectedTask && <p className="form-error" role="alert">该任务不存在或当前不可见。<button className="text-button" onClick={() => updateSelection(null)}>返回任务簿</button></p>}
+ {view === 'hall' ? <><PageError error={error} retry={() => void load()} />{loading && !tasks.length ? <p role="status">正在读取任务…</p> : <BoardHall tasks={tasks} searchTasks={searchTasks} actor={actor} selectedTask={selectedTask} onSelect={updateSelection} onChanged={refresh} onOpenArchive={onOpenArchive} />}</> : <><PageError error={error} retry={() => void load()} />{loading && !tasks.length ? <p role="status">正在读取任务…</p> : <TaskBookLayout selected={!!selectedTask} left={<>
+ <TaskCompletionRecord {...completions} />
+ <TaskRecommendation task={recommendation} onSelect={updateSelection} onRefresh={recommendationPool.length > 1 ? () => setRecommendationIndex(index => index + 1) : undefined} />
+ <section className="task-index-panel" aria-label="任务簿"><div className="task-book-toolbar"><strong>我的任务</strong><small>（{personal.length}）</small><div className="task-book-controls"><button aria-expanded={filtersOpen} onClick={() => setFiltersOpen(v => !v)}><Icon name="filter" size={16} />{listStatus !== 'all' || listLabel.length > 0 ? '已筛选' : '筛选'}</button><button aria-label="刷新任务" title="刷新任务" disabled={loading} onClick={refresh}><Icon name="history" size={17} /></button></div></div>
+ {filtersOpen && <div className="task-book-filters"><label>状态<select aria-label="任务状态" value={listStatus} onChange={e => setListStatus(e.target.value)}><option value="all">全部状态</option><option value="failed">未完成关闭</option><option value="ready">待提交</option><option value="active">进行中</option><option value="waiting">待接取</option><option value="cancelled">已取消</option></select></label><TaskLabels filter value={listLabel} onChange={setListLabel} /><button className="text-button" onClick={() => {
+              setListStatus('all');
+              setListLabel([]);
+            }}>清除</button></div>}
+ <div className="task-index">{visiblePersonal.length ? visiblePersonal.map(task => <TaskIndexItem key={task.id} task={task} actor={actor} selected={selectedId === task.id} onSelect={() => updateSelection(task.id)} onDismiss={() => dismiss(task.id + ':' + task.version)} />) : <p className="task-index-empty">{query.trim() ? '没有匹配的任务' : '暂时没有需要处理的任务'}</p>}</div></section>
+ </>} detail={selectedTask ? <div className="task-detail-column"><button className="text-button task-detail-back" onClick={() => updateSelection(null)}><Icon name="back" size={16} />返回任务簿</button><TaskScene key={selectedTask.id} task={selectedTask} actor={actor} onChanged={refresh} onOpenArchive={onOpenArchive} /></div> : <aside className="task-scene-empty"><h2>选择一项任务</h2><p>查看任务目的、交付要求与工作进展。</p></aside>} />}</>}
  </main>;
 }
+export type { Task } from '../shared/work-tasks';
+export type { ArchivePreview } from '../shared/work-tasks';
+export { TaskDetailModal } from './work-tasks/TaskDetail';
+export { TaskIndexItem } from './work-tasks/TaskCards';
