@@ -1,186 +1,174 @@
-import {z} from 'zod';
-import {canonical,hash,KnowledgeError,now,uid} from './types.ts';
-import type {CatalogActor} from './catalog.ts';
-import type {KnowledgeBranch,KnowledgeVersion,KnowledgeCategory,KnowledgeMerge,KnowledgeIssue,KnowledgeComment,KnowledgeDiff} from '../../app/shared/knowledge.ts';
-
-const key=z.string().min(1).max(180),request_id=z.uuid(),expected_version=z.number().int().positive();
-const branch_id=key.default('main'),page={offset:z.coerce.number().int().min(0).default(0),limit:z.coerce.number().int().min(1).max(100).default(40)};
-export const workspaceSchemas={
- list:z.object({branch_id,scope:z.enum(['main','public','drafts']).optional(),search:z.string().max(100).default(''),category_id:key.optional(),...page}).strict(),
- branch:z.object({name:z.string().trim().min(1).max(80),visibility:z.enum(['private','members']).default('members'),request_id}).strict(),
- share:z.object({branch_id:key,expected_version,request_id}).strict(),
- deleteBranch:z.object({branch_id:key,expected_version,request_id}).strict(),
- save:z.object({branch_id:key,expected_version,document_id:z.uuid().optional(),title:z.string().trim().min(1).max(200),body:z.string().min(1).max(60000),category:z.string().trim().min(1).max(40),kind:z.string().trim().min(1).max(30).default('知识'),source:z.string().max(2000).default(''),message:z.string().trim().min(1).max(300),request_id}).strict(),
- remove:z.object({branch_id:key,expected_version,document_id:z.uuid(),message:z.string().trim().min(1).max(300),request_id}).strict(),
- category:z.object({id:z.uuid(),branch_id,expected_version,definition:z.string().max(4000),request_id}).strict(),
- categoryEdit:z.object({id:z.uuid().optional(),branch_id,expected_version:expected_version.optional(),name:z.string().trim().min(1).max(40),definition:z.string().max(4000).default(''),request_id}).strict(),
- review:z.object({branch_id:key,expected_version,document_id:z.uuid(),version_id:key,reason:z.string().trim().max(4000).default('提交审核'),request_id}).strict(),
- issueFromComment:z.object({comment_id:z.uuid(),title:z.string().trim().min(1).max(200),body:z.string().trim().min(1).max(12000),request_id}).strict(),
- merge:z.object({branch_id:key,expected_version,title:z.string().trim().min(1).max(200),reason:z.string().trim().min(1).max(4000),request_id}).strict(),
- approve:z.object({id:z.uuid(),head_id:key,request_id}).strict(),
- accept:z.object({id:z.uuid(),head_id:key,main_version:expected_version,selection:z.discriminatedUnion('kind',[z.object({kind:z.literal('meeting'),notes:z.string().trim().min(1).max(4000)}),z.object({kind:z.literal('issue'),issue_id:z.uuid()})]).optional(),request_id}).strict(),
- resolve:z.object({branch_id:key,expected_version,document_id:z.uuid(),main_version:expected_version,choice:z.enum(['main','branch']),request_id}).strict(),
- issue:z.object({title:z.string().trim().min(1).max(200),body:z.string().trim().min(1).max(12000),document_id:z.uuid().optional(),request_id}).strict(),
- issueState:z.object({id:z.uuid(),expected_version,state:z.enum(['open','closed']),resolution:z.string().trim().max(4000).default(''),selected_merge_id:z.uuid().optional(),request_id}).strict(),
- comment:z.object({branch_id:key.optional(),document_id:z.uuid().optional(),category_id:z.uuid().optional(),issue_id:z.uuid().optional(),parent_id:z.uuid().optional(),version_id:key.optional(),quote:z.string().min(1).max(4000).optional(),start_offset:z.number().int().min(0).optional(),end_offset:z.number().int().positive().optional(),body:z.string().trim().min(1).max(8000),request_id}).strict().refine(v=>Number(!!v.document_id)+Number(!!v.category_id)+Number(!!v.issue_id)===1,'请选择一个评论对象'),
-};
-
-export class KnowledgeWorkspace{
- constructor(readonly db:D1Database,readonly actor:CatalogActor,readonly clock:()=>string=now){}
- stmt(sql:string,...args:unknown[]){return this.db.prepare(sql).bind(...args);}
- get guest(){return 'kind' in this.actor;}
- get identity(){return {id:this.actor.id,name:this.actor.name,kind:this.guest?'guest':'member',can_write:!this.guest&&this.actor.eligible};}
- writer(){if(this.guest||!this.actor.eligible)throw new KnowledgeError(403,'FORMAL_MEMBER_REQUIRED','仅正式成员可以修改或发表评论');}
- async branch(id:string){const b=await this.stmt('SELECT * FROM kw_branches WHERE id=?',id).first<KnowledgeBranch>();if(!b||b.state==='closed'||(this.guest&&id!=='main')||(b.visibility==='private'&&b.owner_id!==this.actor.id))throw new KnowledgeError(404,'NOT_FOUND','分支不存在或不可见');return b;}
- editable(b:KnowledgeBranch,version:number){this.writer();if(b.id==='main')throw new KnowledgeError(403,'MAIN_REQUIRES_MERGE','请先在分支中修改，再提出合并请求');if(b.state!=='open')throw new KnowledgeError(409,'BRANCH_CLOSED','该分支已经结束，请新建分支');if(b.version!==version)throw new KnowledgeError(409,'CONFLICT','分支已变化，请刷新后核对');}
- async receipt(id:string,fingerprint?:string){const row=await this.stmt('SELECT fingerprint,result_json FROM kw_requests WHERE actor_id=? AND request_id=?',this.actor.id,id).first<{fingerprint:string;result_json:string}>();if(row&&fingerprint&&row.fingerprint!==fingerprint)throw new KnowledgeError(409,'REQUEST_REUSED','请求编号已用于其他内容');return row?JSON.parse(row.result_json):null;}
- async command(input:{request_id:string},operation:string,build:(at:string)=>Promise<{statements:D1PreparedStatement[];result:Record<string,unknown>}>){
-  this.writer();const fingerprint=await hash(canonical({operation,...input})),saved=await this.receipt(input.request_id,fingerprint);if(saved)return saved;
-  const revision=(await this.db.prepare('SELECT revision FROM kw_meta WHERE id=1').first<{revision:number}>())!.revision,at=this.clock();
-  const {statements,result}=await build(at),guard=uid();
-  try{await this.db.batch([
-   this.stmt('INSERT INTO kw_guards VALUES(?,CASE WHEN (SELECT revision FROM kw_meta WHERE id=1)=? THEN 1 ELSE 0 END)',guard,revision),
-   ...statements,this.stmt('UPDATE kw_meta SET revision=revision+1 WHERE id=1'),
-   this.stmt('INSERT INTO kw_events(actor_id,action,detail_json,created_at) VALUES(?,?,?,?)',this.actor.id,operation,JSON.stringify(result),at),
-   this.stmt('INSERT INTO kw_requests VALUES(?,?,?,?,?)',this.actor.id,input.request_id,fingerprint,JSON.stringify(result),at),this.stmt('DELETE FROM kw_guards WHERE id=?',guard),
-  ]);}catch(error){const committed=await this.receipt(input.request_id,fingerprint);if(committed)return committed;if(/constraint|immutable/i.test(String(error)))throw new KnowledgeError(409,'CONFLICT','内容已变化，请刷新核对后重试');throw error;}
-  return result;
- }
- async branches(){const rows=await this.stmt("SELECT * FROM kw_branches WHERE state<>'closed' AND (?=0 OR id='main') AND (visibility='members' OR owner_id=?) ORDER BY CASE WHEN id='main' THEN 0 ELSE 1 END,updated_at DESC,id",this.guest?1:0,this.actor.id).all<KnowledgeBranch>();return {branches:rows.results,identity:this.identity};}
- async createBranch(input:unknown){const a=workspaceSchemas.branch.parse(input);return this.command(a,'branch.create',async at=>{const main=await this.branch('main'),id=uid();return {statements:[this.stmt('INSERT INTO kw_branches(id,name,owner_id,owner_name,visibility,head_id,base_head_id,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)',id,a.name,this.actor.id,this.actor.name,a.visibility,main.head_id,main.head_id,at,at),this.stmt('INSERT INTO kw_items SELECT ?,document_id,version_id,version_id FROM kw_items WHERE branch_id=?',id,'main')],result:{id,version:1}};});}
- async shareBranch(input:unknown){const a=workspaceSchemas.share.parse(input);return this.command(a,'branch.share',async at=>{const b=await this.branch(a.branch_id);this.editable(b,a.expected_version);if(b.owner_id!==this.actor.id)throw new KnowledgeError(403,'OWNER_REQUIRED','仅作者可以公开私人草稿');return {statements:[this.stmt("UPDATE kw_branches SET visibility='members',version=version+1,updated_at=? WHERE id=?",at,b.id)],result:{id:b.id,version:b.version+1}};});}
- async deleteBranch(input:unknown){const a=workspaceSchemas.deleteBranch.parse(input);return this.command(a,'branch.delete',async at=>{
-  const b=await this.branch(a.branch_id);
-  if(b.id==='main')throw new KnowledgeError(403,'MAIN_PROTECTED','主分支不能删除');
-  if(b.owner_id!==this.actor.id)throw new KnowledgeError(403,'OWNER_REQUIRED','仅分支创建者可以删除分支');
-  if(b.version!==a.expected_version)throw new KnowledgeError(409,'CONFLICT','分支已变化，请刷新后核对');
-  return {statements:[this.stmt("UPDATE kw_branches SET state='closed',version=version+1,updated_at=? WHERE id=?",at,b.id),this.stmt("UPDATE kw_merges SET state='closed',version=version+1,updated_at=? WHERE branch_id=? AND state='open'",at,b.id)],result:{id:b.id,name:b.name,version:b.version+1,deleted:true}};
- });}
- async categories(branchId='main'){await this.branch(branchId);const rows=await this.stmt('SELECT c.*,(SELECT COUNT(*) FROM kw_items i JOIN kw_versions v ON v.id=i.version_id WHERE i.branch_id=? AND v.category_id=c.id AND v.deleted=0) AS count FROM kw_categories c WHERE (?=0 AND c.independent=1) OR EXISTS(SELECT 1 FROM kw_items i JOIN kw_versions v ON v.id=i.version_id WHERE i.branch_id=? AND v.category_id=c.id AND v.deleted=0) ORDER BY c.name',branchId,this.guest?1:0,branchId).all<KnowledgeCategory>();return {categories:rows.results};}
- async list(input:unknown){
-  const a=workspaceSchemas.list.parse(input);if(this.guest&&a.scope&&a.scope!=='main')throw new KnowledgeError(403,'PUBLISHED_ONLY','接收者只能阅读主要知识库');
-  const branch=await this.branch(a.scope==='main'?'main':a.branch_id),pattern='%'+a.search.replace(/[!%_]/g,'!$&')+'%';
-  let scope='i.branch_id=?',scopeArgs:unknown[]=[branch.id];
-  if(a.scope==='drafts'){scope="b.visibility='private' AND b.owner_id=? AND b.state='open' AND i.version_id IS NOT i.base_version_id AND NOT EXISTS(SELECT 1 FROM kw_review_sources s JOIN kw_merges m ON m.id=s.merge_id WHERE s.source_branch_id=i.branch_id AND s.document_id=i.document_id AND s.source_version_id=i.version_id AND m.state<>'closed')";scopeArgs=[this.actor.id];}
-  if(a.scope==='public'){scope="b.visibility='members' AND b.state='open' AND i.version_id IS NOT i.base_version_id AND EXISTS(SELECT 1 FROM kw_merges m WHERE m.branch_id=b.id AND m.state='open' AND m.head_id=b.head_id)";scopeArgs=[];}
-  const from='FROM kw_items i JOIN kw_branches b ON b.id=i.branch_id JOIN kw_versions v ON v.id=i.version_id LEFT JOIN kw_categories c ON c.id=v.category_id';
-  const where=`${scope} AND v.deleted=0 AND (? IS NULL OR v.category_id=?) AND (v.title LIKE ? ESCAPE '!' OR v.body LIKE ? ESCAPE '!')`,args=[...scopeArgs,a.category_id??null,a.category_id??null,pattern,pattern];
-  const rows=await this.stmt(`SELECT v.*,i.branch_id,c.name AS category_name ${from} WHERE ${where} ORDER BY v.created_at DESC,v.id,i.branch_id LIMIT ? OFFSET ?`,...args,a.limit+1,a.offset).all<KnowledgeVersion>();
-  const categories=a.scope==='public'||a.scope==='drafts'?(await this.stmt(`SELECT c.*,COUNT(*) AS count ${from} WHERE ${scope} AND v.deleted=0 AND c.id IS NOT NULL GROUP BY c.id ORDER BY c.name`,...scopeArgs).all<KnowledgeCategory>()).results:(await this.categories(branch.id)).categories;
-  if(!this.guest&&(a.scope==='public'||a.scope==='drafts'))for(const c of (await this.stmt('SELECT *,0 AS count FROM kw_categories WHERE independent=1 ORDER BY name').all<KnowledgeCategory>()).results)if(!categories.some(x=>x.id===c.id))categories.push(c);
-  return {branch,documents:rows.results.slice(0,a.limit),next_offset:rows.results.length>a.limit?a.offset+a.limit:null,categories};
- }
- async document(branchId:string,id:string){await this.branch(branchId);const v=await this.stmt('SELECT v.*,c.name AS category_name FROM kw_items i JOIN kw_versions v ON v.id=i.version_id LEFT JOIN kw_categories c ON c.id=v.category_id WHERE i.branch_id=? AND i.document_id=?',branchId,id).first<KnowledgeVersion>();if(!v||v.deleted)throw new KnowledgeError(404,'NOT_FOUND','文档不存在或已在此分支移除');return v;}
- async get(branchId:string,id:string){const document=await this.document(branchId,id);return {document};}
- async version(id:string|null){return id?await this.stmt('SELECT v.*,c.name AS category_name FROM kw_versions v LEFT JOIN kw_categories c ON c.id=v.category_id WHERE v.id=?',id).first<KnowledgeVersion>():null;}
- commit(id:string,b:KnowledgeBranch,message:string,at:string,mergeParent:string|null=null){return this.stmt('INSERT INTO kw_commits VALUES(?,?,?,?,?,?,?,?)',id,b.id,b.head_id,mergeParent,message,this.actor.id,this.actor.name,at);}
- async save(input:unknown){const a=workspaceSchemas.save.parse(input);return this.command(a,'document.save',async at=>{
-  const b=await this.branch(a.branch_id);this.editable(b,a.expected_version);const old=a.document_id?await this.document(b.id,a.document_id):null;
-  const category=await this.stmt('SELECT id FROM kw_categories WHERE name=?',a.category).first<{id:string}>(),categoryId=category?.id??uid(),documentId=old?.document_id??uid(),versionId=uid(),commitId=uid(),statements:D1PreparedStatement[]=[];
-  if(!category)statements.push(this.stmt('INSERT INTO kw_categories(id,name,updated_at) VALUES(?,?,?)',categoryId,a.category,at));
-  if(!old)statements.push(this.stmt('INSERT INTO kw_documents VALUES(?,?,?,?)',documentId,this.actor.id,this.actor.name,at));
-  statements.push(this.stmt('INSERT INTO kw_versions VALUES(?,?,?,?,?,?,?,?,?,?,?)',versionId,documentId,a.title,a.body,categoryId,a.kind,a.source,0,this.actor.id,this.actor.name,at),this.commit(commitId,b,a.message,at),this.stmt('INSERT INTO kw_changes VALUES(?,?,?,?)',commitId,documentId,old?.id??null,versionId),this.stmt('INSERT INTO kw_items(branch_id,document_id,version_id) VALUES(?,?,?) ON CONFLICT(branch_id,document_id) DO UPDATE SET version_id=excluded.version_id',b.id,documentId,versionId),this.stmt('UPDATE kw_branches SET head_id=?,version=version+1,updated_at=? WHERE id=?',commitId,at,b.id));
-  return {statements,result:{id:documentId,version_id:versionId,commit_id:commitId,branch_id:b.id,version:b.version+1}};
- });}
- async remove(input:unknown){const a=workspaceSchemas.remove.parse(input);return this.command(a,'document.remove',async at=>{const b=await this.branch(a.branch_id);this.editable(b,a.expected_version);const v=await this.document(b.id,a.document_id),version=uid(),commit=uid();return {statements:[this.stmt('INSERT INTO kw_versions SELECT ?,document_id,title,body,category_id,kind,source,1,?,?,? FROM kw_versions WHERE id=?',version,this.actor.id,this.actor.name,at,v.id),this.commit(commit,b,a.message,at),this.stmt('INSERT INTO kw_changes VALUES(?,?,?,?)',commit,v.document_id,v.id,version),this.stmt('UPDATE kw_items SET version_id=? WHERE branch_id=? AND document_id=?',version,b.id,v.document_id),this.stmt('UPDATE kw_branches SET head_id=?,version=version+1,updated_at=? WHERE id=?',commit,at,b.id)],result:{id:v.document_id,branch_id:b.id,version:b.version+1}};});}
- async category(branchId:string,id:string){const found=(await this.categories(branchId)).categories.find(c=>c.id===id);if(!found)throw new KnowledgeError(404,'NOT_FOUND','当前分支没有这个分类的文档');return found;}
- async categoryChanges(a:{id?:string;branch_id:string;expected_version?:number;name?:string;definition:string},at:string){
-  const old=a.id?await this.category(a.branch_id,a.id):null;if(old&&old.version!==a.expected_version)throw new KnowledgeError(409,'CONFLICT','分类已更新，请重新读取');
-  const name=a.name??old!.name,duplicate=await this.stmt('SELECT id FROM kw_categories WHERE name=?',name).first<{id:string}>();if(duplicate&&duplicate.id!==old?.id)throw new KnowledgeError(409,'CATEGORY_EXISTS','已有同名分类，请选择它或使用其他名称');
-  const id=old?.id??uid(),versionId=uid(),documentId='category-'+id,statements:D1PreparedStatement[]=[];
-  if(!old)statements.push(this.stmt('INSERT INTO kw_categories(id,name,definition,independent,updated_at) VALUES(?,?,?,1,?)',id,name,a.definition,at));
-  statements.push(this.stmt('INSERT OR IGNORE INTO kw_documents VALUES(?,?,?,?)',documentId,this.actor.id,this.actor.name,at),this.stmt('INSERT INTO kw_versions VALUES(?,?,?,?,?,?,?,?,?,?,?)',versionId,documentId,name,a.definition,id,'分类解释','',0,this.actor.id,this.actor.name,at),this.stmt('UPDATE kw_categories SET name=?,definition=?,definition_version_id=?,version=?,updated_at=? WHERE id=?',name,a.definition,versionId,old?old.version+1:1,at,id));
-  return {statements,result:{id,version:old?old.version+1:1,definition_version_id:versionId}};
- }
- async editCategory(input:unknown){const a=workspaceSchemas.categoryEdit.parse(input);return this.command(a,'category.edit',at=>this.categoryChanges(a,at));}
- async defineCategory(input:unknown){const a=workspaceSchemas.category.parse(input);return this.command(a,'category.define',at=>this.categoryChanges(a,at));}
- async diff(branchId:string):Promise<{branch:KnowledgeBranch;main:KnowledgeBranch;changes:KnowledgeDiff[]}>{
-  const branch=await this.branch(branchId),main=await this.branch('main');if(branch.id==='main')return {branch,main,changes:[]};
-  const items=(await this.stmt('SELECT i.document_id,i.version_id,i.base_version_id,m.version_id AS current_id FROM kw_items i LEFT JOIN kw_items m ON m.branch_id=? AND m.document_id=i.document_id WHERE i.branch_id=? AND i.version_id IS NOT i.base_version_id','main',branchId).all<{document_id:string;version_id:string;base_version_id:string|null;current_id:string|null}>()).results;
-  const changes:KnowledgeDiff[]=[];for(const item of items){const proposed=(await this.version(item.version_id))!,base=await this.version(item.base_version_id),current=await this.version(item.current_id);if(!base&&proposed.deleted)continue;changes.push({document_id:item.document_id,base,current,proposed,conflict:item.current_id!==item.base_version_id&&item.current_id!==item.version_id});}return {branch,main,changes};
- }
- async mergeRequests(){if(this.guest)return {merges:[]};const rows=await this.stmt("SELECT m.*,b.name AS branch_name,b.head_id AS current_head_id,(SELECT COUNT(*) FROM kw_approvals a WHERE a.merge_id=m.id AND a.head_id=m.head_id) AS approval_count,(SELECT COUNT(*) FROM kw_approvals a WHERE a.merge_id=m.id AND a.head_id=m.head_id AND a.actor_id=?) AS approved_by_me FROM kw_merges m JOIN kw_branches b ON b.id=m.branch_id WHERE b.state<>'closed' AND (b.visibility='members' OR b.owner_id=?) ORDER BY m.updated_at DESC,m.id",this.actor.id,this.actor.id).all<KnowledgeMerge>();return {merges:rows.results};}
- async qualified(){return (await this.mergeRequests()).merges.filter(m=>m.state==='open'&&m.head_id===m.current_head_id&&m.approval_count>=3);}
- async mergeRequest(id:string){const m=(await this.mergeRequests()).merges.find(m=>m.id===id);if(!m)throw new KnowledgeError(404,'NOT_FOUND','合并请求不存在或不可见');return m;}
- async submitReview(input:unknown){const a=workspaceSchemas.review.parse(input);return this.command(a,'review.submit',async at=>{
-  const source=await this.branch(a.branch_id);this.editable(source,a.expected_version);const document=await this.document(source.id,a.document_id);if(document.id!==a.version_id)throw new KnowledgeError(409,'CONFLICT','草稿内容已变化，请重新核对');
-  const existing=await this.stmt('SELECT m.id,m.branch_id,m.head_id,m.state FROM kw_review_sources s JOIN kw_merges m ON m.id=s.merge_id WHERE s.source_branch_id=? AND s.document_id=? AND s.source_version_id=? AND m.state<>\'closed\'',source.id,document.document_id,document.id).first<Record<string,unknown>>();if(existing)return {statements:[],result:{...existing,document_id:document.document_id}};
-  const main=await this.branch('main'),base=await this.stmt('SELECT base_version_id FROM kw_items WHERE branch_id=? AND document_id=?',source.id,document.document_id).first<{base_version_id:string|null}>();if(base?.base_version_id===document.id)throw new KnowledgeError(400,'NO_CHANGES','这篇文档没有待审核的修改');
-  const branchId=uid(),commitId=uid(),mergeId=uid(),reason=a.reason||'提交审核';
-  return {statements:[
-   this.stmt('INSERT INTO kw_branches(id,name,owner_id,owner_name,visibility,head_id,base_head_id,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)',branchId,document.title.slice(0,55)+' · '+branchId.slice(0,8),this.actor.id,this.actor.name,'members',commitId,main.head_id,at,at),
-   this.stmt("INSERT INTO kw_items SELECT ?,document_id,version_id,version_id FROM kw_items WHERE branch_id='main'",branchId),
-   this.stmt('INSERT INTO kw_items VALUES(?,?,?,?) ON CONFLICT(branch_id,document_id) DO UPDATE SET version_id=excluded.version_id,base_version_id=excluded.base_version_id',branchId,document.document_id,document.id,base?.base_version_id??null),
-   this.stmt('INSERT INTO kw_commits VALUES(?,?,?,?,?,?,?,?)',commitId,branchId,main.head_id,null,reason,this.actor.id,this.actor.name,at),
-   this.stmt('INSERT INTO kw_changes VALUES(?,?,?,?)',commitId,document.document_id,base?.base_version_id??null,document.id),
-   this.stmt('INSERT INTO kw_merges(id,branch_id,head_id,title,reason,author_id,author_name,created_at,updated_at,auto_promote) VALUES(?,?,?,?,?,?,?,?,?,1)',mergeId,branchId,commitId,document.title,reason,this.actor.id,this.actor.name,at,at),
-   this.stmt('INSERT INTO kw_review_sources VALUES(?,?,?,?) ON CONFLICT(source_branch_id,document_id,source_version_id) DO UPDATE SET merge_id=excluded.merge_id',source.id,document.document_id,document.id,mergeId),
-  ],result:{id:mergeId,branch_id:branchId,head_id:commitId,document_id:document.document_id,state:'open'}};
- });}
- async propose(input:unknown){const a=workspaceSchemas.merge.parse(input);return this.command(a,'merge.propose',async at=>{const diff=await this.diff(a.branch_id),b=diff.branch;this.editable(b,a.expected_version);if(b.visibility!=='members')throw new KnowledgeError(409,'PRIVATE_BRANCH','请先明确共享该分支，再征求成员同意');if(!b.head_id||!diff.changes.length)throw new KnowledgeError(400,'NO_CHANGES','此分支没有需要合入的修改');const old=await this.stmt("SELECT * FROM kw_merges WHERE branch_id=? AND state='open'",b.id).first<KnowledgeMerge>(),id=old?.id??uid();return {statements:[old?this.stmt('UPDATE kw_merges SET head_id=?,title=?,reason=?,version=version+1,updated_at=? WHERE id=?',b.head_id,a.title,a.reason,at,id):this.stmt('INSERT INTO kw_merges(id,branch_id,head_id,title,reason,author_id,author_name,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)',id,b.id,b.head_id,a.title,a.reason,this.actor.id,this.actor.name,at,at)],result:{id,head_id:b.head_id}};});}
- async approve(input:unknown){const a=workspaceSchemas.approve.parse(input);return this.command(a,'merge.approve',async at=>{
-  const m=await this.mergeRequest(a.id);if(m.state!=='open'||m.head_id!==m.current_head_id||a.head_id!==m.head_id)throw new KnowledgeError(409,'STALE_PROPOSAL','修改版本已变化，请先阅读最新合并请求');const actor=this.actor;if('kind' in actor||!actor.membership_id)throw new KnowledgeError(403,'FORMAL_MEMBER_REQUIRED','需要当前正式成员身份');
-  const statements=[this.stmt('INSERT OR IGNORE INTO kw_approvals VALUES(?,?,?,?,?,?,?)',m.id,m.head_id,actor.id,actor.name,actor.membership_id,actor.verified_at,at)],count=m.approval_count+(m.approved_by_me?0:1);
-  let pending:string|null=null;
-  if(m.auto_promote&&count>=3){
-   const diff=await this.diff(m.branch_id),others=(await this.qualified()).filter(x=>x.id!==m.id),ids=JSON.stringify(diff.changes.map(c=>c.document_id));
-   // Keep concurrent alternatives open even while their voting is still in progress.
-   const competing=await this.stmt("SELECT 1 FROM kw_merges x JOIN kw_branches b ON b.id=x.branch_id JOIN kw_items i ON i.branch_id=b.id WHERE x.id<>? AND x.state='open' AND x.head_id=b.head_id AND i.version_id IS NOT i.base_version_id AND i.document_id IN (SELECT value FROM json_each(?)) LIMIT 1",m.id,ids).first();
-   if(others.length||competing)pending='choice';else if(diff.changes.some(c=>c.conflict))pending='conflict';else if(!diff.changes.length)pending='no_changes';else {const merged=this.mergeChanges(m,at,null,diff);return {statements:[...statements,...merged.statements],result:{...merged.result,head_id:m.head_id,agreed:true,approval_count:count,merged:true}};}
+import { now } from './types.ts';
+import type { CatalogActor } from './catalog.ts';
+import type { KnowledgeBranch, KnowledgeMerge, KnowledgeDiff } from '../../app/shared/knowledge.ts';
+import * as records from './workspace/records.ts';
+import * as command from './workspace/command.ts';
+import * as branches from './workspace/branches.ts';
+import * as categories from './workspace/categories.ts';
+import * as documents from './workspace/documents.ts';
+import * as review_queries from './workspace/review-queries.ts';
+import * as reviews from './workspace/reviews.ts';
+import * as issue_queries from './workspace/issue-queries.ts';
+import * as discussions from './workspace/discussions.ts';
+import { createWorkspaceContext, type ServiceContext } from './workspace/context.ts';
+// Stable HTTP/MCP adapter. Commands keep their original atomic batch boundary.
+export { workspaceSchemas } from './workspace/inputs.ts';
+export class KnowledgeWorkspace {
+  private readonly context: ServiceContext;
+  constructor(readonly db: D1Database, readonly actor: CatalogActor, readonly clock: () => string = now) {
+    this.context = createWorkspaceContext(db, actor, clock);
   }
-  return {statements,result:{id:m.id,head_id:m.head_id,agreed:true,approval_count:count,merged:false,pending}};
- });}
- async accept(input:unknown){const a=workspaceSchemas.accept.parse(input);return this.command(a,'merge.accept',async at=>{
-  const m=await this.mergeRequest(a.id),qualified=await this.qualified();if(m.state!=='open'||m.head_id!==m.current_head_id||a.head_id!==m.head_id)throw new KnowledgeError(409,'STALE_PROPOSAL','修改版本已变化，请重新确认');if(!qualified.some(x=>x.id===m.id))throw new KnowledgeError(403,'THREE_APPROVALS_REQUIRED','需要至少三名不同正式成员同意当前修改版本');
-  const candidates=qualified.map(x=>({id:x.id,head_id:x.head_id})).sort((x,y)=>x.id.localeCompare(y.id));let selection:unknown=null;
-  if(qualified.length>1&&!a.selection)throw new KnowledgeError(409,'CONSENSUS_CHOICE_REQUIRED','多个候选均已达标，请通过会议或议题记录选择结论');
-  if(a.selection?.kind==='issue'){const issue=await this.issue(a.selection.issue_id);if(issue.state!=='closed'||issue.selected_merge_id!==m.id||canonical(JSON.parse(issue.candidates_json??'[]'))!==canonical(candidates))throw new KnowledgeError(409,'CHOICE_STALE','议题尚未确定该候选，或达标候选已变化');selection={kind:'issue',issue_id:issue.id,resolution:issue.resolution,candidates};}
-  else if(a.selection)selection={...a.selection,candidates};
-  const {branch,main,changes}=await this.diff(m.branch_id);if(main.version!==a.main_version)throw new KnowledgeError(409,'MAIN_CHANGED','主分支已变化，请重新比较');if(changes.some(c=>c.conflict))throw new KnowledgeError(409,'MERGE_CONFLICT','存在内容冲突，请先在分支中解决并重新征求同意');if(!changes.length)throw new KnowledgeError(409,'NO_CHANGES','没有需要合入的内容');
-  return this.mergeChanges(m,at,selection,{branch,main,changes});
- });}
- mergeChanges(m:KnowledgeMerge,at:string,selection:unknown,{branch,main,changes}:{branch:KnowledgeBranch;main:KnowledgeBranch;changes:KnowledgeDiff[]}){
-  const commit=uid(),ids=JSON.stringify(changes.map(c=>c.document_id));return {statements:[
-   this.commit(commit,main,'合入：'+m.title,at,branch.head_id),
-   this.stmt('INSERT INTO kw_changes SELECT ?,i.document_id,m.version_id,i.version_id FROM kw_items i LEFT JOIN kw_items m ON m.branch_id=\'main\' AND m.document_id=i.document_id WHERE i.branch_id=? AND i.document_id IN (SELECT value FROM json_each(?))',commit,branch.id,ids),
-   this.stmt('INSERT INTO kw_items(branch_id,document_id,version_id) SELECT \'main\',document_id,version_id FROM kw_items WHERE branch_id=? AND document_id IN (SELECT value FROM json_each(?)) ON CONFLICT(branch_id,document_id) DO UPDATE SET version_id=excluded.version_id',branch.id,ids),
-   this.stmt('UPDATE kw_branches SET head_id=?,version=version+1,updated_at=? WHERE id=\'main\'',commit,at),
-   this.stmt("UPDATE kw_branches SET state='merged',version=version+1,updated_at=? WHERE id=?",at,branch.id),
-   this.stmt("UPDATE kw_merges SET state='merged',version=version+1,updated_at=?,merged_at=?,selection_json=? WHERE id=?",at,at,selection?JSON.stringify(selection):null,m.id),
-  ],result:{id:m.id,commit_id:commit,branch_id:branch.id,main_version:main.version+1,selection}};
- }
- async resolveConflict(input:unknown){const a=workspaceSchemas.resolve.parse(input);return this.command(a,'branch.resolve',async at=>{const {branch,main,changes}=await this.diff(a.branch_id);this.editable(branch,a.expected_version);if(main.version!==a.main_version)throw new KnowledgeError(409,'MAIN_CHANGED','主分支已变化');const change=changes.find(c=>c.document_id===a.document_id);if(!change?.conflict)throw new KnowledgeError(409,'NO_CONFLICT','该条目当前没有冲突');const version=a.choice==='main'?change.current?.id:change.proposed.id;if(!version)throw new KnowledgeError(400,'INVALID_RESOLUTION','请选择保留分支版本');const commit=uid();return {statements:[this.commit(commit,branch,'解决冲突：'+change.proposed.title,at),this.stmt('INSERT INTO kw_changes VALUES(?,?,?,?)',commit,a.document_id,change.proposed.id,version),this.stmt('UPDATE kw_items SET base_version_id=?,version_id=? WHERE branch_id=? AND document_id=?',change.current?.id??null,version,branch.id,a.document_id),this.stmt('UPDATE kw_branches SET head_id=?,version=version+1,updated_at=? WHERE id=?',commit,at,branch.id)],result:{id:branch.id,version:branch.version+1,head_id:commit}};});}
- async issues(offset=0){if(this.guest)return {issues:[],next_offset:null};const rows=await this.stmt('SELECT * FROM kw_issues ORDER BY updated_at DESC,id LIMIT 41 OFFSET ?',offset).all<KnowledgeIssue>();return {issues:rows.results.slice(0,40),next_offset:rows.results.length>40?offset+40:null};}
- async issue(id:string){if(this.guest)throw new KnowledgeError(404,'NOT_FOUND','议题不存在或不可见');const row=await this.stmt('SELECT * FROM kw_issues WHERE id=?',id).first<KnowledgeIssue>();if(!row)throw new KnowledgeError(404,'NOT_FOUND','议题不存在');return row;}
- async createIssue(input:unknown){const a=workspaceSchemas.issue.parse(input);return this.command(a,'issue.create',async at=>{if(a.document_id)await this.document('main',a.document_id);const id=uid();return {statements:[this.stmt('INSERT INTO kw_issues(id,number,title,body,document_id,author_id,author_name,created_at,updated_at) VALUES(?,(SELECT COALESCE(MAX(number),0)+1 FROM kw_issues),?,?,?,?,?,?,?)',id,a.title,a.body,a.document_id??null,this.actor.id,this.actor.name,at,at)],result:{id}};});}
- async categoryPublic(id:string){return !!await this.stmt("SELECT 1 FROM kw_categories c WHERE c.id=? AND (c.independent=1 OR EXISTS(SELECT 1 FROM kw_items i JOIN kw_versions v ON v.id=i.version_id JOIN kw_branches b ON b.id=i.branch_id WHERE v.category_id=c.id AND v.deleted=0 AND b.visibility='members' AND b.state<>'closed'))",id).first();}
- async issueFromComment(input:unknown){const a=workspaceSchemas.issueFromComment.parse(input);return this.command(a,'issue.from_annotation',async at=>{
-  const c=await this.stmt('SELECT * FROM kw_comments WHERE id=?',a.comment_id).first<KnowledgeComment>();if(!c?.quote)throw new KnowledgeError(404,'NOT_FOUND','批注不存在或不可见');
-  if(c.branch_id){const b=await this.branch(c.branch_id);if(b.visibility==='private')throw new KnowledgeError(409,'PRIVATE_SOURCE','请先将引用内容提交到公开，再发起议题');}
-  let title:string;if(c.document_id)title=(await this.document(c.branch_id!,c.document_id)).title;else if(c.category_id&&await this.categoryPublic(c.category_id))title=(await this.stmt('SELECT name FROM kw_categories WHERE id=?',c.category_id).first<{name:string}>())!.name;else throw new KnowledgeError(404,'NOT_FOUND','引用来源不可见');
-  const source={kind:c.category_id?'category':'document',title,branch_id:c.branch_id,document_id:c.document_id,category_id:c.category_id,version_id:c.version_id,quote:c.quote,comment:c.body,author_name:c.author_name},id=uid();
-  return {statements:[this.stmt('INSERT INTO kw_issues(id,number,title,body,document_id,category_id,source_comment_id,source_json,author_id,author_name,created_at,updated_at) VALUES(?,(SELECT COALESCE(MAX(number),0)+1 FROM kw_issues),?,?,?,?,?,?,?,?,?,?)',id,a.title,a.body,c.document_id,c.category_id,c.id,JSON.stringify(source),this.actor.id,this.actor.name,at,at)],result:{id}};
- });}
- async setIssueState(input:unknown){const a=workspaceSchemas.issueState.parse(input);return this.command(a,'issue.state',async at=>{const issue=await this.issue(a.id);if(issue.version!==a.expected_version)throw new KnowledgeError(409,'CONFLICT','议题已更新');if(a.state==='closed'&&!a.resolution)throw new KnowledgeError(400,'RESOLUTION_REQUIRED','请记录议题结论');let candidates:null|{id:string;head_id:string}[]=null;if(a.selected_merge_id){if(a.state!=='closed')throw new KnowledgeError(400,'CHOICE_REQUIRES_CONCLUSION','请选择已形成结论的议题');const qualified=await this.qualified();if(!qualified.some(m=>m.id===a.selected_merge_id))throw new KnowledgeError(409,'CANDIDATE_NOT_QUALIFIED','该候选尚未获得三名正式成员同意');candidates=qualified.map(m=>({id:m.id,head_id:m.head_id})).sort((a,b)=>a.id.localeCompare(b.id));}return {statements:[this.stmt('UPDATE kw_issues SET state=?,resolution=?,selected_merge_id=?,candidates_json=?,version=version+1,updated_at=? WHERE id=?',a.state,a.resolution,a.selected_merge_id??null,candidates?JSON.stringify(candidates):null,at,a.id)],result:{id:a.id,version:issue.version+1}};});}
- async comments(query:{branch_id?:string;document_id?:string;category_id?:string;issue_id?:string;offset?:number}){
-  let where:string,args:unknown[];
-  if(query.document_id){await this.document(query.branch_id??'main',query.document_id);where='branch_id=? AND document_id=?';args=[query.branch_id??'main',query.document_id];}
-  else if(query.category_id){await this.category(query.branch_id??'main',query.category_id);where="category_id=? AND (branch_id IS NULL OR branch_id=? OR (?=0 AND branch_id IN (SELECT id FROM kw_branches WHERE visibility='members' AND state<>'closed')))";args=[query.category_id,query.branch_id??'main',this.guest?1:0];}
-  else if(query.issue_id){await this.issue(query.issue_id);where='issue_id=?';args=[query.issue_id];}
-  else throw new KnowledgeError(400,'COMMENT_TARGET_REQUIRED','请选择评论对象');
-  const rows=await this.stmt(`SELECT * FROM kw_comments WHERE ${where} ORDER BY created_at,id LIMIT 101 OFFSET ?`,...args,query.offset??0).all<KnowledgeComment>();return {comments:rows.results.slice(0,100),next_offset:rows.results.length>100?(query.offset??0)+100:null};
- }
- async comment(input:unknown){const a=workspaceSchemas.comment.parse(input);return this.command(a,'comment.create',async at=>{
-  let branchId=a.document_id||a.category_id?a.branch_id??'main':null,prefix:string|null=null,suffix:string|null=null;
-  const category=a.category_id?await this.category(a.branch_id??'main',a.category_id):null;
-  const text=a.document_id?await this.document(branchId!,a.document_id):category?{id:category.definition_version_id,body:category.definition}:null;
-  if(category&&await this.categoryPublic(category.id))branchId=null;
-  if(text){if(a.quote!==undefined){if(a.version_id!==text.id||a.start_offset===undefined||a.end_offset===undefined||a.end_offset>text.body.length||a.end_offset<=a.start_offset||text.body.slice(a.start_offset,a.end_offset)!==a.quote)throw new KnowledgeError(409,'QUOTE_CHANGED','引用原文已变化，请重新选择');prefix=text.body.slice(Math.max(0,a.start_offset-40),a.start_offset);suffix=text.body.slice(a.end_offset,a.end_offset+40);}else if(a.version_id||a.start_offset!==undefined||a.end_offset!==undefined)throw new KnowledgeError(400,'QUOTE_REQUIRED','批注必须包含原文');}
-  else if(a.quote!==undefined||a.version_id||a.start_offset!==undefined||a.end_offset!==undefined)throw new KnowledgeError(400,'DOCUMENT_QUOTE_REQUIRED','只能引用文档或分类解释');
-  if(a.issue_id)await this.issue(a.issue_id);
-  let parent:KnowledgeComment|null=null;if(a.parent_id){parent=await this.stmt('SELECT * FROM kw_comments WHERE id=?',a.parent_id).first<KnowledgeComment>();if(parent?.category_id&&parent.category_id===a.category_id&&parent.branch_id){await this.branch(parent.branch_id);branchId=parent.branch_id;}if(!parent||parent.document_id!==(a.document_id??null)||parent.branch_id!==branchId||parent.category_id!==(a.category_id??null)||parent.issue_id!==(a.issue_id??null))throw new KnowledgeError(400,'PARENT_MISMATCH','回复对象不属于这条讨论');}
-  const id=uid();return {statements:[this.stmt('INSERT INTO kw_comments VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',id,branchId,a.document_id??null,a.category_id??null,a.issue_id??null,parent?.id??null,parent?.version_id??a.version_id??null,parent?.quote??a.quote??null,parent?.start_offset??a.start_offset??null,parent?.end_offset??a.end_offset??null,parent?.prefix??prefix,parent?.suffix??suffix,a.body,this.actor.id,this.actor.name,at)],result:{id}};
- });}
- async history(branchId:string,offset=0){await this.branch(branchId);const rows=await this.stmt('WITH RECURSIVE ancestry(id) AS (SELECT head_id FROM kw_branches WHERE id=? UNION SELECT c.parent_id FROM kw_commits c JOIN ancestry a ON c.id=a.id WHERE c.parent_id IS NOT NULL UNION SELECT c.merge_parent_id FROM kw_commits c JOIN ancestry a ON c.id=a.id WHERE c.merge_parent_id IS NOT NULL) SELECT c.* FROM kw_commits c JOIN ancestry a ON a.id=c.id WHERE (?=0 OR c.branch_id=\'main\') ORDER BY c.created_at DESC,c.id DESC LIMIT 51 OFFSET ?',branchId,this.guest?1:0,offset).all();return {commits:rows.results.slice(0,50),next_offset:rows.results.length>50?offset+50:null};}
- async commitDetail(branchId:string,id:string){await this.branch(branchId);const reachable=await this.stmt('WITH RECURSIVE ancestry(id) AS (SELECT head_id FROM kw_branches WHERE id=? UNION SELECT c.parent_id FROM kw_commits c JOIN ancestry a ON a.id=c.id WHERE c.parent_id IS NOT NULL UNION SELECT c.merge_parent_id FROM kw_commits c JOIN ancestry a ON a.id=c.id WHERE c.merge_parent_id IS NOT NULL) SELECT id FROM ancestry WHERE id=?',branchId,id).first();if(!reachable||(this.guest&&!(await this.stmt("SELECT id FROM kw_commits WHERE id=? AND branch_id='main'",id).first())))throw new KnowledgeError(404,'NOT_FOUND','版本不存在或不可见');const commit=await this.stmt('SELECT * FROM kw_commits WHERE id=?',id).first();const rows=(await this.stmt('SELECT * FROM kw_changes WHERE commit_id=?',id).all<{document_id:string;before_id:string|null;after_id:string}>()).results;const changes=[];for(const row of rows)changes.push({document_id:row.document_id,before:await this.version(row.before_id),after:await this.version(row.after_id)});return {commit,changes};}
+  stmt(sql: string, ...args: unknown[]) {
+    return this.context.stmt(sql, ...args);
+  }
+  get guest() {
+    return this.context.guest;
+  }
+  get identity() {
+    return this.context.identity;
+  }
+  writer() {
+    return records.assertWriter(this.context);
+  }
+  branch(id: string) {
+    return records.getBranch(this.context, id);
+  }
+  editable(b: KnowledgeBranch, version: number) {
+    return records.assertEditable(this.context, b, version);
+  }
+  receipt(id: string, fingerprint?: string) {
+    return command.findReceipt(this.context, id, fingerprint);
+  }
+  command(input: {
+    request_id: string;
+  }, operation: string, build: (at: string) => Promise<{
+    statements: D1PreparedStatement[];
+    result: Record<string, unknown>;
+  }>) {
+    return command.runCommand(this.context, input, operation, build);
+  }
+  branches() {
+    return branches.listBranches(this.context);
+  }
+  createBranch(input: unknown) {
+    return branches.createBranch(this.context, input);
+  }
+  shareBranch(input: unknown) {
+    return branches.shareBranch(this.context, input);
+  }
+  deleteBranch(input: unknown) {
+    return branches.deleteBranch(this.context, input);
+  }
+  categories(branchId = 'main') {
+    return categories.listCategories(this.context, branchId);
+  }
+  list(input: unknown) {
+    return documents.listDocuments(this.context, input);
+  }
+  document(branchId: string, id: string) {
+    return records.getDocument(this.context, branchId, id);
+  }
+  get(branchId: string, id: string) {
+    return documents.readDocument(this.context, branchId, id);
+  }
+  version(id: string | null) {
+    return records.getVersion(this.context, id);
+  }
+  commit(id: string, b: KnowledgeBranch, message: string, at: string, mergeParent: string | null = null) {
+    return records.prepareCommit(this.context, id, b, message, at, mergeParent);
+  }
+  save(input: unknown) {
+    return documents.saveDocument(this.context, input);
+  }
+  remove(input: unknown) {
+    return documents.removeDocument(this.context, input);
+  }
+  category(branchId: string, id: string) {
+    return categories.getCategory(this.context, branchId, id);
+  }
+  categoryChanges(a: {
+    id?: string;
+    branch_id: string;
+    expected_version?: number;
+    name?: string;
+    definition: string;
+  }, at: string) {
+    return categories.prepareCategoryChanges(this.context, a, at);
+  }
+  editCategory(input: unknown) {
+    return categories.editCategory(this.context, input);
+  }
+  defineCategory(input: unknown) {
+    return categories.defineCategory(this.context, input);
+  }
+  diff(branchId: string) {
+    return documents.branchDiff(this.context, branchId);
+  }
+  mergeRequests() {
+    return review_queries.listMergeRequests(this.context);
+  }
+  qualified() {
+    return review_queries.qualifiedMerges(this.context);
+  }
+  mergeRequest(id: string) {
+    return review_queries.getMergeRequest(this.context, id);
+  }
+  submitReview(input: unknown) {
+    return reviews.submitReview(this.context, input);
+  }
+  propose(input: unknown) {
+    return reviews.proposeMerge(this.context, input);
+  }
+  approve(input: unknown) {
+    return reviews.approveMerge(this.context, input);
+  }
+  accept(input: unknown) {
+    return reviews.acceptMerge(this.context, input);
+  }
+  mergeChanges(m: KnowledgeMerge, at: string, selection: unknown, changeSet3: {
+    branch: KnowledgeBranch;
+    main: KnowledgeBranch;
+    changes: KnowledgeDiff[];
+  }) {
+    return reviews.mergeChanges(this.context, m, at, selection, changeSet3);
+  }
+  resolveConflict(input: unknown) {
+    return branches.resolveConflict(this.context, input);
+  }
+  issues(offset = 0) {
+    return issue_queries.listIssues(this.context, offset);
+  }
+  issue(id: string) {
+    return issue_queries.getIssue(this.context, id);
+  }
+  createIssue(input: unknown) {
+    return discussions.createIssue(this.context, input);
+  }
+  categoryPublic(id: string) {
+    return categories.isCategoryPublic(this.context, id);
+  }
+  issueFromComment(input: unknown) {
+    return discussions.issueFromComment(this.context, input);
+  }
+  setIssueState(input: unknown) {
+    return discussions.setIssueState(this.context, input);
+  }
+  comments(query: {
+    branch_id?: string;
+    document_id?: string;
+    category_id?: string;
+    issue_id?: string;
+    offset?: number;
+  }) {
+    return discussions.listComments(this.context, query);
+  }
+  comment(input: unknown) {
+    return discussions.addComment(this.context, input);
+  }
+  history(branchId: string, offset = 0) {
+    return branches.branchHistory(this.context, branchId, offset);
+  }
+  commitDetail(branchId: string, id: string) {
+    return branches.commitDetail(this.context, branchId, id);
+  }
 }
