@@ -92,6 +92,7 @@ export const eventLabels: Record<string, string> = {
   expired: '任务到期',
   completed: '提交结果并完成',
   archive_status_changed: '档案状态变化',
+  recognition_withdrawn: '人员认可已撤回',
   comment_created: '发表评论',
   comment_updated: '编辑评论',
   comment_deleted: '删除评论',

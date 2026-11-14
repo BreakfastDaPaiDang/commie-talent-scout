@@ -12,6 +12,7 @@ import type {Archive} from '../shared/archives';
 export function ArchiveQuickAction({archive,openTaskCount,onChanged}:{archive:Archive;openTaskCount:number;onChanged:()=>void}){
  const[confirm,setConfirm]=useState(false),action=archivePrimaryAction(archive);
  if(!action)return null;
+ if(archive.type==='person'&&['人事审核','已加入待对接','已入伙'].includes(action.status))return null;
  return <div className="archive-primary-action"><DetailActions><button className="button primary" onClick={()=>setConfirm(true)}><Icon name="check"/>{action.label}</button></DetailActions>{confirm&&<StateConfirmation key={archive.version} archive={archive} action={action} openTaskCount={openTaskCount} onClose={()=>setConfirm(false)} onChanged={onChanged}/>}</div>;
 }
 function StateConfirmation({archive,action,openTaskCount,onClose,onChanged}:{archive:Archive;action:NonNullable<ReturnType<typeof archivePrimaryAction>>;openTaskCount:number;onClose:()=>void;onChanged:()=>void}){

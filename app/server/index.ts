@@ -1,3 +1,4 @@
+import {PersonnelRecognition} from './personnel-recognition.ts';
 import {Resources} from './resources.ts';
 import {knowledgeIdentity,knowledgeMembers} from './knowledge-identity.ts';
 import {catalogProxy,catalogMode} from './catalog-bridge.ts';
@@ -64,7 +65,7 @@ app.onError((error,c)=>{
   console.error(JSON.stringify({event:'request.failed',path:c.req.path,code:'INTERNAL_ERROR'}));
   return c.json({error:{code:'INTERNAL_ERROR',message:'服务暂时不可用，请稍后重试'}},500);
 });
-app.get('/api/health',c=>c.json({ok:true,version:'1.0.0',environment:c.env.ENVIRONMENT,catalog_bridge:1,knowledge_workspace:1}));
+app.get('/api/health',c=>c.json({ok:true,version:'1.1.0',environment:c.env.ENVIRONMENT,catalog_bridge:1,knowledge_workspace:1}));
 app.all('/api/catalog/*',c=>catalogProxy(c.req.raw,c.env));
 app.all('/api/knowledge-workspace/*',c=>catalogProxy(c.req.raw,c.env,true));
 app.post('/api/auth/login',async c=>{
@@ -119,6 +120,9 @@ app.post('/api/admin/members/profile',async c=>c.json(await new Members(c.env,aw
 app.get('/api/admin/members/:id/history',async c=>c.json(await new Members(c.env,await authenticate(c.req.raw,c.env),'web').history(c.req.param('id'))));
 app.get('/api/admin/members/:id',async c=>c.json(await new Members(c.env,await authenticate(c.req.raw,c.env),'web').detail(c.req.param('id'))));
 app.get('/api/commands/:id',async c=>c.json(await getRequestResult(c.env,await authenticate(c.req.raw,c.env),c.req.param('id'))));
+app.get('/api/personnel-recognition/:id',async c=>c.json(await new PersonnelRecognition(c.env,await authenticate(c.req.raw,c.env),'web').summary({archive_id:c.req.param('id')})));
+app.post('/api/personnel-recognition/recognize',async c=>c.json(await new PersonnelRecognition(c.env,await authenticate(c.req.raw,c.env),'web').recognize(await c.req.json())));
+app.post('/api/personnel-recognition/withdraw',async c=>c.json(await new PersonnelRecognition(c.env,await authenticate(c.req.raw,c.env),'web').withdraw(await c.req.json())));
 app.get('/api/archives',async c=>c.json(await new Archives(c.env,await authenticate(c.req.raw,c.env),'web').list({...c.req.query(),tag_ids:c.req.query('tag_ids')?.split(',').filter(Boolean)??[]})));
 app.get('/api/members',async c=>c.json(await new Members(c.env,await authenticate(c.req.raw,c.env),'web').directory(c.req.query())));
 app.post('/api/archives/delete',async c=>c.json(await new Archives(c.env,await authenticate(c.req.raw,c.env),'web').setDeleted(await c.req.json(),true)));

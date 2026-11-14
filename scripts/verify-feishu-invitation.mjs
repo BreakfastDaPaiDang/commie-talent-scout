@@ -1,3 +1,4 @@
+import {recognizeThree} from '../tests/personnel-fixture.mjs';
 import assert from 'node:assert/strict';
 import {mkdirSync} from 'node:fs';
 import {randomUUID as id} from 'node:crypto';
@@ -12,7 +13,7 @@ export async function verifyFeishuInvitation({page,f,base}){
  for(const width of [1440,390]){
   await page.clock.setFixedTime(new Date(at));await page.setViewportSize({width,height:width===390?844:1080});
   const archive=await archives.create({type:'person',name:`飞书接入验收 ${width}`,request_id:id()});
-  const refer=await tasks.refer({archive_id:archive.id,expected_version:archive.version,deadline_at:'2099-01-01T00:00:00.000Z',request_id:id()});
+  const refer=await recognizeThree(f,archive.id);
   const audit=await tasks.claim({id:refer.task_id,expected_version:1,request_id:id()}),auditObs=await observations.create({archive_id:archive.id,body:'确认审核通过',request_id:id()});
   const approved=await tasks.complete({id:audit.id,expected_version:audit.version,result_kind:'audit_passed',result_text:'审核完成',references:[{observation_id:auditObs.id,content_version:1}],request_id:id()});assert.notEqual(approved.membership_joined,true);
   await tasks.claim({id:approved.next_task_id,expected_version:1,request_id:id()});await observations.create({archive_id:archive.id,body:'本轮对接已完成，可以正式入社。',request_id:id()});

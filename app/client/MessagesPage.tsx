@@ -6,7 +6,7 @@ import {api} from './api';
 import './messages.css';
 
 type Message={id:string;kind:string;task_id:string|null;title:string;body:string;deadline_at:string|null;created_at:string;read:boolean;task_status:string|null;archive_id:string|null;archive_name:string|null};
-const kindLabel:Record<string,string>={task_deadline_reminder:'任务截止提醒',task_expired_uncompleted:'任务未完成关闭',task_overdue:'任务已逾期',archive_status_changed:'对象状态变化'};
+const kindLabel:Record<string,string>={task_deadline_reminder:'任务截止提醒',task_expired_uncompleted:'任务未完成关闭',task_overdue:'任务已逾期',archive_status_changed:'对象状态变化',personnel_recognition_withdrawn:'人员认可已撤回'};
 
 function time(value:string){return new Date(value).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai',year:'numeric',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false});}
 

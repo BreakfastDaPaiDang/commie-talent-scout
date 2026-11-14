@@ -19,7 +19,7 @@ export class NotificationQuery{
  private stmt(sql:string,...args:unknown[]){return this.env.DB.prepare(sql).bind(...args);}
  private projection(){
   const eligible=recipientPredicate(this.actor),at=now();
-  const taskActive=`(m.task_id IS NULL OR (
+  const taskActive=`(m.task_id IS NULL OR (m.kind='personnel_recognition_withdrawn' AND t.owner_id=m.recipient_id) OR (
    t.owner_id=m.recipient_id AND t.version=m.task_version AND (
     (m.kind='task_deadline_reminder' AND t.status='open' AND t.deadline_at=m.deadline_at AND t.deadline_at>?) OR
     (m.kind='task_overdue' AND t.status='open' AND t.deadline_at=m.deadline_at AND t.deadline_at<=?) OR

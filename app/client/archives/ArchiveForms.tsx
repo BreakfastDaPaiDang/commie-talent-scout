@@ -69,7 +69,7 @@ export function ArchiveForm({
     [error, setError] = useState(''),
     [requestId] = useState(() => crypto.randomUUID()),
     [similar, setSimilar] = useState<Archive[]>([]),
-    [status, setStatus] = useState(createStatus ?? '视奸观察'),
+    [status, setStatus] = useState('视奸观察'),
     [members, setMembers] = useState<BoundMember[]>([]);
   useEffect(() => {
     if (initial || !name.trim()) {
@@ -129,7 +129,7 @@ export function ArchiveForm({
   return <form className="manage-form archive-form" onSubmit={save}>
   {reminder.needed && <p className="contact-reminder" role="status">{reminder.message}</p>}
   <ProfileFields type={type} nameManaged={!!initial?.linked_account_id} name={name} setName={setName} currentNeed={currentNeed} setCurrentNeed={setCurrentNeed} contacts={contacts} setContacts={setContacts} links={links} setLinks={setLinks}>{similar.length > 0 && <p className="similar-archives">已有相似档案：{similar.map(a => a.name).join('、')}。同名不同对象可以继续创建。</p>}</ProfileFields>
-   {!initial && createStatus ? <p className="archive-readonly">身份：社员。新建后保持开启，并沿用同一人物档案。</p> : !initial && <StateFields type={type} status={status} onStatus={s => {
+   {!initial && createStatus ? <p className="archive-readonly">先建立人物档案，三名社员认可后进入审核，再通过审核与入社对接任务转为社员。</p> : !initial && <StateFields type={type} status={status} onStatus={s => {
       setStatus(s);
       setMembers([]);
     }} members={members} onMembers={setMembers} />}

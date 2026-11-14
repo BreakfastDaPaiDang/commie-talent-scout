@@ -1,3 +1,4 @@
+import {historicalArchive} from './personnel-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID as uuid} from 'node:crypto';
@@ -22,18 +23,18 @@ test('catalog supports names beyond first page and does not leak imported delete
  const f=fixture();t.after(f.close);const labels=new WorkTaskLabels(f.env,f.actor,'web'),tasks=new WorkTasks(f.env,f.actor,'mcp'),archives=new Archives(f.env,f.actor,'web');
  for(let i=0;i<35;i++)await labels.create({name:'专项'+String(i).padStart(2,'0'),request_id:uuid()});
  const first=await labels.list({query:'专项',limit:30});assert.equal(first.labels.length,30);assert.equal(first.next_offset,30);assert.equal((await labels.list({query:'专项',offset:30})).labels.length,5);assert.equal((await labels.list({query:'专项34'})).labels.length,1);
- const a=await archives.create({type:'person',name:'隐藏对象',request_id:uuid()});await tasks.create(input({archive_id:a.id,labels:['历史隐藏标签']}));f.sqlite.prepare("UPDATE work_task_labels SET created_by=NULL WHERE key='历史隐藏标签'").run();f.sqlite.prepare('UPDATE archives SET deleted=1 WHERE id=?').run(a.id);
+ const a=await historicalArchive(f,archives,{type:'person',name:'隐藏对象',request_id:uuid()});await tasks.create(input({archive_id:a.id,labels:['历史隐藏标签']}));f.sqlite.prepare("UPDATE work_task_labels SET created_by=NULL WHERE key='历史隐藏标签'").run();f.sqlite.prepare('UPDATE archives SET deleted=1 WHERE id=?').run(a.id);
  assert.equal((await labels.list({query:'历史隐藏'})).labels.length,0);assert.equal((await tasks.list({labels:['历史隐藏标签']})).tasks.length,0);
  f.actor.role='admin';assert.equal((await labels.list({query:'历史隐藏'})).labels[0].usage_count,1);
 });
 test('task edit failure rolls back new label registration and retries reuse one label',async t=>{
- const f=fixture();t.after(f.close);const service=new WorkTasks(f.env,f.actor,'mcp'),task=await service.create(input());
+ const f=fixture();t.after(f.close);const service=new WorkTasks(f.env,f.actor,'mcp'),task=await historicalArchive(f,service,input());
  f.sqlite.exec("CREATE TRIGGER reject_edit BEFORE UPDATE ON work_tasks BEGIN SELECT RAISE(ABORT,'fixture'); END;");
  const cmd={id:task.id,expected_version:task.version,labels:['独立标签'],request_id:uuid()};await assert.rejects(service.edit(cmd),/fixture/);assert.equal(f.sqlite.prepare("SELECT count(*) n FROM work_task_labels WHERE key='独立标签'").get().n,0);f.sqlite.exec('DROP TRIGGER reject_edit');
  await service.edit(cmd);await service.edit(cmd);assert.equal(f.sqlite.prepare("SELECT count(*) n FROM work_task_labels WHERE key='独立标签'").get().n,1);
 });
 test('member paused availability roundtrips through creation, filters and state changes',async t=>{
- const f=fixture();t.after(f.close);const service=new Archives(f.env,f.actor,'web');let a=await service.create({type:'person',name:'虚构暂不接工作',status:'已入伙',member_status:'暂不接工作',request_id:uuid()});
+ const f=fixture();t.after(f.close);const service=new Archives(f.env,f.actor,'web');let a=await historicalArchive(f,service,{type:'person',name:'虚构暂不接工作',status:'已入伙',member_status:'暂不接工作',request_id:uuid()});
  assert.equal((await service.get(a.id)).member_status,'暂不接工作');assert.equal((await service.list({type:'person',person_scope:'members',member_status:'暂不接工作'})).counts.all,1);assert.equal((await service.list({type:'person',member_status:'可接工作'})).counts.all,0);
  for(const state of ['请假','可接工作','暂不接工作','失联']){a=await service.setState({id:a.id,expected_version:a.version,status:'已入伙',member_status:state,member_ids:[],request_id:uuid()});assert.equal((await service.get(a.id)).member_status,state);}
  const before=(await service.get(a.id)).version;const tasks=new WorkTasks(f.env,f.actor,'web');await tasks.create(input({archive_id:a.id}));assert.equal((await service.get(a.id)).member_status,'失联');assert.equal((await service.get(a.id)).version,before);

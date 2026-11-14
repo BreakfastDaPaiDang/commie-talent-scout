@@ -27,7 +27,7 @@ test('cancelling a nested dialog closes only its own layer and respects busy sta
  }finally{await f.close();}
 });
 test('approved workspace keeps name and state together, compact header, and tabs above composer',async()=>{
- const f=environment();const {ArchivesPage}=await import('../app/client/ArchivesPage');globalThis.fetch=async url=>Response.json(String(url).includes('/timeline')?{events:[],next_cursor:null}:String(url).includes('/members')?{members:[],next_cursor:null}:String(url).includes('/drafts')?{drafts:[]}:String(url).includes('/draft/')?{draft:null}:String(url).includes('/archives?')?{archives:[archive],next_cursor:null}:{archive});
+ const f=environment();const {ArchivesPage}=await import('../app/client/ArchivesPage');globalThis.fetch=async url=>Response.json(String(url).includes('/personnel-recognition/')?{count:0,eligible:false,can_recognize:false,quota:{remaining:0},round:null,round_number:1,mine:null,votes:[],task_id:null}:String(url).includes('/timeline')?{events:[],next_cursor:null}:String(url).includes('/members')?{members:[],next_cursor:null}:String(url).includes('/drafts')?{drafts:[]}:String(url).includes('/draft/')?{draft:null}:String(url).includes('/archives?')?{archives:[archive],next_cursor:null}:{archive});
  try{await act(async()=>{f.root.render(<ArchivesPage actor={actor} type="person"/>);});await act(async()=>{await new Promise(r=>setTimeout(r,300));});
   assert.ok(f.w.document.querySelector('.scope-filter-row .filter-toggle'),'approved prototype puts filter control on the scope row');
   assert.ok(f.w.document.querySelector('.detail-panel > .detail-top + .detail-scroll > .detail-inner'),'approved prototype has fixed detail controls and a separate scrolling body');
@@ -66,7 +66,7 @@ test('organization detail keeps its type while the archive request is pending',a
  const organization={...archive,type:'org',name:'虚构组织'};let release!:(response:Response)=>void;
  const response=new Promise<Response>(resolve=>{release=resolve;});
  f.w.history.replaceState(null,'','/organizations?archive='+id);
- globalThis.fetch=async url=>String(url)==='/api/archives/'+id?response:Response.json(String(url).includes('/timeline')?{events:[],next_cursor:null}:String(url).includes('/members')?{members:[],next_cursor:null}:String(url).includes('/drafts')?{drafts:[]}:String(url).includes('/archives?')?{archives:[organization],next_cursor:null}:{draft:null});
+ globalThis.fetch=async url=>String(url)==='/api/archives/'+id?response:Response.json(String(url).includes('/personnel-recognition/')?{count:0,eligible:false,can_recognize:false,quota:{remaining:0},round:null,round_number:1,mine:null,votes:[],task_id:null}:String(url).includes('/timeline')?{events:[],next_cursor:null}:String(url).includes('/members')?{members:[],next_cursor:null}:String(url).includes('/drafts')?{drafts:[]}:String(url).includes('/archives?')?{archives:[organization],next_cursor:null}:{draft:null});
  try{
   await act(async()=>{f.root.render(<ArchivesPage actor={actor} type="org"/>);});
   assert.ok(!/人物档案|组织档案/.test(f.w.document.querySelector('.detail-top')?.textContent??''),'the approved layout removes visible breadcrumb labels');

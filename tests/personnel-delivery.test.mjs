@@ -1,3 +1,4 @@
+import {historicalArchive,legacyReferral,legacyState} from './personnel-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID as uuid} from 'node:crypto';
@@ -9,8 +10,8 @@ import {WorkTasks} from '../app/server/work-tasks.ts';
 async function fresh(f,id){const o=await new Observations(f.env,f.actor,'web').create({archive_id:id,body:'本轮新观察',request_id:uuid()});return [{observation_id:o.id,content_version:1}];}
 async function setup(f,source='web'){
  const archives=new Archives(f.env,f.actor,source),tasks=new WorkTasks(f.env,f.actor,source);
- const a=await archives.create({type:'person',name:'虚构人事交付闭环',request_id:uuid()});
- const referral=await tasks.refer({archive_id:a.id,expected_version:a.version,deadline_at:'2099-01-01T00:00:00.000Z',request_id:uuid()});
+ const a=await historicalArchive(f,archives,{type:'person',name:'虚构人事交付闭环',request_id:uuid()});
+ const referral=await legacyReferral(f,a.id,source);
  const task=await tasks.claim({id:referral.task_id,expected_version:1,request_id:uuid()});
  const observation=await new Observations(f.env,f.actor,source).create({archive_id:a.id,body:'虚构审核与对接观察，结论由负责人明确提交。',request_id:uuid()});
  const input={id:task.id,expected_version:task.version,result_kind:'audit_passed',result_text:'审核通过',references:[{observation_id:observation.id,content_version:1}],request_id:uuid()};
@@ -63,9 +64,9 @@ test('labels and manual audit tasks cannot approve an archive, nor can an audit 
 
 test('pre-advanced and reopened deliveries do not regress archives, duplicate onboarding or reset member state',async t=>{
  const f=fixture();t.after(f.close);const s=await setup(f);let archive=await s.archives.get(s.id);
- const advanced=await s.tasks.confirmMembership({archive_id:s.id,expected_version:archive.version,deadline_at:'2099-01-01T00:00:00.000Z',request_id:uuid()});
+ const advanced=await legacyState(f,s.archives,{id:s.id,status:'已加入待对接'});
  const result=await s.tasks.complete(s.input);assert.equal(result.archive_advanced,false);assert.equal(result.archive_version,advanced.archive_version);
- archive=await s.archives.get(s.id);await s.archives.setState({id:s.id,expected_version:archive.version,status:'已入伙',member_status:'请假',member_ids:[],request_id:uuid()});
+ archive=await s.archives.get(s.id);await legacyState(f,s.archives,{id:s.id,expected_version:archive.version,status:'已入伙',member_status:'请假',member_ids:[],request_id:uuid()});
  const reopened=await s.tasks.reopen({id:s.task.id,expected_version:result.version,owner_mode:'keep',deadline_at:'2099-01-01T00:00:00.000Z',request_id:uuid()});
  s.input.references=await fresh(f,s.id);const before=await s.archives.get(s.id);
  const again=await s.tasks.complete({...s.input,expected_version:reopened.version,request_id:uuid()});
@@ -80,7 +81,7 @@ test('withdrawn or earlier-round tasks cannot advance the current personnel stag
  const reopened=await s.tasks.reopen({id:oldTask.id,expected_version:oldTask.version,owner_mode:'keep',deadline_at:'2099-01-01T00:00:00.000Z',request_id:uuid()});
  s.input.references=await fresh(f,s.id);await assert.rejects(s.tasks.complete({...s.input,expected_version:reopened.version,request_id:uuid()}),{code:'PERSONNEL_STAGE_CHANGED'});
  await s.tasks.cancel({id:oldTask.id,expected_version:reopened.version,reason:'结束旧审核',request_id:uuid()});
- const current=await s.tasks.refer({archive_id:s.id,expected_version:(await s.archives.get(s.id)).version,deadline_at:'2099-01-01T00:00:00.000Z',request_id:uuid()});
+ const current=await legacyReferral(f,s.id);
  const old=(await s.tasks.detail(oldTask.id)).task;
  const stale=await s.tasks.reopen({id:old.id,expected_version:old.version,owner_mode:'keep',deadline_at:'2099-01-01T00:00:00.000Z',request_id:uuid()});
  s.input.references=await fresh(f,s.id);await assert.rejects(s.tasks.complete({...s.input,expected_version:stale.version,request_id:uuid()}),{code:'PERSONNEL_STAGE_CHANGED'});

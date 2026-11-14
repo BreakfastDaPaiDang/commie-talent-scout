@@ -1,3 +1,4 @@
+import {historicalSql} from '../tests/personnel-fixture.mjs';
 import {verifyFeishuInvitation} from './verify-feishu-invitation.mjs';
 import {verifyScrollHints} from './verify-scroll-hints.mjs';
 import {verifyObservationContainers} from './verify-observation-containers.mjs';
@@ -21,11 +22,12 @@ import {dayMs} from '../app/shared/work-overview.ts';
 const f=fixture(),demo=overviewDemo(),token=randomUUID(),base='http://127.0.0.1:8796',out='tmp/verification/work-overview-v2';mkdirSync(out,{recursive:true});
 f.sqlite.prepare('UPDATE members SET role=? WHERE id=?').run('admin',f.actor.id);f.actor.role='admin';f.sqlite.prepare("INSERT INTO credentials(id,member_id,hash,kind,name,auth_epoch,created_at,expires_at) VALUES(?,?,?,'session','ui-fixture',1,?,'2099-01-01T00:00:00.000Z')").run(randomUUID(),f.actor.id,await digest(token),new Date().toISOString());
 // Seed the observed histories, not a second hand-built UI dataset.
-for(const p of demo.people){
+historicalSql(f,()=>{for(const p of demo.people){
  f.sqlite.prepare("INSERT INTO archives(id,type,name,status,person_role,created_by,created_at,updated_at) VALUES(?,'person',?,?,?,?,?,?)").run(p.id,p.name,p.status,p.person_role,f.actor.id,p.created_at,p.created_at);
  for(const [i,s] of p.segments.filter(s=>s.source==='state').entries())f.sqlite.prepare("INSERT INTO archive_events(id,archive_id,actor_id,source,kind,before_json,after_json,created_at) VALUES(?,?,?,'web',?,?,?,?)").run(s.id,p.id,f.actor.id,i?'archive.state_changed':'archive.created',JSON.stringify(i?{status:p.segments[i-1].status}:null),JSON.stringify({status:s.status}),s.start);
  for(const s of p.segments)for(const x of s.placements)f.sqlite.prepare('INSERT INTO work_overview_placements(id,archive_id,event_id,resource_ids_json,note,usage,updated_at) VALUES(?,?,?,?,?,?,?)').run(x.id,p.id,s.id,JSON.stringify(x.resource_ids),x.note,x.usage,demo.as_of);
 }
+});
 demo.resources[2].note='参与写作与编辑，一起完成文章';demo.resources[3].note='</style><script>window.__reportInjected=true</script>';
 // FK resource references are JSON values, allowing imports of independently seeded fixtures.
 for(const r of demo.resources)f.sqlite.prepare('INSERT INTO work_overview_resources(id,name,kind,purposes_json,capacity,active,note,updated_at) VALUES(?,?,?,?,?,1,?,?)').run(r.id,r.name,r.kind,JSON.stringify(r.purposes),r.capacity,r.note,demo.as_of);
@@ -128,7 +130,7 @@ try{
  // The shared Agent landing page stays usable with the real connection endpoint.
  // Real archive navigation and identity-bound member links, then share both object types.
  const linkedId=randomUUID(),linkedName=f.sqlite.prepare('SELECT name FROM members WHERE id=?').get(f.actor.id).name;
- f.sqlite.prepare("INSERT INTO archives(id,type,name,status,person_role,linked_account_id,created_by,created_at,updated_at) VALUES(?,'person',?,'已入伙','member',?,?,?,?)").run(linkedId,linkedName,f.actor.id,f.actor.id,demo.as_of,demo.as_of);
+ historicalSql(f,()=>f.sqlite.prepare("INSERT INTO archives(id,type,name,status,person_role,linked_account_id,created_by,created_at,updated_at) VALUES(?,'person',?,'已入伙','member',?,?,?,?)").run(linkedId,linkedName,f.actor.id,f.actor.id,demo.as_of,demo.as_of));
  await page.goto(base+'/statistics');await page.locator('.statistics-self a').waitFor();await page.locator('.statistics-self a').click();await page.locator('.entity-heading h1').filter({hasText:linkedName}).waitFor();assert.equal(new URL(page.url()).searchParams.get('archive'),linkedId);assert.equal(new URL(page.url()).pathname,'/members');
  await page.goto(base+'/statistics');await page.getByRole('button',{name:'林晓',exact:true}).click();await page.locator('.entity-heading h1').filter({hasText:'林晓'}).waitFor();assert.equal(new URL(page.url()).searchParams.get('archive'),demo.people[0].id);
  const shareTask=f.sqlite.prepare('SELECT id FROM work_tasks LIMIT 1').get();assert.ok(shareTask);

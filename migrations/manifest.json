@@ -1,6 +1,6 @@
 {
   "format": 1,
-  "count": 42,
+  "count": 43,
   "migrations": {
     "0001_identity.sql": {
       "sha256": "ceb732997de6972d3f88ae3a15b52b4df0def3418cc4b0834cd289ce55daff6a",
@@ -211,6 +211,11 @@
       "sha256": "4bcc7d5647d8c6899a7bbcd509308c0639d7038e2ff406dc74d1c7ae6d213b5c",
       "backwards_compatible": true,
       "reason": "Adds an initially legacy authority gate. Explicit verified cutover freezes old resource writes, including old-code rollback; independent resources retain empty ID references for existing foreign keys."
+    },
+    "0043_personnel_recognition.sql": {
+      "sha256": "14a2ffc9ec097eb436570907a1e43b56e4c425b42d5d10dfbf162e0d5954be75",
+      "backwards_compatible": true,
+      "reason": "Additive personnel recognition rounds and quota ledger. Existing members and active reviews remain valid. Old code can read data, but direct personnel-stage bypass writes are deliberately blocked even after code rollback; no data deletion."
     }
   }
 }

@@ -1,3 +1,4 @@
+import {historicalArchive} from './personnel-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID as uuid} from 'node:crypto';
@@ -8,7 +9,7 @@ import {personStates,memberStatuses} from '../app/rules/archive-states.ts';
 
 test('person ranges partition joined and external archives before counts, filters and pagination',async t=>{
  const f=fixture();t.after(f.close);const service=new Archives(f.env,f.actor,'web'),rows=[];
- for(const status of personStates)rows.push({...(await service.create({type:'person',name:'虚构范围 '+status,status,member_ids:[f.actor.id],request_id:uuid()})),status});
+ for(const status of personStates)rows.push({...(await historicalArchive(f,service,{type:'person',name:'虚构范围 '+status,status,member_ids:[f.actor.id],request_id:uuid()})),status});
  const other=uuid();f.sqlite.prepare("INSERT INTO members(id,username,name,role,password_hash,must_change_password,created_at) VALUES(?,?,?,'member','fixture',0,'2026-01-01')").run(other,other,'虚构观察作者');
  // Make each creation visible as unread for the reader, without changing archive activity.
  f.sqlite.prepare('UPDATE archive_events SET actor_id=?').run(other);
