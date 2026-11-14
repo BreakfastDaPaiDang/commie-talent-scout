@@ -1,71 +1,197 @@
-import React,{useEffect,useRef,useState} from 'react';
-import {Icon} from './icons';
-import {Modal,ModalActions} from './Modal';
-import {ShareLink} from './ShareLink';
-import {KnowledgeDocumentBody} from './KnowledgeComments';
-import {KnowledgeCategoryDrawer,KnowledgeCategoryEditor} from './KnowledgeCategories';
-import {KnowledgeReviewBar} from './KnowledgeReview';
-import {KnowledgeHelp,KnowledgeHelpButton} from './KnowledgeHelp';
-import {KnowledgeBranches,KnowledgeBranchForm,KnowledgeIssues,KnowledgeHistory} from './KnowledgeCollaboration';
-import type {KnowledgeApi,KnowledgeBranch,KnowledgeCategory,KnowledgeIdentity,KnowledgeVersion,KnowledgeMerge} from '../shared/knowledge';
-import {TagChip} from './TagCatalog';
-import './knowledge.css';
-
-type Tab='content'|'issues'|'branches'|'history';
-type Scope='main'|'public'|'drafts'|'branch';
-export function KnowledgeWorkspace({api,identity}:{api:KnowledgeApi;identity:KnowledgeIdentity}){
- const workspace=useRef<HTMLElement>(null);
- const params=new URLSearchParams(location.search),[scope,setScope]=useState<Scope>((['main','public','drafts'].includes(params.get('scope')??'')?params.get('scope'):params.has('branch')?'branch':'main') as Scope),[newCategory,setNewCategory]=useState(false),[merges,setMerges]=useState<KnowledgeMerge[]>([]),[issueId,setIssueId]=useState<string|null>(params.get('issue')),[mode,setMode]=useState<'simple'|'git'>(params.get('mode')==='git'?'git':'simple'),[branchId,setBranchId]=useState(params.get('branch')??'main'),[documentId,setDocumentId]=useState<string|null>(params.get('document'));
- const [branches,setBranches]=useState<KnowledgeBranch[]>([]),[items,setItems]=useState<KnowledgeVersion[]>([]),[categories,setCategories]=useState<KnowledgeCategory[]>([]),[category,setCategory]=useState(''),[query,setQuery]=useState(''),[search,setSearch]=useState(''),[next,setNext]=useState<number|null>(null),[revision,setRevision]=useState(0),[doc,setDoc]=useState<KnowledgeVersion|null>(null),[loading,setLoading]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState(''),[tab,setTab]=useState<Tab>(params.get('tab')==='issues'?'issues':'content'),[newBranch,setNewBranch]=useState(false),[editor,setEditor]=useState<{document?:KnowledgeVersion}|null>(null),[categoryPanel,setCategoryPanel]=useState<KnowledgeCategory|null>(null),[mobileDetail,setMobileDetail]=useState(!!documentId),[removing,setRemoving]=useState(false),[help,setHelp]=useState(false);
- const branch=branches.find(b=>b.id===branchId),canWrite=identity.can_write,press=useRef<ReturnType<typeof setTimeout>|undefined>(undefined),pressOpened=useRef(false);
- const listKey=scope+'|'+branchId+'|'+category+'|'+search+'|'+revision,listCurrent=useRef(listKey);listCurrent.current=listKey;
- const refresh=()=>setRevision(v=>v+1);
- const openHelp=()=>setHelp(value=>!value);
- const visibleScope=scope==='branch'?(branchId==='main'?'main':branch?.visibility==='private'?'drafts':'public'):scope;
- useEffect(()=>{let current=true;if(canWrite)api.read('/merges').then(r=>{if(current)setMerges(r.merges);}).catch(e=>{if(current)setError(e.message);});return()=>{current=false;};},[api,canWrite,revision]);
- useEffect(()=>{const timer=setTimeout(()=>setSearch(query),180);return()=>clearTimeout(timer);},[query]);
- useEffect(()=>{let current=true;api.read('/branches').then(r=>{if(current)setBranches(r.branches);}).catch(e=>{if(current)setError(e.message);});return()=>{current=false;};},[api,revision]);
- useEffect(()=>{let current=true;setLoading(true);setError('');const filter=new URLSearchParams({branch_id:branchId,...(scope!=='branch'?{scope}:{}),search,...(category?{category_id:category}:{})});api.read('/documents?'+filter).then(r=>{if(current){setItems(r.documents);setCategories(r.categories);setNext(r.next_offset);setBranches(old=>old.map(b=>b.id===r.branch.id?r.branch:b));if(category&&!r.categories.some((c:KnowledgeCategory)=>c.id===category))setCategory('');if(!documentId&&r.documents.length){setDocumentId(r.documents[0].document_id);setBranchId(r.documents[0].branch_id??branchId);}}}).catch(e=>{if(current)setError(e.message);}).finally(()=>{if(current)setLoading(false);});return()=>{current=false;};},[api,branchId,scope,category,search,revision]);
- useEffect(()=>{let current=true;setDoc(null);if(documentId)api.read('/documents/'+documentId+'?branch_id='+encodeURIComponent(branchId)).then(r=>{if(current)setDoc(r.document);}).catch(e=>{if(current)setError(e.message);});return()=>{current=false;};},[api,documentId,branchId,revision]);
- useEffect(()=>{const url=new URL(location.href);url.searchParams.set('mode',mode);if(scope!=='branch')url.searchParams.set('scope',scope);else url.searchParams.delete('scope');if(tab==='issues'){url.searchParams.set('tab','issues');if(issueId)url.searchParams.set('issue',issueId);}else{url.searchParams.delete('tab');url.searchParams.delete('issue');}if(branchId==='main')url.searchParams.delete('branch');else url.searchParams.set('branch',branchId);if(documentId)url.searchParams.set('document',documentId);else url.searchParams.delete('document');history.replaceState(null,'',url.pathname+url.search+url.hash);},[mode,branchId,scope,documentId,tab,issueId]);
- function selectBranch(id:string){setScope('branch');if(id===branchId)return;setBranchId(id);setDocumentId(null);setItems([]);setDoc(null);setCategory('');setCategoryPanel(null);setError('');}
- function changeMode(value:'simple'|'git'){setMode(value);setTab('content');}
- function selectScope(value:Scope){setScope(value);setBranchId('main');setDocumentId(null);setDoc(null);setItems([]);setCategory('');setCategoryPanel(null);setTab('content');setMobileDetail(false);}
- function openIssue(id:string){setIssueId(id);setMode('git');setTab('issues');setMobileDetail(true);setCategoryPanel(null);refresh();}
- function openTab(value:Tab){setTab(value);setMobileDetail(true);if(value==='branches')setMode('git');}
- async function more(){try{const r=await api.read('/documents?'+new URLSearchParams({branch_id:branchId,...(scope!=='branch'?{scope}:{}),search,offset:String(next),...(category?{category_id:category}:{})}));if(listCurrent.current===listKey){setItems(old=>[...old,...r.documents]);setNext(r.next_offset);}}catch(e){setError((e as Error).message);}}
- return <main ref={workspace} className={'kb-workspace '+(mobileDetail?'kb-detail-visible ':'')+(help?'kb-help-active':'')}>
- <aside className="kb-list-pane" aria-label="知识库条目"><header className="kb-list-head"><h1>知识库</h1><div className="kb-search"><Icon name="search" size={18}/><input type="search" aria-label="搜索知识条目" placeholder="搜索条目、方法、案例" value={query} onChange={e=>setQuery(e.target.value)} maxLength={100}/></div>{canWrite&&<button data-kb-help="new-entry" className="button primary" onClick={()=>setEditor({})}>＋ 新条目</button>}<KnowledgeHelpButton list active={help} onClick={openHelp}/></header>
- {mode==='git'&&<section className="kb-branch-box" aria-label="当前分支"><div><span aria-hidden="true">⑂</span><select aria-label="当前分支" value={branchId} onChange={e=>selectBranch(e.target.value)}>{branches.map(b=><option key={b.id} value={b.id}>{b.id==='main'?'主分支':b.name}{b.id!=='main'&&b.visibility==='private'?' · 私人':''}</option>)}</select></div></section>}
- <nav className="kb-library-views" aria-label="知识库范围"><button data-kb-help="scope-main" className={visibleScope==='main'?'active':''} onClick={()=>selectScope('main')}>主要</button>{canWrite&&<><button data-kb-help="scope-public" className={visibleScope==='public'?'active':''} onClick={()=>selectScope('public')}>公开</button><button data-kb-help="scope-drafts" className={visibleScope==='drafts'?'active':''} onClick={()=>selectScope('drafts')}>草稿</button></>}</nav>
- <nav className="kb-categories" aria-label="文档分类"><button className={!category?'active':''} onClick={()=>setCategory('')}>全部</button>{categories.map(c=><button key={c.id} className={'kb-category-tag'+(category===c.id?' active':'')} aria-label={'分类：'+c.name} title="右键查看定义与留言" onClick={()=>{if(!pressOpened.current)setCategory(c.id);pressOpened.current=false;}} onContextMenu={e=>{e.preventDefault();setCategoryPanel(c);}} onKeyDown={e=>{if(e.key==='ContextMenu'||(e.shiftKey&&e.key==='F10')){e.preventDefault();setCategoryPanel(c);}}} onPointerDown={e=>{pressOpened.current=false;if(e.pointerType==='touch')press.current=setTimeout(()=>{pressOpened.current=true;setCategoryPanel(c);},550);}} onPointerMove={()=>clearTimeout(press.current)} onPointerUp={()=>clearTimeout(press.current)} onPointerCancel={()=>clearTimeout(press.current)}><TagChip tag={c}/></button>)}{canWrite&&<button className="kb-category-add button primary" aria-label="添加分类" title="添加分类" onClick={()=>setNewCategory(true)}>＋</button>}</nav>
- {loading&&<p className="kb-list-message" role="status">正在读取条目…</p>}<div className="kb-entries">{items.map(item=><button key={(item.branch_id??branchId)+item.document_id} className={'kb-entry '+(item.document_id===documentId&&(!item.branch_id||item.branch_id===branchId)?'selected':'')} onClick={()=>{setDocumentId(item.document_id);if(item.branch_id)setBranchId(item.branch_id);setTab('content');setMobileDetail(true);setError('');}}><span className="kb-entry-kind">{item.kind}</span><div><h2>{item.title}</h2><p>{item.body.replace(/^#+\s*/gm,'').replace(/\n/g,' ')}</p></div></button>)}{!loading&&!items.length&&<p className="kb-list-message">{search?'没有匹配的条目':visibleScope==='drafts'?'还没有草稿。':visibleScope==='public'?'暂无公开候审的文档。':'主要知识库还没有文档，可先提出第一篇条目。'}</p>}{next!==null&&<button className="button quiet" onClick={more}>加载更多条目</button>}</div></aside>
- <section className="kb-detail-pane" aria-label="知识库内容"><div className="kb-detail-scroll"><header className="kb-detail-toolbar"><button className="kb-mobile-back text-button" onClick={()=>setMobileDetail(false)}>← 条目</button>{mode==='simple'&&<span className="kb-breadcrumb">{doc?.category_name??'知识条目'}{doc?' / '+doc.kind:''}</span>}<div className="kb-view-switch" aria-label="知识库视图"><button aria-pressed={mode==='simple'} className={mode==='simple'?'active':''} onClick={()=>changeMode('simple')}>简</button><button aria-pressed={mode==='git'} className={mode==='git'?'active':''} onClick={()=>changeMode('git')}>繁</button></div>{doc&&<ShareLink path={'/knowledge?'+new URLSearchParams({document:doc.document_id,...(branchId!=='main'?{branch:branchId,mode:'git'}:{})})} label="分享文档"/>}<KnowledgeHelpButton active={help} onClick={openHelp}/></header>
- {mode==='git'&&<nav className="kb-content-tabs" aria-label="知识库页面">{([['content','内容'],['issues','议题'],['branches','分支'],['history','历史']] as [Tab,string][]).filter(([id])=>canWrite||id==='content'||id==='history').map(([id,title])=><button data-kb-help={'tab-'+id} key={id} className={tab===id?'active':''} aria-current={tab===id?'page':undefined} onClick={()=>openTab(id)}>{title}</button>)}</nav>}
- {error&&<div className="kb-notice error" role="alert">{error}<button className="text-button" onClick={refresh}>重试</button></div>}{notice&&<div className="kb-notice" role="status">{notice}<button aria-label="关闭提示" onClick={()=>setNotice('')}>×</button></div>}
- {tab==='content'?(doc?<article className="kb-article"><div className="kb-article-title"><h1>{doc.title}</h1></div><p className="kb-article-meta">{branchId==='main'?'当前共识':branch?.visibility==='private'?'私人草稿':branch?.state==='merged'?'已合入的分支版本':'分支中的修改'}{mode==='git'?' · '+(branch?.name??''):''}<span>{doc.author_name}</span></p><KnowledgeDocumentBody key={branchId+doc.id} api={api} document={doc} branchId={branchId} writable={canWrite} identity={identity} onIssue={openIssue} footer={<div className="kb-document-actions"><div>{canWrite&&<button data-kb-help="issues" className="text-button" onClick={()=>openTab('issues')}>议题</button>}<button data-kb-help="history" className="text-button" onClick={()=>openTab('history')}>历史版本</button></div>{canWrite&&branch?.state==='open'&&<button data-kb-help="edit" className="button" onClick={()=>setEditor({document:doc})}><Icon name="edit" size={18}/>{mode==='simple'?'建议修改':'在分支中修改'}</button>}{canWrite&&branchId!=='main'&&branch?.state==='open'&&<button data-kb-help="remove" className="text-button" onClick={()=>setRemoving(true)}>移除文档</button>}</div>}/></article>:<div className="kb-empty"><h2>把经验写下来，一起形成共识。</h2><p>选择一篇文档开始阅读，或提出新的条目。</p>{canWrite&&<button data-kb-help="new-entry" className="button primary" onClick={()=>setEditor({})}>＋ 新条目</button>}{mode==='simple'&&canWrite&&<button data-kb-help="issues" className="text-button" onClick={()=>openTab('issues')}>查看议题</button>}</div>):tab==='issues'?<KnowledgeIssues api={api} writable={canWrite} revision={revision} selectedId={issueId} onChanged={refresh}/>:tab==='branches'?<KnowledgeBranches api={api} actorId={identity.id} branches={branches} branchId={branchId} writable={canWrite} revision={revision} onBranch={selectBranch} onChanged={refresh} onNew={()=>setNewBranch(true)} onIssue={()=>openTab('issues')}/>:<KnowledgeHistory key={branchId+revision} api={api} branchId={branchId}/>}
- </div>{tab==='content'&&doc&&branch&&canWrite&&<KnowledgeReviewBar key={branchId+doc.id} api={api} branch={branch} document={doc} merge={merges.find(m=>m.branch_id===branchId&&m.state==='open')} onSubmitted={id=>{setBranchId(id);setScope('public');refresh();}} onMerged={()=>{setBranchId('main');setScope('main');refresh();}} onChanged={refresh} onBranches={()=>openTab('branches')}/>}</section>
- {help&&<KnowledgeHelp root={workspace} writable={canWrite} close={()=>setHelp(false)}/>}
- {newBranch&&<KnowledgeBranchForm api={api} close={()=>setNewBranch(false)} done={id=>{setNewBranch(false);selectBranch(id);setMode('git');refresh();}}/>}
- {editor&&branch&&<KnowledgeEditor api={api} identity={identity} branch={branch} document={editor.document} categories={categories} simple={mode==='simple'} close={()=>setEditor(null)} done={(id,bid)=>{setEditor(null);selectBranch(bid);setDocumentId(id);setScope(branch?.id===bid&&branch.visibility==='members'?'branch':'drafts');setTab('content');setMobileDetail(true);setNotice('草稿已保存，可在底部提交到审核。');refresh();}}/>}
- {newCategory&&<KnowledgeCategoryEditor api={api} branchId={branchId} close={()=>setNewCategory(false)} done={c=>{setNewCategory(false);setCategoryPanel(c);refresh();}}/>}
- {categoryPanel&&<KnowledgeCategoryDrawer key={categoryPanel.id} api={api} category={categoryPanel} branchId={branchId} identity={identity} close={()=>setCategoryPanel(null)} onChanged={c=>{setCategoryPanel(c);refresh();}} onIssue={openIssue}/> }
- {removing&&doc&&branch&&<RemoveDocument api={api} branch={branch} document={doc} close={()=>setRemoving(false)} done={()=>{setRemoving(false);setDocumentId(null);refresh();}}/>}
+import { useKnowledgeNavigation, type Tab, type Scope } from './knowledge/navigation';
+import { useKnowledgeData } from './knowledge/data';
+import { useRef, useState } from 'react';
+import { Icon } from "./icons";
+import { ShareLink } from "./ShareLink";
+import { KnowledgeDocumentBody } from "./KnowledgeComments";
+import { KnowledgeCategoryDrawer, KnowledgeCategoryEditor } from "./KnowledgeCategories";
+import { KnowledgeReviewBar } from "./KnowledgeReview";
+import { KnowledgeHelp, KnowledgeHelpButton } from "./KnowledgeHelp";
+import { KnowledgeBranches, KnowledgeBranchForm, KnowledgeIssues, KnowledgeHistory } from "./KnowledgeCollaboration";
+import type { KnowledgeApi, KnowledgeCategory, KnowledgeIdentity, KnowledgeVersion } from "../shared/knowledge";
+import { TagChip } from "./TagCatalog";
+import "./knowledge.css";
+import { KnowledgeEditor, RemoveDocument } from './knowledge/KnowledgeEditor';
+export function KnowledgeWorkspace({
+  api,
+  identity
+}: {
+  api: KnowledgeApi;
+  identity: KnowledgeIdentity;
+}) {
+  const navigation = useKnowledgeNavigation();
+  const {
+    scope,
+    setScope,
+    issueId,
+    setIssueId,
+    mode,
+    setMode,
+    branchId,
+    setBranchId,
+    documentId,
+    setDocumentId,
+    tab,
+    setTab,
+    mobileDetail,
+    setMobileDetail
+  } = navigation;
+  const {
+    search,
+    revision,
+    merges,
+    branches,
+    items,
+    setItems,
+    categories,
+    category,
+    setCategory,
+    query,
+    setQuery,
+    doc,
+    setDoc,
+    loading,
+    error,
+    setError,
+    refresh,
+    more,
+    next
+  } = useKnowledgeData(api, identity.can_write, navigation);
+  const workspace = useRef<HTMLElement>(null);
+  const [newCategory, setNewCategory] = useState(false);
+  const [notice, setNotice] = useState(''),
+    [newBranch, setNewBranch] = useState(false),
+    [editor, setEditor] = useState<{
+      document?: KnowledgeVersion;
+    } | null>(null),
+    [categoryPanel, setCategoryPanel] = useState<KnowledgeCategory | null>(null),
+    [removing, setRemoving] = useState(false),
+    [help, setHelp] = useState(false);
+  const branch = branches.find(b => b.id === branchId),
+    canWrite = identity.can_write,
+    press = useRef<ReturnType<typeof setTimeout> | undefined>(undefined),
+    pressOpened = useRef(false);
+  const openHelp = () => setHelp(value => !value);
+  const visibleScope = scope === 'branch' ? branchId === 'main' ? 'main' : branch?.visibility === 'private' ? 'drafts' : 'public' : scope;
+  function selectBranch(id: string) {
+    setScope('branch');
+    if (id === branchId) return;
+    setBranchId(id);
+    setDocumentId(null);
+    setItems([]);
+    setDoc(null);
+    setCategory('');
+    setCategoryPanel(null);
+    setError('');
+  }
+  function changeMode(value: 'simple' | 'git') {
+    setMode(value);
+    setTab('content');
+  }
+  function selectScope(value: Scope) {
+    setScope(value);
+    setBranchId('main');
+    setDocumentId(null);
+    setDoc(null);
+    setItems([]);
+    setCategory('');
+    setCategoryPanel(null);
+    setTab('content');
+    setMobileDetail(false);
+  }
+  function openIssue(id: string) {
+    setIssueId(id);
+    setMode('git');
+    setTab('issues');
+    setMobileDetail(true);
+    setCategoryPanel(null);
+    refresh();
+  }
+  function openTab(value: Tab) {
+    setTab(value);
+    setMobileDetail(true);
+    if (value === 'branches') setMode('git');
+  }
+  return <main ref={workspace} className={'kb-workspace ' + (mobileDetail ? 'kb-detail-visible ' : '') + (help ? 'kb-help-active' : '')}>
+ <aside className="kb-list-pane" aria-label="知识库条目"><header className="kb-list-head"><h1>知识库</h1><div className="kb-search"><Icon name="search" size={18} /><input type="search" aria-label="搜索知识条目" placeholder="搜索条目、方法、案例" value={query} onChange={e => setQuery(e.target.value)} maxLength={100} /></div>{canWrite && <button data-kb-help="new-entry" className="button primary" onClick={() => setEditor({})}>＋ 新条目</button>}<KnowledgeHelpButton list active={help} onClick={openHelp} /></header>
+ {mode === 'git' && <section className="kb-branch-box" aria-label="当前分支"><div><span aria-hidden="true">⑂</span><select aria-label="当前分支" value={branchId} onChange={e => selectBranch(e.target.value)}>{branches.map(b => <option key={b.id} value={b.id}>{b.id === 'main' ? '主分支' : b.name}{b.id !== 'main' && b.visibility === 'private' ? ' · 私人' : ''}</option>)}</select></div></section>}
+ <nav className="kb-library-views" aria-label="知识库范围"><button data-kb-help="scope-main" className={visibleScope === 'main' ? 'active' : ''} onClick={() => selectScope('main')}>主要</button>{canWrite && <><button data-kb-help="scope-public" className={visibleScope === 'public' ? 'active' : ''} onClick={() => selectScope('public')}>公开</button><button data-kb-help="scope-drafts" className={visibleScope === 'drafts' ? 'active' : ''} onClick={() => selectScope('drafts')}>草稿</button></>}</nav>
+ <nav className="kb-categories" aria-label="文档分类"><button className={!category ? 'active' : ''} onClick={() => setCategory('')}>全部</button>{categories.map(c => <button key={c.id} className={'kb-category-tag' + (category === c.id ? ' active' : '')} aria-label={'分类：' + c.name} title="右键查看定义与留言" onClick={() => {
+          if (!pressOpened.current) setCategory(c.id);
+          pressOpened.current = false;
+        }} onContextMenu={e => {
+          e.preventDefault();
+          setCategoryPanel(c);
+        }} onKeyDown={e => {
+          if (e.key === 'ContextMenu' || e.shiftKey && e.key === 'F10') {
+            e.preventDefault();
+            setCategoryPanel(c);
+          }
+        }} onPointerDown={e => {
+          pressOpened.current = false;
+          if (e.pointerType === 'touch') press.current = setTimeout(() => {
+            pressOpened.current = true;
+            setCategoryPanel(c);
+          }, 550);
+        }} onPointerMove={() => clearTimeout(press.current)} onPointerUp={() => clearTimeout(press.current)} onPointerCancel={() => clearTimeout(press.current)}><TagChip tag={c} /></button>)}{canWrite && <button className="kb-category-add button primary" aria-label="添加分类" title="添加分类" onClick={() => setNewCategory(true)}>＋</button>}</nav>
+ {loading && <p className="kb-list-message" role="status">正在读取条目…</p>}<div className="kb-entries">{items.map(item => <button key={(item.branch_id ?? branchId) + item.document_id} className={'kb-entry ' + (item.document_id === documentId && (!item.branch_id || item.branch_id === branchId) ? 'selected' : '')} onClick={() => {
+          setDocumentId(item.document_id);
+          if (item.branch_id) setBranchId(item.branch_id);
+          setTab('content');
+          setMobileDetail(true);
+          setError('');
+        }}><span className="kb-entry-kind">{item.kind}</span><div><h2>{item.title}</h2><p>{item.body.replace(/^#+\s*/gm, '').replace(/\n/g, ' ')}</p></div></button>)}{!loading && !items.length && <p className="kb-list-message">{search ? '没有匹配的条目' : visibleScope === 'drafts' ? '还没有草稿。' : visibleScope === 'public' ? '暂无公开候审的文档。' : '主要知识库还没有文档，可先提出第一篇条目。'}</p>}{next !== null && <button className="button quiet" onClick={more}>加载更多条目</button>}</div></aside>
+ <section className="kb-detail-pane" aria-label="知识库内容"><div className="kb-detail-scroll"><header className="kb-detail-toolbar"><button className="kb-mobile-back text-button" onClick={() => setMobileDetail(false)}>← 条目</button>{mode === 'simple' && <span className="kb-breadcrumb">{doc?.category_name ?? '知识条目'}{doc ? ' / ' + doc.kind : ''}</span>}<div className="kb-view-switch" aria-label="知识库视图"><button aria-pressed={mode === 'simple'} className={mode === 'simple' ? 'active' : ''} onClick={() => changeMode('simple')}>简</button><button aria-pressed={mode === 'git'} className={mode === 'git' ? 'active' : ''} onClick={() => changeMode('git')}>繁</button></div>{doc && <ShareLink path={'/knowledge?' + new URLSearchParams({
+            document: doc.document_id,
+            ...(branchId !== 'main' ? {
+              branch: branchId,
+              mode: 'git'
+            } : {})
+          })} label="分享文档" />}<KnowledgeHelpButton active={help} onClick={openHelp} /></header>
+ {mode === 'git' && <nav className="kb-content-tabs" aria-label="知识库页面">{([['content', '内容'], ['issues', '议题'], ['branches', '分支'], ['history', '历史']] as [Tab, string][]).filter(([id]) => canWrite || id === 'content' || id === 'history').map(([id, title]) => <button data-kb-help={'tab-' + id} key={id} className={tab === id ? 'active' : ''} aria-current={tab === id ? 'page' : undefined} onClick={() => openTab(id)}>{title}</button>)}</nav>}
+ {error && <div className="kb-notice error" role="alert">{error}<button className="text-button" onClick={refresh}>重试</button></div>}{notice && <div className="kb-notice" role="status">{notice}<button aria-label="关闭提示" onClick={() => setNotice('')}>×</button></div>}
+ {tab === 'content' ? doc ? <article className="kb-article"><div className="kb-article-title"><h1>{doc.title}</h1></div><p className="kb-article-meta">{branchId === 'main' ? '当前共识' : branch?.visibility === 'private' ? '私人草稿' : branch?.state === 'merged' ? '已合入的分支版本' : '分支中的修改'}{mode === 'git' ? ' · ' + (branch?.name ?? '') : ''}<span>{doc.author_name}</span></p><KnowledgeDocumentBody key={branchId + doc.id} api={api} document={doc} branchId={branchId} writable={canWrite} identity={identity} onIssue={openIssue} footer={<div className="kb-document-actions"><div>{canWrite && <button data-kb-help="issues" className="text-button" onClick={() => openTab('issues')}>议题</button>}<button data-kb-help="history" className="text-button" onClick={() => openTab('history')}>历史版本</button></div>{canWrite && branch?.state === 'open' && <button data-kb-help="edit" className="button" onClick={() => setEditor({
+              document: doc
+            })}><Icon name="edit" size={18} />{mode === 'simple' ? '建议修改' : '在分支中修改'}</button>}{canWrite && branchId !== 'main' && branch?.state === 'open' && <button data-kb-help="remove" className="text-button" onClick={() => setRemoving(true)}>移除文档</button>}</div>} /></article> : <div className="kb-empty"><h2>把经验写下来，一起形成共识。</h2><p>选择一篇文档开始阅读，或提出新的条目。</p>{canWrite && <button data-kb-help="new-entry" className="button primary" onClick={() => setEditor({})}>＋ 新条目</button>}{mode === 'simple' && canWrite && <button data-kb-help="issues" className="text-button" onClick={() => openTab('issues')}>查看议题</button>}</div> : tab === 'issues' ? <KnowledgeIssues api={api} writable={canWrite} revision={revision} selectedId={issueId} onChanged={refresh} /> : tab === 'branches' ? <KnowledgeBranches api={api} actorId={identity.id} branches={branches} branchId={branchId} writable={canWrite} revision={revision} onBranch={selectBranch} onChanged={refresh} onNew={() => setNewBranch(true)} onIssue={() => openTab('issues')} /> : <KnowledgeHistory key={branchId + revision} api={api} branchId={branchId} />}
+ </div>{tab === 'content' && doc && branch && canWrite && <KnowledgeReviewBar key={branchId + doc.id} api={api} branch={branch} document={doc} merge={merges.find(m => m.branch_id === branchId && m.state === 'open')} onSubmitted={id => {
+        setBranchId(id);
+        setScope('public');
+        refresh();
+      }} onMerged={() => {
+        setBranchId('main');
+        setScope('main');
+        refresh();
+      }} onChanged={refresh} onBranches={() => openTab('branches')} />}</section>
+ {help && <KnowledgeHelp root={workspace} writable={canWrite} close={() => setHelp(false)} />}
+ {newBranch && <KnowledgeBranchForm api={api} close={() => setNewBranch(false)} done={id => {
+      setNewBranch(false);
+      selectBranch(id);
+      setMode('git');
+      refresh();
+    }} />}
+ {editor && branch && <KnowledgeEditor api={api} identity={identity} branch={branch} document={editor.document} categories={categories} simple={mode === 'simple'} close={() => setEditor(null)} done={(id, bid) => {
+      setEditor(null);
+      selectBranch(bid);
+      setDocumentId(id);
+      setScope(branch?.id === bid && branch.visibility === 'members' ? 'branch' : 'drafts');
+      setTab('content');
+      setMobileDetail(true);
+      setNotice('草稿已保存，可在底部提交到审核。');
+      refresh();
+    }} />}
+ {newCategory && <KnowledgeCategoryEditor api={api} branchId={branchId} close={() => setNewCategory(false)} done={c => {
+      setNewCategory(false);
+      setCategoryPanel(c);
+      refresh();
+    }} />}
+ {categoryPanel && <KnowledgeCategoryDrawer key={categoryPanel.id} api={api} category={categoryPanel} branchId={branchId} identity={identity} close={() => setCategoryPanel(null)} onChanged={c => {
+      setCategoryPanel(c);
+      refresh();
+    }} onIssue={openIssue} />}
+ {removing && doc && branch && <RemoveDocument api={api} branch={branch} document={doc} close={() => setRemoving(false)} done={() => {
+      setRemoving(false);
+      setDocumentId(null);
+      refresh();
+    }} />}
  </main>;
 }
-
-function KnowledgeEditor({api,identity,branch,document:doc,categories,simple,close,done}:{api:KnowledgeApi;identity:KnowledgeIdentity;branch:KnowledgeBranch;document?:KnowledgeVersion;categories:KnowledgeCategory[];simple:boolean;close:()=>void;done:(id:string,branch:string)=>void}){
- const draftKey='cts.knowledge.draft.'+identity.id+'.'+branch.id+'.'+(doc?.document_id??'new'),defaults={title:doc?.title??'',body:doc?.body??'',category:doc?.category_name??categories[0]?.name??'',kind:doc?.kind??'知识',source:doc?.source??'',message:''};
- const [fields,setFields]=useState(()=>{try{return {...defaults,...JSON.parse(sessionStorage.getItem(draftKey)??'null')};}catch{return defaults;}}),[busy,setBusy]=useState(false),[error,setError]=useState(''),[pickingCategory,setPickingCategory]=useState(false);
- const progress=useRef<{id:string;version:number;documentId?:string}|null>(doc&&branch.id!=='main'&&branch.state==='open'?{id:branch.id,version:branch.version,documentId:doc.document_id}:null);
- useEffect(()=>{try{sessionStorage.setItem(draftKey,JSON.stringify(fields));}catch{}},[fields,draftKey]);
- const field=(name:keyof typeof defaults)=>({'aria-label':({title:'标题',body:'正文',category:'分类',kind:'条目类型',source:'来源',message:'修改说明'})[name],value:fields[name],onChange:(e:React.ChangeEvent<HTMLInputElement|HTMLTextAreaElement>)=>setFields((old:typeof defaults)=>({...old,[name]:e.target.value}))});
- async function save(event:React.FormEvent<HTMLFormElement>){event.preventDefault();if(!fields.category.trim()){setError('请选择分类');return;}setBusy(true);setError('');try{
-  if(!progress.current){const b=await api.write('/branches',{name:fields.title.slice(0,58)+' · '+crypto.randomUUID().slice(0,6),visibility:'private'});progress.current={id:b.id,version:b.version,documentId:doc?.document_id};}
-  const working=progress.current!,result=await api.write('/documents',{branch_id:working.id,expected_version:working.version,...(working.documentId?{document_id:working.documentId}:{}),...fields});progress.current={id:working.id,version:result.version,documentId:result.id};
-  try{sessionStorage.removeItem(draftKey);}catch{}done(result.id,working.id);
- }catch(e){setError((e as Error).message);}finally{setBusy(false);}}
- return <Modal title={doc?'修改文档':'新条目'} onClose={close} busy={busy} wide><form className="kb-form kb-editor" onSubmit={save}><div className="kb-editor-meta"><div className="kb-category-field"><span id="kb-editor-category-label">分类</span><button type="button" className="button kb-category-choice" aria-labelledby="kb-editor-category-label" disabled={busy} onClick={()=>setPickingCategory(true)}>{fields.category?<TagChip tag={{name:fields.category}}/>:<span>选择分类</span>}<span className="kb-muted">选择</span></button></div><label>条目类型<input list="kb-kind-options" required maxLength={30} {...field('kind')}/><datalist id="kb-kind-options">{['知识','共识','方法','案例','题目','需求','资源'].map(name=><option key={name} value={name}/>)}</datalist></label></div><label>标题<input required maxLength={200} {...field('title')}/></label><label>正文<textarea rows={13} required maxLength={60000} placeholder="写下内容。可用 ## 表示小标题。" {...field('body')}/></label><label>修改说明<textarea rows={2} required maxLength={300} placeholder="这次新增或修改了什么，为什么？" {...field('message')}/></label><details><summary>来源（可选）</summary><label>来源<input maxLength={2000} {...field('source')}/></label></details>{error&&<p className="form-error" role="alert">{error}</p>}<ModalActions><button className="button primary" disabled={busy}>{busy?'正在保存…':simple?'保存草稿':'保存到分支'}</button></ModalActions></form>{pickingCategory&&<KnowledgeCategoryEditor api={api} branchId={branch.id} close={()=>setPickingCategory(false)} done={c=>{setFields((old:typeof defaults)=>({...old,category:c.name}));setPickingCategory(false);}}/>}</Modal>;
-}
-
-function RemoveDocument({api,branch,document:doc,close,done}:{api:KnowledgeApi;branch:KnowledgeBranch;document:KnowledgeVersion;close:()=>void;done:()=>void}){const [busy,setBusy]=useState(false),[error,setError]=useState('');return <Modal title="从分支移除文档" onClose={close} busy={busy}><form className="kb-form" onSubmit={async e=>{e.preventDefault();const f=new FormData(e.currentTarget);setBusy(true);try{await api.write('/documents/remove',{branch_id:branch.id,expected_version:branch.version,document_id:doc.document_id,message:f.get('message')});done();}catch(e){setError((e as Error).message);}finally{setBusy(false);}}}><p>从“{branch.name}”移除“{doc.title}”。主分支在合入前保持原状，历史版本保留。</p><label>移除理由<textarea name="message" required maxLength={300}/></label>{error&&<p className="form-error" role="alert">{error}</p>}<ModalActions><button className="button primary" disabled={busy}>确认移除</button></ModalActions></form></Modal>;}
