@@ -1,60 +1,242 @@
-import {TagDefinitionDialog} from './TagMaintenance';
-import {TabList} from '../ui/Workspace';
-import React,{useEffect,useRef,useState,type FormEvent} from 'react';
-import {api} from './api';
-import {Modal} from './Modal';
-import {PageError} from './ConnectionPages';
-import type {Archive} from '../server/archives';
-import type {TagDefinition} from '../server/tags';
-import type {TagBinding,TagLabel,Evidence} from '../server/tag-state';
-import {TagCatalog,TagChip,TagDefinitionFields} from '../ui/TagCatalog';
-export {TagChip} from '../ui/TagCatalog';
-
-type Kind='person'|'org';
-type Category={id:string;name:string;description:string;enabled:number;deleted?:number;color:string};
-const kindLabels={observation:'观察材料',self_statement:'本人明确自述',member_instruction:'成员明确指令'};
-export function TagSummary({tags,total=tags.length}:{tags:TagLabel[];total?:number}){const shown=[...tags].sort((a,b)=>(a.focus||4)-(b.focus||4)).slice(0,3);return <div className="tag-summary">{shown.map(t=><TagChip key={t.tag_id} tag={t}/>)}{total>shown.length&&<span className="tag-more">+{total-shown.length}</span>}</div>;}
-export function TagEvidence({items}:{items:Evidence[]}){
- const[record,setRecord]=useState<{body:string;version:number;author_name:string}|null>(null),[error,setError]=useState('');
- async function read(e:Evidence){try{const r=await api<{versions:{version:number;body:string}[];author_id:string}>(`/observations/${e.observation_id}/versions?before=${e.content_version!+1}&limit=1`);if(r.versions[0]?.version!==e.content_version)throw new Error('该来源版本当前不可读');setRecord({...r.versions[0],author_name:'引用的观察版本'});}catch(e){setError((e as Error).message);}}
- return <><PageError error={error}/>{items.length?<ul className="tag-evidence">{items.map((e,i)=><li key={i}><small>{kindLabels[e.kind]}</small><p>{e.note}</p>{e.observation_id&&<button className="button quiet" onClick={()=>void read(e)}>查看来源 · 版本 {e.content_version}</button>}</li>)}</ul>:<p className="secondary-copy">手工添加，未附依据</p>}{record&&<Modal title={record.author_name} onClose={()=>setRecord(null)} busy={false}><div className="observation-body">{record.body}</div></Modal>}</>;
+import { TagEvidence, kindLabels } from './TagEvidence';
+import { TagPicker } from './TagPicker';
+import { TagDefinitionDialog } from './TagMaintenance';
+import { TabList } from '../ui/Workspace';
+import React, { useEffect, useRef, useState } from 'react';
+import { api } from './api';
+import { Modal } from './Modal';
+import { PageError } from './ConnectionPages';
+import type { Archive } from '../shared/archives';
+import type { TagBinding, TagLabel, Evidence } from '../shared/tags';
+import { TagChip } from '../ui/TagCatalog';
+export { TagEvidence } from './TagEvidence';
+export { TagChip } from '../ui/TagCatalog';
+type Kind = 'person' | 'org';
+type Category = {
+  id: string;
+  name: string;
+  description: string;
+  enabled: number;
+  deleted?: number;
+  color: string;
+};
+export function TagSummary({
+  tags,
+  total = tags.length
+}: {
+  tags: TagLabel[];
+  total?: number;
+}) {
+  const shown = [...tags].sort((a, b) => (a.focus || 4) - (b.focus || 4)).slice(0, 3);
+  return <div className="tag-summary">{shown.map(t => <TagChip key={t.tag_id} tag={t} />)}{total > shown.length && <span className="tag-more">+{total - shown.length}</span>}</div>;
 }
-export function TagsSection({archive,onChanged,manage=false}:{archive:Archive;onChanged:()=>void;manage?:boolean}){
- const[related,setRelated]=useState<string|null>(null);
- const[add,setAdd]=useState(false),[selected,setSelected]=useState<TagBinding|null>(null),[editing,setEditing]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('');
- const pending=useRef<{signature:string;id:string}|null>(null);
- async function save(changes:unknown[],focus?:string[]){setBusy(true);setError('');const body={archive_id:archive.id,expected_version:archive.version,changes,...(focus?{focus}:{})},signature=JSON.stringify(body);if(pending.current?.signature!==signature)pending.current={signature,id:crypto.randomUUID()};try{const r=await api<{changed:boolean}>('/archive-tags/update',{...body,request_id:pending.current.id});pending.current=null;setSelected(null);setEditing(false);setAdd(false);setNotice(r.changed?'标签已保存':'标签没有变化');onChanged();}catch(e){setError((e as Error).message);throw e;}finally{setBusy(false);}}
- const tags=archive.tags??[];
- if(!manage&&!tags.length)return null;
- return <section className={'archive-tags '+(manage?'tag-management':'')}>{manage&&<header><h2>标签</h2>{!archive.closed&&!archive.deleted&&<button className="button" onClick={()=>{setError('');setAdd(true);}}>＋ 添加</button>}</header>}<PageError error={error} retry={onChanged} retryLabel="刷新档案版本"/>{notice&&<p className="form-notice" role="status">{notice}</p>}
-  {tags.length?<div className="tag-bindings">{tags.map(t=><button key={t.tag_id} className="tag-binding-button" onClick={()=>{setSelected(t);setEditing(false);setError('');}}><TagChip tag={t}/>{t.deleted||t.category_deleted?<small>已删除</small>:(!t.enabled||!t.category_enabled)&&<small>已停用</small>}{t.merged_into&&<small>已有合并去向</small>}</button>)}</div>:<p className="archive-no-contact">暂未记录标签</p>}
-  {add&&<Modal title="添加标签" busy={busy} onClose={()=>setAdd(false)}><TagChooser type={archive.type} boundIds={tags.map(t=>t.tag_id)} onSelect={async id=>{await save([{tag_id:id,action:'add'}]);}}/><PageError error={error} retry={onChanged} retryLabel="刷新档案版本后重试"/></Modal>}
-  {selected&&<Modal title={`${selected.category_name}：${selected.name}`} busy={busy} onClose={()=>setSelected(null)}><div className="tag-detail"><p className="tag-description">{selected.description}</p>{selected.merged_into&&<button className="button quiet" onClick={()=>setRelated(selected.merged_into)}>查看合并去向</button>}<section className="tag-detail-evidence"><h3>判断依据</h3>{editing?<EvidenceForm initial={selected.evidence} archiveId={archive.id} busy={busy} onSave={evidence=>save([{tag_id:selected.tag_id,action:'evidence',evidence}])}/>:<TagEvidence items={selected.evidence}/>}</section><p className="tag-confirmed">最近确认 {new Date(selected.confirmed_at).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai',year:'numeric',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false})}</p><PageError error={error} retry={onChanged} retryLabel="刷新档案版本"/>{!archive.closed&&!archive.deleted&&!editing&&<div className="tag-actions"><button className="button" disabled={busy} onClick={()=>setEditing(true)}>维护依据</button><button className="button" disabled={busy||(!selected.focus&&tags.filter(t=>t.focus>0).length>=3)} onClick={()=>{const focused=tags.filter(t=>t.focus>0).sort((a,b)=>a.focus-b.focus).map(t=>t.tag_id);void save([],selected.focus?focused.filter(id=>id!==selected.tag_id):[...focused,selected.tag_id]).catch(()=>{});}}>{selected.focus?'取消重点':'设为重点'}</button><button className="button quiet" disabled={busy} onClick={()=>void save([{tag_id:selected.tag_id,action:'remove'}]).catch(()=>{})}>移除此档案的绑定</button></div>}</div></Modal>}
- {related&&<TagDefinitionDialog entityType="tag" id={related} onClose={()=>setRelated(null)} onChanged={onChanged}/>}
+export function TagsSection({
+  archive,
+  onChanged,
+  manage = false
+}: {
+  archive: Archive;
+  onChanged: () => void;
+  manage?: boolean;
+}) {
+  const [related, setRelated] = useState<string | null>(null);
+  const [add, setAdd] = useState(false),
+    [selected, setSelected] = useState<TagBinding | null>(null),
+    [editing, setEditing] = useState(false),
+    [busy, setBusy] = useState(false),
+    [error, setError] = useState(''),
+    [notice, setNotice] = useState('');
+  const pending = useRef<{
+    signature: string;
+    id: string;
+  } | null>(null);
+  async function save(changes: unknown[], focus?: string[]) {
+    setBusy(true);
+    setError('');
+    const body = {
+        archive_id: archive.id,
+        expected_version: archive.version,
+        changes,
+        ...(focus ? {
+          focus
+        } : {})
+      },
+      signature = JSON.stringify(body);
+    if (pending.current?.signature !== signature) pending.current = {
+      signature,
+      id: crypto.randomUUID()
+    };
+    try {
+      const r = await api<{
+        changed: boolean;
+      }>('/archive-tags/update', {
+        ...body,
+        request_id: pending.current.id
+      });
+      pending.current = null;
+      setSelected(null);
+      setEditing(false);
+      setAdd(false);
+      setNotice(r.changed ? '标签已保存' : '标签没有变化');
+      onChanged();
+    } catch (e) {
+      setError((e as Error).message);
+      throw e;
+    } finally {
+      setBusy(false);
+    }
+  }
+  const tags = archive.tags ?? [];
+  if (!manage && !tags.length) return null;
+  return <section className={'archive-tags ' + (manage ? 'tag-management' : '')}>{manage && <header><h2>标签</h2>{!archive.closed && !archive.deleted && <button className="button" onClick={() => {
+        setError('');
+        setAdd(true);
+      }}>＋ 添加</button>}</header>}<PageError error={error} retry={onChanged} retryLabel="刷新档案版本" />{notice && <p className="form-notice" role="status">{notice}</p>}
+  {tags.length ? <div className="tag-bindings">{tags.map(t => <button key={t.tag_id} className="tag-binding-button" onClick={() => {
+        setSelected(t);
+        setEditing(false);
+        setError('');
+      }}><TagChip tag={t} />{t.deleted || t.category_deleted ? <small>已删除</small> : (!t.enabled || !t.category_enabled) && <small>已停用</small>}{t.merged_into && <small>已有合并去向</small>}</button>)}</div> : <p className="archive-no-contact">暂未记录标签</p>}
+  {add && <Modal title="添加标签" busy={busy} onClose={() => setAdd(false)}><TagChooser type={archive.type} boundIds={tags.map(t => t.tag_id)} onSelect={async id => {
+        await save([{
+          tag_id: id,
+          action: 'add'
+        }]);
+      }} /><PageError error={error} retry={onChanged} retryLabel="刷新档案版本后重试" /></Modal>}
+  {selected && <Modal title={`${selected.category_name}：${selected.name}`} busy={busy} onClose={() => setSelected(null)}><div className="tag-detail"><p className="tag-description">{selected.description}</p>{selected.merged_into && <button className="button quiet" onClick={() => setRelated(selected.merged_into)}>查看合并去向</button>}<section className="tag-detail-evidence"><h3>判断依据</h3>{editing ? <EvidenceForm initial={selected.evidence} archiveId={archive.id} busy={busy} onSave={evidence => save([{
+            tag_id: selected.tag_id,
+            action: 'evidence',
+            evidence
+          }])} /> : <TagEvidence items={selected.evidence} />}</section><p className="tag-confirmed">最近确认 {new Date(selected.confirmed_at).toLocaleString('zh-CN', {
+            timeZone: 'Asia/Shanghai',
+            year: 'numeric',
+            month: 'numeric',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false
+          })}</p><PageError error={error} retry={onChanged} retryLabel="刷新档案版本" />{!archive.closed && !archive.deleted && !editing && <div className="tag-actions"><button className="button" disabled={busy} onClick={() => setEditing(true)}>维护依据</button><button className="button" disabled={busy || !selected.focus && tags.filter(t => t.focus > 0).length >= 3} onClick={() => {
+            const focused = tags.filter(t => t.focus > 0).sort((a, b) => a.focus - b.focus).map(t => t.tag_id);
+            void save([], selected.focus ? focused.filter(id => id !== selected.tag_id) : [...focused, selected.tag_id]).catch(() => {});
+          }}>{selected.focus ? '取消重点' : '设为重点'}</button><button className="button quiet" disabled={busy} onClick={() => void save([{
+            tag_id: selected.tag_id,
+            action: 'remove'
+          }]).catch(() => {})}>移除此档案的绑定</button></div>}</div></Modal>}
+ {related && <TagDefinitionDialog entityType="tag" id={related} onClose={() => setRelated(null)} onChanged={onChanged} />}
  </section>;
 }
-function EvidenceForm({initial,archiveId,busy,onSave}:{initial:Evidence[];archiveId:string;busy:boolean;onSave:(evidence:Evidence[])=>Promise<void>}){
- const[items,setItems]=useState<Evidence[]>(initial),[records,setRecords]=useState<{id:string;content_version:number;body:string}[]>([]),[cursor,setCursor]=useState<string|null>(null),[error,setError]=useState('');
- async function load(before?:string){try{const r=await api<{observations:typeof records;next_cursor:string|null}>('/observations?'+new URLSearchParams({archive_id:archiveId,...(before?{before}:{})}));setRecords(old=>before?[...old,...r.observations]:r.observations);setCursor(r.next_cursor);}catch(e){setError((e as Error).message);}}
- useEffect(()=>{void load();},[archiveId]);
- function change(i:number,patch:Partial<Evidence>){setItems(old=>old.map((e,n)=>n===i?{...e,...patch}:e));}
- return <form className="manage-form" onSubmit={e=>{e.preventDefault();void onSave(items).catch(()=>{});}}><p>保留来源引用；独立材料需明确说明出处和范围。</p>{items.map((e,i)=><fieldset key={i}><legend>依据 {i+1}</legend><label>来源种类<select value={e.kind} onChange={v=>change(i,{kind:v.target.value as Evidence['kind']})}>{Object.entries(kindLabels).map(([v,l])=><option key={v} value={v}>{l}</option>)}</select></label><label>说明<textarea required maxLength={2000} rows={3} value={e.note} onChange={v=>change(i,{note:v.target.value})}/></label><label>引用观察<select value={e.observation_id??''} onChange={v=>{const r=records.find(r=>r.id===v.target.value);if(r)change(i,{observation_id:r.id,content_version:r.content_version});}}><option value="" disabled={!!e.observation_id}>{e.kind==='observation'?'请选择来源观察':'本次独立材料，无观察引用'}</option>{e.observation_id&&!records.some(r=>r.id===e.observation_id)&&<option value={e.observation_id}>已有引用 · 版本 {e.content_version}</option>}{records.map(r=><option key={r.id} value={r.id}>{r.body.slice(0,60)} · 版本 {r.content_version}</option>)}</select></label><button type="button" className="button quiet" onClick={()=>setItems(old=>old.filter((_,n)=>n!==i))}>移除这条依据</button></fieldset>)}{cursor&&<button type="button" className="button quiet" onClick={()=>void load(cursor)}>读取更多来源观察</button>}<button type="button" className="button" disabled={items.length>=30} onClick={()=>setItems(old=>[...old,{kind:'member_instruction',note:''}])}>＋ 补充依据</button><PageError error={error}/><button className="button primary" disabled={busy||(initial.length>0&&!items.length)}>{busy?'正在保存…':'保存依据'}</button></form>;
+function EvidenceForm({
+  initial,
+  archiveId,
+  busy,
+  onSave
+}: {
+  initial: Evidence[];
+  archiveId: string;
+  busy: boolean;
+  onSave: (evidence: Evidence[]) => Promise<void>;
+}) {
+  const [items, setItems] = useState<Evidence[]>(initial),
+    [records, setRecords] = useState<{
+      id: string;
+      content_version: number;
+      body: string;
+    }[]>([]),
+    [cursor, setCursor] = useState<string | null>(null),
+    [error, setError] = useState('');
+  async function load(before?: string) {
+    try {
+      const r = await api<{
+        observations: typeof records;
+        next_cursor: string | null;
+      }>('/observations?' + new URLSearchParams({
+        archive_id: archiveId,
+        ...(before ? {
+          before
+        } : {})
+      }));
+      setRecords(old => before ? [...old, ...r.observations] : r.observations);
+      setCursor(r.next_cursor);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+  useEffect(() => {
+    void load();
+  }, [archiveId]);
+  function change(i: number, patch: Partial<Evidence>) {
+    setItems(old => old.map((e, n) => n === i ? {
+      ...e,
+      ...patch
+    } : e));
+  }
+  return <form className="manage-form" onSubmit={e => {
+    e.preventDefault();
+    void onSave(items).catch(() => {});
+  }}><p>保留来源引用；独立材料需明确说明出处和范围。</p>{items.map((e, i) => <fieldset key={i}><legend>依据 {i + 1}</legend><label>来源种类<select value={e.kind} onChange={v => change(i, {
+          kind: v.target.value as Evidence['kind']
+        })}>{Object.entries(kindLabels).map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label><label>说明<textarea required maxLength={2000} rows={3} value={e.note} onChange={v => change(i, {
+          note: v.target.value
+        })} /></label><label>引用观察<select value={e.observation_id ?? ''} onChange={v => {
+          const r = records.find(r => r.id === v.target.value);
+          if (r) change(i, {
+            observation_id: r.id,
+            content_version: r.content_version
+          });
+        }}><option value="" disabled={!!e.observation_id}>{e.kind === 'observation' ? '请选择来源观察' : '本次独立材料，无观察引用'}</option>{e.observation_id && !records.some(r => r.id === e.observation_id) && <option value={e.observation_id}>已有引用 · 版本 {e.content_version}</option>}{records.map(r => <option key={r.id} value={r.id}>{r.body.slice(0, 60)} · 版本 {r.content_version}</option>)}</select></label><button type="button" className="button quiet" onClick={() => setItems(old => old.filter((_, n) => n !== i))}>移除这条依据</button></fieldset>)}{cursor && <button type="button" className="button quiet" onClick={() => void load(cursor)}>读取更多来源观察</button>}<button type="button" className="button" disabled={items.length >= 30} onClick={() => setItems(old => [...old, {
+      kind: 'member_instruction',
+      note: ''
+    }])}>＋ 补充依据</button><PageError error={error} /><button className="button primary" disabled={busy || initial.length > 0 && !items.length}>{busy ? '正在保存…' : '保存依据'}</button></form>;
 }
-export function TagChooser({type,boundIds=[],onSelect,allowCreate=true,selectLabel='添加',includeDisabled=false,includeDeleted=false}:{type:Kind;boundIds?:string[];onSelect?:(id:string)=>Promise<void>;allowCreate?:boolean;selectLabel?:'添加'|'选择';includeDisabled?:boolean;includeDeleted?:boolean}){
- const[inspected,setInspected]=useState<string|null>(null);
- const[query,setQuery]=useState(''),[items,setItems]=useState<(TagDefinition&{binding_count:number})[]>([]),[cursor,setCursor]=useState<string|null>(null),[categories,setCategories]=useState<Category[]>([]),[create,setCreate]=useState(false),[error,setError]=useState(''),[loading,setLoading]=useState(false),[busy,setBusy]=useState(false),[revision,setRevision]=useState(0),[created,setCreated]=useState<string|null>(null);const serial=useRef(0);
- async function load(before?:string){const n=++serial.current;setLoading(true);try{const r=await api<{tags:typeof items;next_cursor:string|null}>('/tags?'+new URLSearchParams({type,query,include_disabled:String(includeDisabled),include_deleted:String(includeDeleted),...(before?{before}:{})}));if(n===serial.current){setItems(old=>before?[...old,...r.tags]:r.tags);setCursor(r.next_cursor);}}catch(e){if(n===serial.current)setError((e as Error).message);}finally{if(n===serial.current)setLoading(false);}}
- useEffect(()=>{setItems([]);setCursor(null);setError('');const timer=setTimeout(()=>void load(),200);return()=>{serial.current++;clearTimeout(timer);};},[type,query,revision,includeDisabled,includeDeleted]);
- useEffect(()=>{api<{categories:Category[]}>('/tag-categories?type='+type).then(r=>setCategories(r.categories)).catch(e=>setError(e.message));},[type,revision]);
- async function select(id:string){if(!onSelect)return;setBusy(true);setError('');try{await onSelect(id);}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
- return <>{inspected&&<TagDefinitionDialog entityType="tag" id={inspected} onClose={()=>setInspected(null)} onChanged={()=>setRevision(n=>n+1)}/>}<TagCatalog query={query} onQuery={setQuery} items={items.map(t=>({...t,meta:<>{t.binding_count} 个可见绑定 · 定义版本 {t.version}</>,state:t.deleted||t.category_deleted?'已删除':(!t.enabled||!t.category_enabled)?'已停用':undefined}))} loading={loading} busy={busy} selectedIds={boundIds} selectLabel={selectLabel} onSelect={onSelect?id=>void select(id):undefined} onInspect={!onSelect?setInspected:undefined} onMore={cursor?()=>void load(cursor):undefined} feedback={<><PageError error={error} retry={()=>void load()}/>{created&&<p className="form-notice">词条已创建或复用{onSelect?'，绑定失败时可继续重试。':'。'}{onSelect&&<button className="button" disabled={busy} onClick={()=>void select(created)}>继续绑定已创建词条</button>}</p>}</>} onCreate={allowCreate?()=>setCreate(true):undefined} createForm={allowCreate&&create?<TagCreateForm type={type} categories={categories} initial={query} onCreated={async id=>{setCreated(id);setCreate(false);setRevision(n=>n+1);if(onSelect)await select(id);}}/>:undefined}/></>;
+export function TagLibraryPage({
+  isAdmin = false
+}: {
+  isAdmin?: boolean;
+}) {
+  const [scope, setScope] = useState('active');
+  useEffect(() => {
+    if (!isAdmin) setScope(s => s === 'deleted' ? 'active' : s);
+  }, [isAdmin]);
+  const [type, setType] = useState<Kind>('person'),
+    [revision, setRevision] = useState(0);
+  return <main className="tag-library"><p className="eyebrow">共享词义 · 按需维护</p><h1>标签库</h1><p>人物与组织分别维护。先读描述，再选择适合的词义。</p><TabList id="tag-library" value={type} onChange={value => setType(value as Kind)} label="标签库" items={[{
+      key: 'person',
+      label: '人物标签'
+    }, {
+      key: 'org',
+      label: '组织标签'
+    }]} /><section role="tabpanel" id="tag-library-timeline" aria-labelledby={`tag-library-tab-${type}`}><label className="tag-search">词库范围<select value={scope} onChange={e => setScope(e.target.value)}><option value="active">可用词库</option><option value="disabled">含停用项</option>{isAdmin && <option value="deleted">已删除</option>}</select></label><CategoryManagement key={type + scope} scope={scope} type={type} onChanged={() => setRevision(n => n + 1)} /><TagChooser key={type + scope + revision} type={type} includeDisabled={scope === 'disabled'} includeDeleted={scope === 'deleted'} allowCreate={scope !== 'deleted'} /></section></main>;
 }
-function TagCreateForm({type,categories,initial,onCreated}:{type:Kind;categories:Category[];initial:string;onCreated:(id:string)=>Promise<void>}){
- const parts=initial.normalize('NFKC').split(':'),prefix=parts.length===2?parts[0].trim():'',chosen=categories.find(c=>c.enabled&&c.name.normalize('NFKC').toLowerCase()===prefix.toLowerCase());
- const[category,setCategory]=useState(prefix?(chosen?.id??'new'):(categories.find(c=>c.enabled)?.id??'new')),[categoryName,setCategoryName]=useState(prefix),[name,setName]=useState(parts.length===2?parts[1].trim():initial),[description,setDescription]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('');const categoryRequest=useRef(crypto.randomUUID()),tagRequest=useRef(crypto.randomUUID()),createdCategory=useRef<string|null>(null);
- async function save(e:FormEvent){e.preventDefault();setBusy(true);setError('');try{let id=category;if(id==='new'){if(!createdCategory.current){const r=await api<{id:string}>('/tag-categories/create',{type,name:categoryName,color:'sage',request_id:categoryRequest.current});createdCategory.current=r.id;}id=createdCategory.current;}const r=await api<{id:string}>('/tags/create',{category_id:id,name,description,request_id:tagRequest.current});await onCreated(r.id);}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
- return <form className="manage-form tag-create-form" onSubmit={save}><h3>新建标签</h3><label>类别<select value={category} onChange={e=>setCategory(e.target.value)} disabled={busy||!!createdCategory.current}>{categories.filter(c=>c.enabled).map(c=><option key={c.id} value={c.id}>{c.name}</option>)}<option value="new">＋ 新建类别</option></select></label>{category==='new'&&<label>类别名称<input required maxLength={24} value={categoryName} onChange={e=>setCategoryName(e.target.value)} disabled={busy||!!createdCategory.current}/></label>}<TagDefinitionFields name={name} onName={setName} description={description} onDescription={setDescription} busy={busy}/><PageError error={error}/><button className="button primary" disabled={busy}>{busy?'正在保存…':'保存词条'}</button></form>;
+function CategoryManagement({
+  type,
+  scope,
+  onChanged
+}: {
+  type: Kind;
+  scope: string;
+  onChanged: () => void;
+}) {
+  const [open, setOpen] = useState(false),
+    [items, setItems] = useState<Category[]>([]),
+    [selected, setSelected] = useState<string | null>(null),
+    [error, setError] = useState(''),
+    [revision, setRevision] = useState(0);
+  useEffect(() => {
+    api<{
+      categories: Category[];
+    }>('/tag-categories?' + new URLSearchParams({
+      type,
+      include_disabled: String(scope === 'disabled'),
+      include_deleted: String(scope === 'deleted')
+    })).then(r => setItems(r.categories)).catch(e => setError(e.message));
+  }, [type, scope, revision]);
+  return <div className="category-management"><button className="button quiet" onClick={() => setOpen(v => !v)}>维护类别</button>{open && <div className="category-choices">{items.map(c => <button className="button" key={c.id} onClick={() => setSelected(c.id)}>{c.name}{c.deleted ? ' · 已删除' : !c.enabled ? ' · 已停用' : ''}</button>)}</div>}<PageError error={error} />{selected && <TagDefinitionDialog entityType="category" id={selected} onClose={() => setSelected(null)} onChanged={() => {
+      setRevision(n => n + 1);
+      onChanged();
+    }} />}</div>;
 }
-export function TagLibraryPage({isAdmin=false}:{isAdmin?:boolean}){const[scope,setScope]=useState('active');useEffect(()=>{if(!isAdmin)setScope(s=>s==='deleted'?'active':s);},[isAdmin]);const[type,setType]=useState<Kind>('person'),[revision,setRevision]=useState(0);return <main className="tag-library"><p className="eyebrow">共享词义 · 按需维护</p><h1>标签库</h1><p>人物与组织分别维护。先读描述，再选择适合的词义。</p><TabList id="tag-library" value={type} onChange={value=>setType(value as Kind)} label="标签库" items={[{key:'person',label:'人物标签'},{key:'org',label:'组织标签'}]}/><section role="tabpanel" id="tag-library-timeline" aria-labelledby={`tag-library-tab-${type}`}><label className="tag-search">词库范围<select value={scope} onChange={e=>setScope(e.target.value)}><option value="active">可用词库</option><option value="disabled">含停用项</option>{isAdmin&&<option value="deleted">已删除</option>}</select></label><CategoryManagement key={type+scope} scope={scope} type={type} onChanged={()=>setRevision(n=>n+1)}/><TagChooser key={type+scope+revision} type={type} includeDisabled={scope==='disabled'} includeDeleted={scope==='deleted'} allowCreate={scope!=='deleted'}/></section></main>;}
-
-function CategoryManagement({type,scope,onChanged}:{type:Kind;scope:string;onChanged:()=>void}){const[open,setOpen]=useState(false),[items,setItems]=useState<Category[]>([]),[selected,setSelected]=useState<string|null>(null),[error,setError]=useState(''),[revision,setRevision]=useState(0);useEffect(()=>{api<{categories:Category[]}>('/tag-categories?'+new URLSearchParams({type,include_disabled:String(scope==='disabled'),include_deleted:String(scope==='deleted')})).then(r=>setItems(r.categories)).catch(e=>setError(e.message));},[type,scope,revision]);return <div className="category-management"><button className="button quiet" onClick={()=>setOpen(v=>!v)}>维护类别</button>{open&&<div className="category-choices">{items.map(c=><button className="button" key={c.id} onClick={()=>setSelected(c.id)}>{c.name}{c.deleted?' · 已删除':!c.enabled?' · 已停用':''}</button>)}</div>}<PageError error={error}/>{selected&&<TagDefinitionDialog entityType="category" id={selected} onClose={()=>setSelected(null)} onChanged={()=>{setRevision(n=>n+1);onChanged();}}/>}</div>;}
+export function TagChooser(props: React.ComponentProps<typeof TagPicker>) {
+  const [inspected, setInspected] = useState<string | null>(null);
+  const [revision, setRevision] = useState(0);
+  return <>{inspected && <TagDefinitionDialog entityType="tag" id={inspected} onClose={() => setInspected(null)} onChanged={() => setRevision(n => n + 1)} />}<TagPicker {...props} refreshKey={revision} onInspect={setInspected} /></>;
+}

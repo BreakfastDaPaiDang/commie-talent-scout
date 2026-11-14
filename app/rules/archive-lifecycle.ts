@@ -1,6 +1,6 @@
 import {storedMemberStatus,archiveStateLabel,isClosedState,isWorkState,statesFor,isMemberArchive,type MemberBasicState} from './archive-states.ts';
 import {Failure,uid} from '../server/types.ts';
-import type {Archive,BoundMember} from '../server/archives.ts';
+import type {Archive,BoundMember} from '../shared/archives';
 import type {TagState} from '../server/tag-state.ts';
 import type {Source} from '../server/commands.ts';
 import {planRules,type RuleModule} from './contract.ts';

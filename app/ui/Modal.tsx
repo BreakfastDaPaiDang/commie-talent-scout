@@ -1,5 +1,5 @@
 import React,{useContext,createContext,useEffect,useId,useRef,useState,type ReactNode} from 'react';
-import {IconButton} from './Workspace';
+import {IconButton} from './IconButton';
 export const ModalAlertTarget=createContext<HTMLElement|null>(null);
 export const ModalControls=createContext<{onClose:()=>void;busy:boolean}|null>(null);
 // The approved native-dialog implementation, shared with the prototype.

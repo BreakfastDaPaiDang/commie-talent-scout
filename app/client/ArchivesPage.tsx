@@ -17,7 +17,7 @@ import {api,type Member} from './api';
 import {Avatar} from './Avatar';
 import {Modal,ModalActions} from './Modal';
 import {PageError} from './ConnectionPages';
-import type {Archive,BoundMember} from '../server/archives';
+import type {Archive,BoundMember} from '../shared/archives';
 import {ArchiveStateForm,StateFields} from './ArchiveStateForm';
 import {isWorkState} from '../rules/archive-states';
 import {contactReminder} from '../rules/contact-reminders';

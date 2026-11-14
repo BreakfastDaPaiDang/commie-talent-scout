@@ -1,7 +1,7 @@
 import {notifyMembershipJoined} from './MembershipNotice';
 import type {MembershipResult} from '../shared/feishu-invitation';
 import {MemberPicker} from './ArchiveStateForm';
-import type {BoundMember} from '../server/archives';
+import type {BoundMember} from '../shared/archives';
 import {observationRequiredMessage,personnelDeliveryKind,taskResultLabel} from '../rules/task-delivery';
 import {TaskCompletionChoice} from '../ui/TaskCompletionChoice';
 import {TaskLabels} from './TaskLabels';

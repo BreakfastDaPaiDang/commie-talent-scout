@@ -7,7 +7,7 @@ import {avatarUrl} from './AvatarEditor';
 import React,{useEffect,useRef,useState,type FormEvent} from 'react';
 import {api} from './api';
 import {PageError} from './ConnectionPages';
-import type {Archive,BoundMember} from '../server/archives';
+import type {Archive,BoundMember} from '../shared/archives';
 import {statesFor,isClosedState,isWorkState,memberLabel,isMemberArchive,memberBasicStates,type MemberBasicState} from '../rules/archive-states';
 
 

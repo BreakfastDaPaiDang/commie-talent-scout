@@ -10,12 +10,12 @@ import {Modal,ModalActions} from './Modal';
 import {Avatar} from './Avatar';
 import {PageError} from './ConnectionPages';
 import {useObservationDraft} from './draft-store';
-import type {Archive} from '../server/archives';
+import type {Archive} from '../shared/archives';
 import type {Observation} from '../server/observations';
 import './observations.css';
 import {TagChip,TagEvidence} from './TagsSection';
 import {MaterialsSection} from './MaterialsSection';
-import type {TagBinding} from '../server/tag-state';
+import type {TagBinding} from '../shared/tags';
 
 export type ObservationFocus={event_id?:string;observation_id?:string;content_version?:number;query?:string;key:string};
 type TimelineEvent={is_read?:boolean;reading?:ReadDelivery|null;id:string;archive_id:string;actor_id:string;seq:number;kind:string;actor_name:string;source:string;created_at:string;observation_id:string|null;observation:Observation|null;before:Record<string,unknown>|null;after:Record<string,unknown>|null};
