@@ -18,7 +18,7 @@ function environment(){
  return {w,root,async close(){await act(async()=>root.unmount());dom.window.close();}};
 }
 const settle=()=>act(async()=>{await new Promise(r=>setTimeout(r,30));});
-function otherResponse(url:string){return Response.json(url.includes('/timeline')?{events:[],next_cursor:null}:url.includes('/members')?{members:[],next_cursor:null}:url.includes('/drafts')?{drafts:[],draft:null}:url.includes('/archives?')?{archives:[archive],counts:{all:1,mine:0,unread:1},next_cursor:null}:url.includes('/material-capacity')?{count:0}:{tags:[],next_cursor:null});}
+function otherResponse(url:string){return Response.json(url.includes('/personnel-recognition/')?{count:0,eligible:false,can_recognize:false,quota:{remaining:0},round:null,round_number:1,mine:null,votes:[],task_id:null}:url.includes('/timeline')?{events:[],next_cursor:null}:url.includes('/members')?{members:[],next_cursor:null}:url.includes('/drafts')?{drafts:[],draft:null}:url.includes('/archives?')?{archives:[archive],counts:{all:1,mine:0,unread:1},next_cursor:null}:url.includes('/material-capacity')?{count:0}:{tags:[],next_cursor:null});}
 
 test('a successful foreground detail acknowledges the archive once; background refresh does not consume a newer opening snapshot',async()=>{
  const f=environment(),sent:string[]=[],confirmed:unknown[]=[];let detailReads=0;

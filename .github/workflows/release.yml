@@ -34,6 +34,7 @@ jobs:
       - run: node --experimental-transform-types scripts/verify-browser-crypto.mjs
       - run: node scripts/verify-whale-home.mjs
       - run: node --experimental-transform-types scripts/verify-whale-home-live.mjs
+      - run: node --experimental-transform-types scripts/verify-personnel-recognition.mjs
       - run: node --experimental-transform-types scripts/verify-work-overview.mjs
       - run: node --experimental-transform-types scripts/verify-knowledge-workspace.mjs
   deploy:

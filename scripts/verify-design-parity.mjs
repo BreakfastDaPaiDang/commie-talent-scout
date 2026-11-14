@@ -41,6 +41,7 @@ async function fixture(route){const request=route.request(),url=new URL(request.
  else if(p==='/drafts')body={drafts:[]};
  else if(p==='/drafts/save'){const data=request.postDataJSON();drafts.set(data.archive_id,{...data,version:(drafts.get(data.archive_id)?.version??0)+1,publish_request_id:uuid('publish')});body={version:drafts.get(data.archive_id).version,publish_request_id:uuid('publish')};}
  else if(p.startsWith('/drafts/'))body={draft:drafts.get(p.split('/')[2])??null,published:null};
+ else if(p.startsWith('/personnel-recognition/'))body={count:0,eligible:false,can_recognize:false,quota:{remaining:0},round:null,round_number:1,mine:null,votes:[],task_id:null};
  else if(p==='/work-tasks')body={tasks:[],next_offset:null};
  else if(p==='/archives'){const type=url.searchParams.get('type'),query=url.searchParams.get('query');body={archives:archives.filter(a=>a.type===type&&(!query||a.name.includes(query))),next_cursor:null};}
  else if(/^\/archives\/[^/]+\/timeline$/.test(p)){const id=p.split('/')[2];body={events:observations.filter(r=>r.archive_id===id&&!r.deleted).map((r,i)=>({id:uuid('event'+r.id),archive_id:id,actor_id:r.author_id,actor_name:r.author_name,kind:'observation.created',created_at:r.created_at,seq:100-i,source:'web',observation_id:r.id,observation:r})),next_cursor:null};}

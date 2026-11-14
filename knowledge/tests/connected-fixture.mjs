@@ -1,3 +1,4 @@
+import {historicalSql} from '../../tests/personnel-fixture.mjs';
 import {fixture,request} from './fixture.mjs';
 import {fixture as personnelFixture} from '../../tests/d1-fixture.mjs';
 import worker from '../src/index.ts';
@@ -8,7 +9,7 @@ export async function connectedFixture(){
  const token='fixture-catalog-'+request(),session='fixture-session-'+request();p.env.ENVIRONMENT='staging';
  p.sqlite.prepare('UPDATE credentials SET hash=? WHERE id=?').run(await digest(token),p.actor.credential_id);
  p.sqlite.prepare("INSERT INTO credentials(id,member_id,hash,kind,name,auth_epoch,created_at,expires_at) VALUES(?,?,?,'session','catalog-ui',1,?,'2099-01-01T00:00:00.000Z')").run(request(),p.actor.id,await digest(session),at);
- const membership=request();p.sqlite.prepare("INSERT INTO archives(id,type,name,status,person_role,linked_account_id,created_by,created_at,updated_at) VALUES(?,'person',?,'已入伙','member',?,?,?,?)").run(membership,p.actor.name,p.actor.id,p.actor.id,at,at);
+ const membership=request();historicalSql(p,()=>p.sqlite.prepare("INSERT INTO archives(id,type,name,status,person_role,linked_account_id,created_by,created_at,updated_at) VALUES(?,'person',?,'已入伙','member',?,?,?,?)").run(membership,p.actor.name,p.actor.id,p.actor.id,at,at));
  k.sqlite.exec('UPDATE catalog_meta SET authority_ready=1');p.sqlite.exec("UPDATE resource_catalog_state SET mode='independent'");
  const env={KNOWLEDGE_DB:k.db,ENVIRONMENT:'staging',APP_ORIGIN:'https://knowledge.example',IDENTITY_ORIGIN:'https://identity.example',CATALOG_FILES:{async put(key,bytes){objects.set(key,Buffer.from(bytes));},async get(key){return objects.has(key)?{body:new Response(objects.get(key)).body}:null;}},IDENTITY:{fetch(req){if(req.redirect!=='manual')throw new Error('Identity redirects must never forward credentials');paths.push(new URL(req.url).pathname);return personnel.fetch(req,p.env,ctx);}}};
  p.env.CATALOG_ORIGIN=env.APP_ORIGIN;p.env.CATALOG={fetch(req){return worker.fetch(req,env,ctx);}};

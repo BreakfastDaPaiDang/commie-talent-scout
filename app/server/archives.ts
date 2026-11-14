@@ -101,6 +101,7 @@ export class Archives{
   });
  }
  async create(input:unknown){const a=archiveCreateInput.parse(input);return command(this.env,this.actor,{requestId:a.request_id,operation:'archive.create',parameters:{...a,request_id:undefined}},async()=>{
+  if(a.type==='person'&&['人事审核','已加入待对接','已入伙'].includes(a.status))throw new Failure(409,'PERSONNEL_RECOGNITION_REQUIRED','请先创建外部人物档案；三名社员认可后发起审核，由审核与对接任务交付推进身份');
   const id=uid(),at=now(),plan=await this.planBindings(id,a.type,a.status,a.member_ids),closed=isClosedState(a.status),reminder=contactReminder(a.type,a.status,a.contacts);
   const person_role=a.type==='person'?(a.status==='已入伙'?'member':'external'):null,member_status=person_role==='member'?a.member_status??'可接工作':null;
   if(a.member_status&&person_role!=='member')throw new Failure(400,'MEMBER_STATUS_NOT_APPLICABLE','基本状态只适用于社员档案');
@@ -127,6 +128,7 @@ export class Archives{
  private async transition(input:unknown,reopen:boolean){
   const a=archiveStateInput.parse(input);return command(this.env,this.actor,{requestId:a.request_id,operation:reopen?'archive.reopen':'archive.state',parameters:{...a,request_id:undefined}},async()=>{
    const old=await this.get(a.id,a.expected_version,!reopen),key=uid(),closed=isClosedState(a.status);
+   if(old.type==='person'&&a.status!==old.status&&['人事审核','已加入待对接','已入伙'].includes(a.status))throw new Failure(409,'PERSONNEL_RECOGNITION_REQUIRED','进入审核需要三名社员认可；审核通过与入社请在对应任务中提交交付');
    const transition={old,status:a.status,memberIds:a.member_ids,reopen,memberStatus:a.member_status,membershipAction:a.membership_action};assertReopenAllowed(transition);
    const plan=await this.planBindings(a.id,old.type,a.status,a.member_ids),changed=transitionChanged(transition),at=now();
    let stageTask=old.type==='person'?await preparePersonnelTask(this.stmt.bind(this),a.id,a.status,a.deadline_at??new Date(Date.parse(at)+7*86400000).toISOString()):null;

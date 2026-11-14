@@ -1,3 +1,4 @@
+import {historicalArchive,legacyReferral,legacyState,seedRuleTask} from './personnel-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID as uuid} from 'node:crypto';
@@ -51,7 +52,7 @@ test('reopening enforces ownership, versions and future deadline; administrators
 });
 test('reopening snapshots old observation versions, clears current result, and history obeys reference visibility',async t=>{
  const f=fixture();t.after(f.close);const service=new WorkTasks(f.env,f.actor,'mcp'),archives=new Archives(f.env,f.actor,'web');
- const archive=await archives.create({type:'person',name:'虚构重开结果引用',request_id:uuid()});
+ const archive=await historicalArchive(f,archives,{type:'person',name:'虚构重开结果引用',request_id:uuid()});
  const observation=uuid(),at=new Date().toISOString();f.sqlite.prepare('INSERT INTO observations(id,archive_id,author_id,created_at,updated_at) VALUES(?,?,?,?,?)').run(observation,archive.id,f.actor.id,at,at);f.sqlite.prepare('INSERT INTO observation_versions(observation_id,version,body,editor_id,created_at) VALUES(?,?,?,?,?)').run(observation,1,'第一轮观察',f.actor.id,at);
  const task=await service.create({...taskInput(),archive_id:archive.id}),claimed=await service.claim({id:task.id,expected_version:task.version,request_id:uuid()}),ref={observation_id:observation,content_version:1};
  const completed=await service.complete({id:task.id,expected_version:claimed.version,result_kind:'completed',result_text:'第一轮结果',references:[ref],request_id:uuid()});
@@ -149,7 +150,7 @@ test('two members racing the same claim leave one owner, an explicit transaction
 test('web and MCP share task state and enforce owner permissions across the full operation path',async t=>{
  const f=fixture();t.after(f.close);
  const other=addMember(f,'跨入口成员'),web=new WorkTasks(f.env,f.actor,'web'),mcp=new WorkTasks(f.env,other,'mcp');
- const webCreated=await web.create(taskInput());
+ const webCreated=await historicalArchive(f,web,taskInput());
  const fromMcp=await mcp.list({scope:'all'});
  assert.equal(fromMcp.tasks.find(task=>task.id===webCreated.id)?.owner_id,null);
  const claimed=await mcp.claim({id:webCreated.id,expected_version:webCreated.version,request_id:uuid()});
@@ -161,7 +162,7 @@ test('web and MCP share task state and enforce owner permissions across the full
  assert.equal((await web.detail(webCreated.id)).task.status,'completed');
  assert.equal(completed.version,3);
 
- const mcpCreated=await mcp.create(taskInput());
+ const mcpCreated=await historicalArchive(f,mcp,taskInput());
  assert.ok((await web.list({scope:'all'})).tasks.some(task=>task.id===mcpCreated.id));
  const webClaim=await web.claim({id:mcpCreated.id,expected_version:mcpCreated.version,request_id:uuid()});
  assert.equal((await mcp.detail(mcpCreated.id)).task.owner_id,f.actor.id);
@@ -177,7 +178,7 @@ test('web and MCP share task state and enforce owner permissions across the full
 test('stale versions and frozen accounts cannot mutate an owned task',async t=>{
  const f=fixture();t.after(f.close);
  const other=addMember(f,'边界成员'),web=new WorkTasks(f.env,f.actor,'web'),mcp=new WorkTasks(f.env,other,'mcp');
- const task=await web.create(taskInput());
+ const task=await historicalArchive(f,web,taskInput());
  const claimed=await mcp.claim({id:task.id,expected_version:task.version,request_id:uuid()});
  await assert.rejects(web.claim({id:task.id,expected_version:task.version,request_id:uuid()}),error=>error.code==='TASK_ALREADY_CLAIMED'&&/已被其他成员领取/.test(error.message));
  await assert.rejects(web.complete({id:task.id,expected_version:claimed.version,result_kind:'completed',result_text:'非负责人不能完成',request_id:uuid()}),{code:'TASK_OWNER_REQUIRED'});
@@ -194,25 +195,18 @@ test('task creators can cancel an unclaimed task and the reason remains in histo
  const detail=await service.detail(task.id);assert.equal(detail.events[0].kind,'task.cancelled');assert.equal(detail.events[0].reason,'需求已经合并到其他工作');
 });
 
-test('referral creates an unowned audit task and explicit membership creates onboarding on the same archive',async t=>{
- const f=fixture();t.after(f.close);const archives=new Archives(f.env,f.actor,'web'),archive=await archives.create({type:'person',name:'虚构流程对象',status:'个人接触',request_id:uuid()});const service=new WorkTasks(f.env,f.actor,'mcp');
- const referral=await service.refer({archive_id:archive.id,expected_version:archive.version,deadline_at:'2099-01-01T00:00:00.000Z',request_id:uuid()});assert.equal(referral.archive_status,'人事审核');assert.equal(f.sqlite.prepare("SELECT owner_id FROM work_tasks WHERE id=?").get(referral.task_id).owner_id,null);
- const claimed=await service.claim({id:referral.task_id,expected_version:1,request_id:uuid()});await service.complete({id:referral.task_id,expected_version:claimed.version,result_kind:'continue',result_text:'对方愿意继续了解组织。',references:[resultReference(f,archive.id)],request_id:uuid()});
- const membership=await service.confirmMembership({archive_id:archive.id,expected_version:2,deadline_at:'2099-01-01T00:00:00.000Z',request_id:uuid()});assert.equal(membership.archive_status,'已加入待对接');
- const current=await archives.get(archive.id);assert.equal(current.status,'已加入待对接');assert.equal(current.closed,false);assert.equal(f.sqlite.prepare("SELECT count(*) n FROM work_tasks WHERE archive_id=? AND kind='onboarding' AND status='open'").get(archive.id).n,1);
- const membershipEvent=f.sqlite.prepare("SELECT before_json,after_json FROM archive_events WHERE archive_id=? AND kind='archive.state_changed' ORDER BY seq DESC LIMIT 1").get(archive.id);assert.equal(JSON.parse(membershipEvent.before_json).status,'人事审核');assert.equal(JSON.parse(membershipEvent.after_json).task_id,membership.task_id);
- assert.equal((await archives.list({type:'person',status:'已加入待对接,已入伙'})).archives.some(item=>item.id===archive.id),true);
- assert.equal((await archives.list({type:'person',person_scope:'members'})).archives.some(item=>item.id===archive.id),false);
- assert.equal((await archives.list({type:'person',person_scope:'external'})).archives.some(item=>item.id===archive.id),true);
- const joined=await archives.setState({id:archive.id,expected_version:current.version,status:'已入伙',member_ids:[],request_id:uuid()});
- await assert.rejects(service.refer({archive_id:archive.id,expected_version:joined.version,deadline_at:'2099-01-01T00:00:00.000Z',request_id:uuid()}),{code:'MEMBERSHIP_ACTION_REQUIRED'});
+test('direct personnel referral and membership shortcuts are rejected for new requests',async t=>{
+ const f=fixture();t.after(f.close);const archives=new Archives(f.env,f.actor,'web'),a=await archives.create({type:'person',name:'受保护的人事入口',request_id:uuid()}),tasks=new WorkTasks(f.env,f.actor,'mcp');
+ const input={archive_id:a.id,expected_version:1,deadline_at:'2099-01-01T00:00:00.000Z',request_id:uuid()};
+ await assert.rejects(tasks.refer(input),{code:'PERSONNEL_RECOGNITION_REQUIRED'});await assert.rejects(tasks.confirmMembership({...input,request_id:uuid()}),{code:'PERSONNEL_RECOGNITION_REQUIRED'});
+ assert.equal((await archives.get(a.id)).status,'视奸观察');assert.equal(f.sqlite.prepare('SELECT count(*) n FROM work_tasks').get().n,0);
 });
 
 test('withdrawing an audit cancels only open rule audit tasks atomically, preserving ownership, history and request replay',async t=>{
  const f=fixture();t.after(f.close);const web=new Archives(f.env,f.actor,'web'),mcp=new Archives(f.env,f.actor,'mcp'),tasks=new WorkTasks(f.env,f.actor,'mcp');
  for(const [index,status] of ['视奸观察','个人接触','外部社友','已弃用'].entries()){
-  const archive=await web.create({type:'person',name:'虚构审核撤回 '+index,request_id:uuid()});
-  const referred=await tasks.refer({archive_id:archive.id,expected_version:1,deadline_at:'2099-01-01T00:00:00.000Z',request_id:uuid()});
+  const archive=await historicalArchive(f,web,{type:'person',name:'虚构审核撤回 '+index,request_id:uuid()});
+  const referred=await legacyReferral(f,archive.id);
   if(index%2)await tasks.claim({id:referred.task_id,expected_version:1,request_id:uuid()});
   const manual=await tasks.create({archive_id:archive.id,kind:'audit',title:'虚构独立任务',purpose:'独立目的',delivery:'独立交付',deadline_at:'2099-01-01T00:00:00.000Z',request_id:uuid()});
   const input={id:archive.id,expected_version:2,status,member_ids:[],request_id:uuid()},service=index%2?mcp:web;
@@ -225,14 +219,14 @@ test('withdrawing an audit cancels only open rule audit tasks atomically, preser
   assert.equal((await tasks.detail(referred.task_id)).events.length,count);
   if(status==='个人接触'){
    await tasks.cancel({id:manual.id,expected_version:1,reason:'虚构独立任务结束',request_id:uuid()});
-   const again=await tasks.refer({archive_id:archive.id,expected_version:result.version,deadline_at:'2099-01-01T00:00:00.000Z',request_id:uuid()});assert.notEqual(again.task_id,referred.task_id);assert.equal(again.archive_status,'人事审核');
+   const again=await legacyReferral(f,archive.id);assert.notEqual(again.task_id,referred.task_id);assert.equal(again.archive_status,'人事审核');
   }
  }
 });
 
 test('audit withdrawal failure rolls back the archive, tasks, history and receipt, while completed audits remain completed',async t=>{
  const f=fixture();t.after(f.close);const archives=new Archives(f.env,f.actor,'web'),tasks=new WorkTasks(f.env,f.actor,'mcp');
- const archive=await archives.create({type:'person',name:'虚构撤回事务',request_id:uuid()}),referral=await tasks.refer({archive_id:archive.id,expected_version:1,deadline_at:'2099-01-01T00:00:00.000Z',request_id:uuid()});
+ const archive=await historicalArchive(f,archives,{type:'person',name:'虚构撤回事务',request_id:uuid()}),referral=await legacyReferral(f,archive.id);
  const input={id:archive.id,expected_version:2,status:'个人接触',member_ids:[],request_id:uuid()};
  f.sqlite.exec("CREATE TRIGGER reject_audit_cancel BEFORE UPDATE ON work_tasks WHEN NEW.status='cancelled' BEGIN SELECT RAISE(ABORT,'injected cancellation failure'); END");
  await assert.rejects(archives.setState(input),/injected cancellation failure/);
@@ -246,22 +240,22 @@ test('audit withdrawal failure rolls back the archive, tasks, history and receip
 test('cancelling the current automatic audit restores its recorded external relationship and associations through web and MCP',async t=>{
  const f=fixture();t.after(f.close);const archives=new Archives(f.env,f.actor,'web');
  for(const [index,status] of ['视奸观察','个人接触','外部社友'].entries()){
-  const tasks=new WorkTasks(f.env,f.actor,index%2?'web':'mcp'),a=await archives.create({type:'person',name:'虚构任务取消退回 '+index,status,member_ids:[f.actor.id],request_id:uuid()});
-  const referral=await tasks.refer({archive_id:a.id,expected_version:1,deadline_at:'2099-01-01T00:00:00.000Z',request_id:uuid()}),input={id:referral.task_id,expected_version:1,reason:'暂时只保留接触与合作',request_id:uuid()};
+  const tasks=new WorkTasks(f.env,f.actor,index%2?'web':'mcp'),a=await historicalArchive(f,archives,{type:'person',name:'虚构任务取消退回 '+index,status,member_ids:[f.actor.id],request_id:uuid()});
+  const referral=await legacyReferral(f,a.id),input={id:referral.task_id,expected_version:1,reason:'暂时只保留接触与合作',request_id:uuid()};
   const cancelled=await tasks.cancel(input),current=await archives.get(a.id);
   assert.equal(cancelled.archive_status,status);assert.equal(current.status,status);assert.equal(current.version,3);assert.equal(current.members[0].id,f.actor.id);
   assert.equal((await tasks.detail(referral.task_id)).events.filter(e=>e.kind==='task.cancelled').length,1);assert.equal((await tasks.cancel(input)).replayed,true);assert.equal((await archives.get(a.id)).version,3);
-  const newReferral=await tasks.refer({archive_id:a.id,expected_version:3,deadline_at:'2099-01-01T00:00:00.000Z',request_id:uuid()});assert.notEqual(newReferral.task_id,referral.task_id);
+  const newReferral=await legacyReferral(f,a.id);assert.notEqual(newReferral.task_id,referral.task_id);
  }
  // Cancellation cannot undo a later explicit membership or invent a missing origin.
- const tasks=new WorkTasks(f.env,f.actor,'mcp'),a=await archives.create({type:'person',name:'虚构身份变化保护',request_id:uuid()}),referral=await tasks.refer({archive_id:a.id,expected_version:1,deadline_at:'2099-01-01T00:00:00.000Z',request_id:uuid()});
- await archives.setState({id:a.id,expected_version:2,status:'已入伙',member_ids:[],request_id:uuid()});await tasks.cancel({id:referral.task_id,expected_version:1,reason:'旧审核结束',request_id:uuid()});assert.equal((await archives.get(a.id)).status,'已入伙');
- const unknown=await archives.create({type:'person',name:'虚构未知审核来源',status:'人事审核',member_ids:[f.actor.id],request_id:uuid()}),task=await tasks.create({archive_id:unknown.id,kind:'audit',source:'rule',title:'虚构没有引荐历史的任务',purpose:'核对',delivery:'记录',deadline_at:'2099-01-01T00:00:00.000Z',request_id:uuid()});
+ const tasks=new WorkTasks(f.env,f.actor,'mcp'),a=await historicalArchive(f,archives,{type:'person',name:'虚构身份变化保护',request_id:uuid()}),referral=await legacyReferral(f,a.id);
+ await legacyState(f,archives,{id:a.id,expected_version:2,status:'已入伙',member_ids:[],request_id:uuid()});await tasks.cancel({id:referral.task_id,expected_version:1,reason:'旧审核结束',request_id:uuid()});assert.equal((await archives.get(a.id)).status,'已入伙');
+ const unknown=await historicalArchive(f,archives,{type:'person',name:'虚构未知审核来源',status:'人事审核',member_ids:[f.actor.id],request_id:uuid()}),task=await seedRuleTask(f,unknown.id,'audit');
  await tasks.cancel({id:task.id,expected_version:1,reason:'取消不推定原关系',request_id:uuid()});assert.equal((await archives.get(unknown.id)).status,'人事审核');
 });
 
 test('cancelling an audit and restoring the archive rolls back together on SQL failure or concurrent archive edits',async t=>{
- const f=fixture();t.after(f.close);const archives=new Archives(f.env,f.actor,'web'),tasks=new WorkTasks(f.env,f.actor,'mcp'),a=await archives.create({type:'person',name:'虚构取消原子边界',status:'个人接触',request_id:uuid()}),referral=await tasks.refer({archive_id:a.id,expected_version:1,deadline_at:'2099-01-01T00:00:00.000Z',request_id:uuid()}),input={id:referral.task_id,expected_version:1,reason:'撤回本次引荐',request_id:uuid()};
+ const f=fixture();t.after(f.close);const archives=new Archives(f.env,f.actor,'web'),tasks=new WorkTasks(f.env,f.actor,'mcp'),a=await historicalArchive(f,archives,{type:'person',name:'虚构取消原子边界',status:'个人接触',request_id:uuid()}),referral=await legacyReferral(f,a.id),input={id:referral.task_id,expected_version:1,reason:'撤回本次引荐',request_id:uuid()};
  f.sqlite.exec("CREATE TRIGGER reject_audit_restoration BEFORE INSERT ON archive_events WHEN NEW.kind='archive.state_changed' AND json_extract(NEW.after_json,'$.status')='个人接触' BEGIN SELECT RAISE(ABORT,'injected restoration failure'); END");
  await assert.rejects(tasks.cancel(input),/injected restoration failure/);assert.equal((await tasks.detail(referral.task_id)).task.status,'open');assert.equal((await archives.get(a.id)).version,2);assert.equal(f.sqlite.prepare('SELECT count(*) n FROM commands WHERE request_id=?').get(input.request_id).n,0);
  f.sqlite.exec('DROP TRIGGER reject_audit_restoration');
@@ -272,7 +266,7 @@ test('cancelling an audit and restoring the archive rolls back together on SQL f
 
 test('task history supports content edits, deadline extension, comments with permission-filtered references, and recovery',async t=>{
  const f=fixture();t.after(f.close);const archives=new Archives(f.env,f.actor,'web');
- const archive=await archives.create({type:'person',name:'评论引用档案',request_id:uuid()});
+ const archive=await historicalArchive(f,archives,{type:'person',name:'评论引用档案',request_id:uuid()});
  const observation=uuid(),at=new Date().toISOString();
  f.sqlite.prepare('INSERT INTO observations(id,archive_id,author_id,created_at,updated_at) VALUES(?,?,?,?,?)').run(observation,archive.id,f.actor.id,at,at);
  f.sqlite.prepare('INSERT INTO observation_versions(observation_id,version,body,editor_id,created_at) VALUES(?,?,?,?,?)').run(observation,1,'正文只应在观察接口返回',f.actor.id,at);

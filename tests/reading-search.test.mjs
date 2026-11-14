@@ -1,3 +1,4 @@
+import {historicalArchive,historicalSql,legacyReferral,legacyState,seedRuleTask} from './personnel-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID as uuid} from 'node:crypto';
@@ -34,7 +35,7 @@ test('search returns the current version of an older observation, escaping LIKE,
  t.mock.timers.tick(1);const newer=await observe(obs,a.id,'最新普通观察');
  let r=await reader.list({type:'person',query:'命中_100%\\'});assert.equal(r.archives.length,1);assert.equal(r.archives[0].search_match.observation_id,old.id);assert.match(r.archives[0].search_match.excerpt,/命中_100%\\/);assert.equal(r.archives[0].latest_observation,'最新普通观察');
  assert.equal((await reader.list({type:'person',scope:'mine'})).archives.length,0);let current=await service.get(a.id);
- await service.setState({id:a.id,expected_version:current.version,status:'人事审核',member_ids:[f.actor.id],request_id:uuid()});assert.equal((await reader.list({type:'person',scope:'mine',member_id:f.actor.id,status:'人事审核',closed:'open',query:'罕见命中'})).archives.length,1);
+ await service.setState({id:a.id,expected_version:current.version,status:'引荐中（待人事组接触）',member_ids:[f.actor.id],request_id:uuid()});assert.equal((await reader.list({type:'person',scope:'mine',member_id:f.actor.id,status:'引荐中（待人事组接触）',closed:'open',query:'罕见命中'})).archives.length,1);
  current=await service.get(a.id);await service.setState({id:a.id,expected_version:current.version,status:'个人接触',member_ids:[],request_id:uuid()});assert.equal((await reader.list({type:'person',scope:'mine'})).archives.length,0,'prior work-state owner is not a current owner');
  await obs.update({id:old.id,expected_version:1,body:'替换后新事实',occurred_at:null,request_id:uuid()});assert.equal((await reader.list({type:'person',query:'罕见命中'})).archives.length,0,'historical superseded body is not ordinary current-body search');
  await obs.setDeleted({id:old.id,expected_version:2,request_id:uuid()},true);assert.equal((await reader.list({type:'person',query:'替换后新事实'})).archives.length,0);assert.equal((await reader.list({type:'person'})).archives[0].observation_count,1);assert.equal((await reader.list({type:'org'})).archives.length,0);assert.ok(newer.id);
@@ -63,10 +64,10 @@ test('representative data uses bounded archive queries and one first-page count 
 test('scope totals count complete filtered archives, preserve other scopes, and follow personal unread receipts',async t=>{
  const f=fixture();t.after(f.close);const writer=member(f,'totals-writer'),service=new Archives(f.env,writer,'web'),reader=new Archives(f.env,f.actor,'web');
  const a=await create(service,'person','范围 甲'),b=await create(service,'person','范围 乙'),c=await create(service,'person','其他 丙');await create(service,'org','范围 组织');
- for(const id of [a.id,b.id])await service.setState({id,expected_version:1,status:'人事审核',member_ids:[f.actor.id],request_id:uuid()});
+ for(const id of [a.id,b.id])await service.setState({id,expected_version:1,status:'引荐中（待人事组接触）',member_ids:[f.actor.id],request_id:uuid()});
  let result=await reader.list({type:'person',limit:1,scope:'mine'});assert.equal(result.archives.length,1);assert.deepEqual(result.counts,{all:3,mine:2,unread:3});assert.ok(result.next_cursor);
  assert.deepEqual((await reader.list({type:'person',scope:'unread',query:'范围',limit:1})).counts,{all:2,mine:2,unread:2});
- assert.deepEqual((await reader.list({type:'person',status:'人事审核',member_id:f.actor.id})).counts,{all:2,mine:2,unread:2});
+ assert.deepEqual((await reader.list({type:'person',status:'引荐中（待人事组接触）',member_id:f.actor.id})).counts,{all:2,mine:2,unread:2});
  assert.deepEqual((await service.list({type:'person'})).counts,{all:3,mine:0,unread:0});
  assert.deepEqual((await reader.list({type:'person',query:'没有这样的档案'})).counts,{all:0,mine:0,unread:0});
  const reading=new Reading(f.env,f.actor),events=f.sqlite.prepare('SELECT id FROM archive_events WHERE archive_id=?').all(a.id),tickets=await reading.deliver(events);await reading.confirm({tickets:[...tickets.values()].map(r=>r.ticket)});

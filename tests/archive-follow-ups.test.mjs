@@ -1,3 +1,4 @@
+import {historicalArchive,historicalSql,legacyReferral,legacyState,seedRuleTask} from './personnel-fixture.mjs';
 import {Observations} from '../app/server/observations.ts';
 import {zaojiSubject} from '../app/rules/service-subjects.ts';
 import test from 'node:test';
@@ -11,7 +12,7 @@ import {archiveReminder,DAY_MS} from '../app/rules/archive-reminders.ts';
 
 function setup(t){const f=fixture();t.after(f.close);f.sqlite.prepare("UPDATE members SET role='admin' WHERE id=?").run(f.actor.id);f.actor.role='admin';return f;}
 async function subject(f,{type='person',status='个人接触',days=31}={}){
- const a=await new Archives(f.env,f.actor,'web').create({type,name:'虚构跟进对象',status,member_ids:[],request_id:uuid()});
+ const a=await historicalArchive(f,new Archives(f.env,f.actor,'web'),{type,name:'虚构跟进对象',status,member_ids:[],request_id:uuid()});
  f.sqlite.prepare('UPDATE archives SET updated_at=? WHERE id=?').run(new Date(Date.now()-days*DAY_MS).toISOString(),a.id);return a.id;
 }
 test('follow-up eligibility matches archive reminders, excludes member/closed/deleted and honours strict time boundary',async t=>{

@@ -36,6 +36,7 @@ export async function createTask(context: ServiceContext, input: unknown) {
   }, async () => {
     if (a.follow_up && !a.archive_id) throw new Failure(400, 'ARCHIVE_REQUIRED', '跟进任务需要关联档案');
     if (a.deadline_at <= now()) throw new Failure(400, 'DEADLINE_REQUIRED', '开启任务必须有未来期限');
+    if (a.source === 'rule') throw new Failure(403, 'RULE_TASK_REQUIRED', '自动任务只能由对应业务规则创建');
     if (a.kind === 'monthly') throw new Failure(400, 'MONTHLY_GENERATION_REMOVED', '旧月度任务生成已移除，请创建普通跟进任务');
     if (a.archive_id) {
       const archive = await context.stmt('SELECT closed,deleted,status FROM archives WHERE id=?', a.archive_id).first<{
@@ -380,6 +381,7 @@ export async function reopenTask(context: ServiceContext, input: unknown) {
     requireAdmin: admin && a.owner_mode === 'unassigned'
   }, async () => {
     const task = await getTask(context, a.id, a.expected_version);
+    if (await context.stmt('SELECT 1 FROM personnel_recognition_rounds WHERE task_id=? AND legacy=0',task.id).first()) throw new Failure(409,'NEW_RECOGNITION_ROUND_REQUIRED','此轮审核已结束，需重新收集三名社员认可，不能复用旧任务');
     if (!(reopenableTaskStates as readonly string[]).includes(task.status)) throw new Failure(409, 'TASK_NOT_REOPENABLE', '只有已关闭的任务可以重新开启');
     if (task.archive_id) {
       const archive = await context.stmt('SELECT closed,deleted FROM archives WHERE id=?', task.archive_id).first<{

@@ -1,3 +1,4 @@
+import {historicalArchive,legacyReferral} from './personnel-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID as id} from 'node:crypto';
@@ -8,7 +9,7 @@ import {WorkTasks} from '../app/server/work-tasks.ts';
 import {WorkOverview} from '../app/server/work-overview.ts';
 import {overviewResourceDistribution,resourceDistribution,buildOverviewPerson,dayMs} from '../app/shared/work-overview.ts';
 
-async function setup(f){const archives=new Archives(f.env,f.actor,'web'),obs=new Observations(f.env,f.actor,'web'),tasks=new WorkTasks(f.env,f.actor,'web'),overview=new WorkOverview(f.env,f.actor);const a=await archives.create({type:'person',name:'边界测试',request_id:id()});return {archives,obs,tasks,overview,a};}
+async function setup(f){const archives=new Archives(f.env,f.actor,'web'),obs=new Observations(f.env,f.actor,'web'),tasks=new WorkTasks(f.env,f.actor,'web'),overview=new WorkOverview(f.env,f.actor);const a=await historicalArchive(f,archives,{type:'person',name:'边界测试',request_id:id()});return {archives,obs,tasks,overview,a};}
 const deadline='2099-01-01T00:00:00.000Z';
 const white=o=>({entity:'white_resource',id:id(),expected_version:0,observation_id:o.id,resource_id:null,capacity:null,request_id:id()});
 
@@ -16,7 +17,7 @@ test('white resources are explicit review observations, resolve to one entity an
  const f=fixture();t.after(f.close);const s=await setup(f);
  const early=await s.obs.create({archive_id:s.a.id,body:'接触阶段',request_id:id()});
  await assert.rejects(s.overview.save(white(early)),{code:'WHITE_NOT_ELIGIBLE'});
- await s.tasks.refer({archive_id:s.a.id,expected_version:(await s.archives.get(s.a.id)).version,deadline_at:deadline,request_id:id()});
+ await legacyReferral(f,s.a.id);
  const o1=await s.obs.create({archive_id:s.a.id,body:'审核期间已完成接洽，资源待登记',request_id:id()}),o2=await s.obs.create({archive_id:s.a.id,body:'另一次审核接洽',request_id:id()});
  assert.equal((await s.overview.read({})).white_resources.length,0);
  const w1=white(o1),w2=white(o2);await s.overview.save(w1);await s.overview.save(w2);assert.equal((await s.overview.save(w1)).replayed,true);
@@ -33,7 +34,7 @@ test('white resources are explicit review observations, resolve to one entity an
 });
 
 test('white registration is per observation, and deleted source observations leave the live chart',async t=>{
- const f=fixture();t.after(f.close);const s=await setup(f);await s.tasks.refer({archive_id:s.a.id,expected_version:1,deadline_at:deadline,request_id:id()});
+ const f=fixture();t.after(f.close);const s=await setup(f);await legacyReferral(f,s.a.id);
  const o=await s.obs.create({archive_id:s.a.id,body:'审核观察',request_id:id()}),w=white(o);await s.overview.save(w);
  await s.obs.setDeleted({id:o.id,expected_version:1,request_id:id()},true);assert.equal((await s.overview.read({})).white_resources.length,0);assert.equal(f.sqlite.prepare('SELECT count(*) n FROM work_overview_white_resources').get().n,1);
  const r={entity:'resource',id:id(),expected_version:0,name:'已登记群',kind:'群聊',purposes:['review'],capacity:null,active:true,note:'',request_id:id()};await s.overview.save(r);

@@ -56,18 +56,7 @@ test('related tasks pagination can retry a failed next page without dropping the
  }finally{await f.close();}
 });
 
-test('archive shortcut preserves target bindings, version and idempotency on retry; members and organizations have no action',async()=>{
- const f=environment(),sent:Record<string,unknown>[]=[];
- globalThis.fetch=async(url,init)=>{assert.equal(String(url),'/api/archives/state');sent.push(JSON.parse(String(init?.body)));return sent.length===1?Response.json({error:{message:'连接中断'}},{status:503}):Response.json({id,changed:true});};
- try{
-  const {ArchiveQuickAction}=await import('../app/client/ArchiveQuickAction');let changed=0;
-  const data={...archive,closed:false,deleted:false,bindings:{'人事审核':[{id:'bound-to-audit',name:'审核关联人'}]}} as unknown as import('../app/server/archives').Archive;
-  await act(async()=>f.root.render(<ArchiveQuickAction archive={data} openTaskCount={2} onChanged={()=>changed++}/>));
-  await act(async()=>f.w.document.querySelector<HTMLButtonElement>('.archive-primary-action button')!.click());assert.ok(f.w.document.body.textContent!.includes('现有 2 项开启任务会保留'));
-  const submit=()=>f.w.document.querySelector<HTMLButtonElement>('dialog .modal-actions .primary')!.click();await act(async()=>submit());await act(async()=>submit());
-  assert.equal(changed,1);assert.deepEqual(sent[0],sent[1]);assert.equal(sent[0].expected_version,2);assert.equal(sent[0].status,'人事审核');assert.deepEqual(sent[0].member_ids,['bound-to-audit']);
-  for(const state of [{type:'org',status:'个人接触'},{type:'person',status:'已入伙'},{type:'person',status:'个人接触',closed:true},{type:'person',status:'个人接触',deleted:true}]){
-   await act(async()=>f.root.render(<ArchiveQuickAction archive={{...data,...state} as typeof data} openTaskCount={0} onChanged={()=>{}}/>));assert.equal(f.w.document.querySelector('.archive-primary-action'),null);
-  }
- }finally{await f.close();}
+test('archive shortcuts no longer offer direct audit or membership transitions',async()=>{
+ const f=environment();globalThis.fetch=async()=>{throw new Error('shortcut must not write');};
+ try{const {ArchiveQuickAction}=await import('../app/client/ArchiveQuickAction');for(const status of ['视奸观察','个人接触','人事审核','已加入待对接','已入伙']){await act(async()=>f.root.render(<ArchiveQuickAction archive={{...archive,status,closed:false,deleted:false} as any} openTaskCount={2} onChanged={()=>{}}/>));assert.equal(f.w.document.querySelector('.archive-primary-action'),null);}}finally{await f.close();}
 });

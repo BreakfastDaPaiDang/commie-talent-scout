@@ -1,3 +1,4 @@
+import {historicalArchive,historicalSql,legacyReferral,legacyState,seedRuleTask} from './personnel-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID as uuid} from 'node:crypto';
@@ -8,8 +9,8 @@ import {registerArchiveTools} from '../app/server/mcp-archives.ts';
 const DAY=86400000,NOW=Date.parse('2026-10-20T12:00:00.000Z');
 function setup(t){t.mock.timers.enable({apis:['Date'],now:NOW});const f=fixture();t.after(f.close);return {...f,s:new Archives(f.env,f.actor,'web')};}
 async function add(f,type,age,member=false){
- const a=await f.s.create({type,name:`虚构关闭筛选 ${type} ${age}`,status:member?'已入伙':'个人接触',request_id:uuid()});
- if(age!==null){await f.s.setState({id:a.id,expected_version:a.version,status:'已弃用',...(member?{membership_action:'leave'}:{}),member_ids:[],request_id:uuid()});if(member)f.sqlite.prepare("UPDATE archives SET status='已入伙',person_role=NULL,member_status=NULL WHERE id=?").run(a.id);f.sqlite.prepare("UPDATE archive_events SET created_at=? WHERE archive_id=? AND kind='archive.closed'").run(new Date(NOW-age*DAY).toISOString(),a.id);}
+ const a=await historicalArchive(f,f.s,{type,name:`虚构关闭筛选 ${type} ${age}`,status:member?'已入伙':'个人接触',request_id:uuid()});
+ if(age!==null){await f.s.setState({id:a.id,expected_version:a.version,status:'已弃用',...(member?{membership_action:'leave'}:{}),member_ids:[],request_id:uuid()});if(member)historicalSql(f,()=>f.sqlite.prepare("UPDATE archives SET status='已入伙',person_role=NULL,member_status=NULL WHERE id=?").run(a.id));f.sqlite.prepare("UPDATE archive_events SET created_at=? WHERE archive_id=? AND kind='archive.closed'").run(new Date(NOW-age*DAY).toISOString(),a.id);}
  // Deliberately decouple activity time from closing evidence.
  f.sqlite.prepare('UPDATE archives SET updated_at=? WHERE id=?').run(new Date(NOW-(age===null?200:0)*DAY).toISOString(),a.id);return a.id;
 }
@@ -54,7 +55,7 @@ test('history composes with search, bindings, status, tags, unread and deletion 
  const f=setup(t),tags=new Tags(f.env,f.actor,'web'),tag=f.sqlite.prepare("SELECT id FROM tags WHERE name='视频剪辑'").get().id,writer=uuid(),ids=[];
  f.sqlite.prepare("INSERT INTO members(id,username,name,role,password_hash,must_change_password,created_at) VALUES(?,?,?,'member','fixture',0,?)").run(writer,'writer','虚构作者',new Date(NOW).toISOString());
  for(const age of [10,10,100]){
-  const a=await f.s.create({type:'person',name:'虚构组合历史',status:'个人接触',member_ids:[f.actor.id],request_id:uuid()});
+  const a=await historicalArchive(f,f.s,{type:'person',name:'虚构组合历史',status:'个人接触',member_ids:[f.actor.id],request_id:uuid()});
   await tags.batch({archive_id:a.id,expected_version:1,changes:[{tag_id:tag,action:'add'}],request_id:uuid()});
   await f.s.setState({id:a.id,expected_version:2,status:'已弃用',member_ids:[f.actor.id],request_id:uuid()});
   f.sqlite.prepare("UPDATE archive_events SET created_at=? WHERE archive_id=? AND kind='archive.closed'").run(new Date(NOW-age*DAY).toISOString(),a.id);

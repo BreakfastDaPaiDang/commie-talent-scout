@@ -1,3 +1,4 @@
+import {historicalSql} from '../tests/personnel-fixture.mjs';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import {mkdirSync,writeFileSync,readFileSync,readdirSync} from 'node:fs';
@@ -44,7 +45,7 @@ export async function verifyDisplayModes({browser,page,context,base,taskId,archi
  // Approved archive layout: day/night share geometry; all records below are isolated fixtures.
  const owner=sqlite.prepare('SELECT created_by FROM work_tasks WHERE id=?').get(taskId).created_by;
  const sampleId=randomUUID(),sampleTask=randomUUID(),now=new Date().toISOString();
- sqlite.prepare("INSERT INTO archives(id,type,name,status,created_by,created_at,updated_at,contacts_json) VALUES(?,'person','沈舟（界面验收）','已加入待对接',?,?,?,?)").run(sampleId,owner,now,now,JSON.stringify([{type:'邮箱',value:'shenzhou@example.invalid',note:''},{type:'微信',value:'demo_shenzhou',note:''}]));
+ historicalSql({sqlite},()=>sqlite.prepare("INSERT INTO archives(id,type,name,status,created_by,created_at,updated_at,contacts_json) VALUES(?,'person','沈舟（界面验收）','已加入待对接',?,?,?,?)").run(sampleId,owner,now,now,JSON.stringify([{type:'邮箱',value:'shenzhou@example.invalid',note:''},{type:'微信',value:'demo_shenzhou',note:''}])));
  sqlite.prepare("INSERT INTO work_tasks(id,archive_id,kind,title,purpose,delivery,source,owner_id,deadline_at,created_by,created_at,updated_at) VALUES(?,?,'custom','安排首次项目交流','确认参与意愿','记录沟通结果','manual',?,'2098-12-01T12:00:00Z',?,?,?)").run(sampleTask,sampleId,owner,owner,now,now);
  sqlite.prepare('UPDATE archives SET current_need=? WHERE id=?').run('希望参与实际写作项目，先与接待人讨论一个可完成的选题。',sampleId);
  const geometry={};

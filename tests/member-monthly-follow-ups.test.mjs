@@ -1,3 +1,4 @@
+import {historicalArchive,historicalSql,legacyReferral,legacyState,seedRuleTask} from './personnel-fixture.mjs';
 import {canRefreshMemberMonthlyCopy,legacyMemberMonthlyCopy,memberMonthlyCopy} from '../app/rules/member-monthly-follow-up.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -10,7 +11,7 @@ import {generateMemberMonthlyFollowUps,generateScheduledMemberMonthlyFollowUps a
 import {memberMonth,memberMonthlyRule} from '../app/rules/member-monthly-follow-up.ts';
 import {zaojiSubject} from '../app/rules/service-subjects.ts';
 const setup=t=>{const f=fixture();t.after(f.close);return f;};
-const member=async(f,extra={})=>new Archives(f.env,f.actor,'web').create({type:'person',name:'虚构正式社员',status:'已入伙',request_id:uuid(),...extra});
+const member=async(f,extra={})=>historicalArchive(f,new Archives(f.env,f.actor,'web'),{type:'person',name:'虚构正式社员',status:'已入伙',request_id:uuid(),...extra});
 const oct='2026-10-01T00:17:00.000+08:00';
 test('month follows China midnight, year boundary and leap February',()=>{
  assert.equal(memberMonth('2026-09-30T15:59:59.999Z').key,'2026-09');assert.deepEqual(memberMonth('2026-09-30T16:00:00.000Z'),{key:'2026-10',title:'10月人事跟进',deadline:'2026-10-31T15:59:59.999Z'});
