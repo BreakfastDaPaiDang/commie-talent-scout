@@ -6,7 +6,7 @@ import { getBranch, assertEditable, getDocument, prepareCommit } from './records
 import { branchDiff } from './documents.ts';
 import { getMergeRequest, qualifiedMerges } from './review-queries.ts';
 import { getIssue } from './issue-queries.ts';
-import { expected_version, branch_id, workspaceSchemas } from './inputs.ts';
+import { workspaceSchemas } from './inputs.ts';
 export async function submitReview(context: ServiceContext, input: unknown) {
   const a = workspaceSchemas.review.parse(input);
   return runCommand(context, a, 'review.submit', async at => {

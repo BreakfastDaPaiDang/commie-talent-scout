@@ -4,7 +4,7 @@ import type { ServiceContext } from './context.ts';
 import { getBranch, getDocument, assertEditable, prepareCommit, getVersion } from './records.ts';
 import { listCategories } from './categories.ts';
 import { runCommand } from './command.ts';
-import { expected_version, branch_id, workspaceSchemas } from './inputs.ts';
+import { workspaceSchemas } from './inputs.ts';
 export async function listDocuments(context: ServiceContext, input: unknown) {
   const a = workspaceSchemas.list.parse(input);
   if (context.guest && a.scope && a.scope !== 'main') throw new KnowledgeError(403, 'PUBLISHED_ONLY', '接收者只能阅读主要知识库');

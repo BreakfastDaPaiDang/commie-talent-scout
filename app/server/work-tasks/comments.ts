@@ -1,4 +1,4 @@
-import { command, requestId } from "../commands.ts";
+import { command } from "../commands.ts";
 import { Failure, now, uid } from "../types.ts";
 import type { ServiceContext } from './context.ts';
 import { getTask, assertOpenTask, commentTaskGuard } from './records.ts';

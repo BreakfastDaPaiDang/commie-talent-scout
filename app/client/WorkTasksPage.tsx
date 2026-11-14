@@ -8,7 +8,7 @@ import { PageError } from "./ConnectionPages";
 import { Icon } from "../ui/icons";
 import { ArchiveHead } from "../ui/Workspace";
 import { TaskCompletionRecord, TaskBookLayout } from "../ui/TaskBook";
-import { type ArchivePreview, type Task } from '../shared/work-tasks';
+import { type ArchivePreview } from '../shared/work-tasks';
 import { priorityFirst, taskStage } from './work-tasks/presentation';
 import { CreateTask } from './work-tasks/TaskCreation';
 import { TaskIndexItem, TaskRecommendation } from './work-tasks/TaskCards';

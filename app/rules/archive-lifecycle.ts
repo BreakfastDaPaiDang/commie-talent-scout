@@ -145,7 +145,7 @@ export const archiveTransitionRules=[
 
 export const archiveLifecycleModule:RuleModule<Effects,D1PreparedStatement>={
  id:'archive-lifecycle',source:'app/rules/archive-lifecycle.ts',
- triggers:[{file:'app/server/archives.ts',entry:'transition'},{file:'app/server/work-tasks.ts',entry:'restoreCancelledAudit'},{file:'app/server/work-tasks.ts',entry:'completePersonnelStage'}],
+ triggers:[{file:'app/server/archives.ts',entry:'transition'},{file:'app/server/work-tasks/delivery.ts',entry:'planAuditRestoration'},{file:'app/server/work-tasks/delivery.ts',entry:'planPersonnelDelivery'}],
  rules:archiveTransitionRules,
  verification:{
   transaction:{file:'app/server/commands.ts',entry:'command'},

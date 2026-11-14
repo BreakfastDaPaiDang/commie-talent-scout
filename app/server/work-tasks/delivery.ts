@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { command, requestId } from "../commands.ts";
+import { command } from "../commands.ts";
 import { Failure, now, uid } from "../types.ts";
 import { TagState } from "../tag-state.ts";
 import { isMemberArchive } from "../../rules/archive-states.ts";

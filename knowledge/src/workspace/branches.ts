@@ -4,7 +4,7 @@ import type { ServiceContext } from './context.ts';
 import { runCommand } from './command.ts';
 import { getBranch, assertEditable, getVersion, prepareCommit } from './records.ts';
 import { branchDiff } from './documents.ts';
-import { expected_version, branch_id, workspaceSchemas } from './inputs.ts';
+import { workspaceSchemas } from './inputs.ts';
 export async function listBranches(context: ServiceContext) {
   const rows = await context.stmt("SELECT * FROM kw_branches WHERE state<>'closed' AND (?=0 OR id='main') AND (visibility='members' OR owner_id=?) ORDER BY CASE WHEN id='main' THEN 0 ELSE 1 END,updated_at DESC,id", context.guest ? 1 : 0, context.actor.id).all<KnowledgeBranch>();
   return {

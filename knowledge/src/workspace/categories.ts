@@ -3,7 +3,7 @@ import type { KnowledgeCategory } from "../../../app/shared/knowledge.ts";
 import type { ServiceContext } from './context.ts';
 import { getBranch } from './records.ts';
 import { runCommand } from './command.ts';
-import { expected_version, branch_id, workspaceSchemas } from './inputs.ts';
+import { workspaceSchemas } from './inputs.ts';
 export async function listCategories(context: ServiceContext, branchId = 'main') {
   await getBranch(context, branchId);
   const rows = await context.stmt('SELECT c.*,(SELECT COUNT(*) FROM kw_items i JOIN kw_versions v ON v.id=i.version_id WHERE i.branch_id=? AND v.category_id=c.id AND v.deleted=0) AS count FROM kw_categories c WHERE (?=0 AND c.independent=1) OR EXISTS(SELECT 1 FROM kw_items i JOIN kw_versions v ON v.id=i.version_id WHERE i.branch_id=? AND v.category_id=c.id AND v.deleted=0) ORDER BY c.name', branchId, context.guest ? 1 : 0, branchId).all<KnowledgeCategory>();

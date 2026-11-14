@@ -1,4 +1,3 @@
-import { labels } from '../client/work-tasks/presentation';
 export type ArchivePreview = {
   person_role?: 'external' | 'member';
   id: string;

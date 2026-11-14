@@ -23,7 +23,8 @@
     "test:dom": "node --import ./tests/dom-register.mjs --import tsx --test tests/*.dom.test.tsx",
     "knowledge:check": "tsc -p knowledge/tsconfig.json",
     "knowledge:test": "node --experimental-transform-types --test knowledge/tests/*.test.mjs",
-    "knowledge:build": "wrangler deploy --config knowledge/wrangler.jsonc --env staging --dry-run --outdir ../tmp/knowledge/build"
+    "knowledge:build": "wrangler deploy --config knowledge/wrangler.jsonc --env staging --dry-run --outdir ../tmp/knowledge/build",
+    "architecture:check": "node scripts/check-architecture.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/client": "2.0.0",
@@ -46,6 +47,7 @@
     "tsx": "4.23.13",
     "typescript": "7.0.2",
     "vite": "8.2.2",
-    "wrangler": "4.129.1"
+    "wrangler": "4.129.1",
+    "@babel/parser": "8.0.4"
   }
 }

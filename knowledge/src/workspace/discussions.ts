@@ -6,7 +6,7 @@ import { getDocument, getBranch } from './records.ts';
 import { isCategoryPublic, getCategory } from './categories.ts';
 import { getIssue } from './issue-queries.ts';
 import { qualifiedMerges } from './review-queries.ts';
-import { expected_version, branch_id, workspaceSchemas } from './inputs.ts';
+import { workspaceSchemas } from './inputs.ts';
 export async function createIssue(context: ServiceContext, input: unknown) {
   const a = workspaceSchemas.issue.parse(input);
   return runCommand(context, a, 'issue.create', async at => {

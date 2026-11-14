@@ -1,7 +1,6 @@
 import { canonical, hash, KnowledgeError, uid } from "../types.ts";
 import type { ServiceContext } from './context.ts';
 import { assertWriter } from './records.ts';
-import { request_id } from './inputs.ts';
 export async function findReceipt(context: ServiceContext, id: string, fingerprint?: string) {
   const row = await context.stmt('SELECT fingerprint,result_json FROM kw_requests WHERE actor_id=? AND request_id=?', context.actor.id, id).first<{
     fingerprint: string;

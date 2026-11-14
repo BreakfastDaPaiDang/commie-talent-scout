@@ -4,7 +4,7 @@ import { WorkTaskLabels } from "../work-task-labels.ts";
 import { taskPriorityDefaults, reopenableTaskStates } from "../../rules/task-policy.ts";
 import { runTaskNotifications } from "../task-notifications.ts";
 import { assertAdmin } from "../credentials.ts";
-import { command, requestId } from "../commands.ts";
+import { command } from "../commands.ts";
 import { Failure, now, uid } from "../types.ts";
 import type { ServiceContext } from './context.ts';
 import { getTask, assertOpenTask } from './records.ts';

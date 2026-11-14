@@ -22,6 +22,7 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - run: npm run architecture:check
       - run: npm run check
       - run: npm run rules:check
       - run: node scripts/check-migrations.mjs

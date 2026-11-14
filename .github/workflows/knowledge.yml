@@ -1,10 +1,10 @@
 name: Knowledge database and service
 on:
   pull_request:
-    paths: ['knowledge/**', 'app/shared/knowledge.ts', 'app/shared/catalog.ts', 'app/server/knowledge-identity.ts', 'scripts/smoke.mjs', '.github/workflows/knowledge.yml', 'package.json', 'package-lock.json']
+    paths: ['knowledge/**', 'app/shared/**', 'scripts/check-architecture.mjs', 'app/server/knowledge-identity.ts', 'scripts/smoke.mjs', '.github/workflows/knowledge.yml', 'package.json', 'package-lock.json']
   push:
     branches: [main]
-    paths: ['knowledge/**', 'app/shared/knowledge.ts', 'app/shared/catalog.ts', 'app/server/knowledge-identity.ts', 'scripts/smoke.mjs', '.github/workflows/knowledge.yml', 'package.json', 'package-lock.json']
+    paths: ['knowledge/**', 'app/shared/**', 'scripts/check-architecture.mjs', 'app/server/knowledge-identity.ts', 'scripts/smoke.mjs', '.github/workflows/knowledge.yml', 'package.json', 'package-lock.json']
   workflow_dispatch:
 permissions:
   contents: read
@@ -21,6 +21,7 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - run: npm run architecture:check
       - run: npm run check
       - run: npm run knowledge:check
       - run: npm run knowledge:test

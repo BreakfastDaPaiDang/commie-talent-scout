@@ -1,4 +1,9 @@
-export type Evidence = {kind:'observation'|'self_statement'|'member_instruction';note:string;observation_id?:string;content_version?:number};
+export type Evidence = {
+  kind: 'observation' | 'self_statement' | 'member_instruction';
+  note: string;
+  observation_id?: string;
+  content_version?: number;
+};
 export type TagBinding = {
   tag_id: string;
   category_id: string;

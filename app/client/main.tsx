@@ -1,6 +1,7 @@
 import '../shared/browser-crypto';
-import { PrimaryNavigation, PageRoutes } from './navigation/PageRoutes';
 import { HomePage } from './HomePage';
+// Keep shared shell styles ahead of route-specific styles, as before extraction.
+import { PrimaryNavigation, PageRoutes } from './navigation/PageRoutes';
 import { KnowledgePage } from './KnowledgePage';
 import { CatalogPage } from './CatalogPage';
 import { MembershipNotice } from './MembershipNotice';
