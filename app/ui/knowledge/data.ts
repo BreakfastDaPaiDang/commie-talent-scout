@@ -55,6 +55,8 @@ export function useKnowledgeData(api: KnowledgeApi, canWrite: boolean, {
     let current = true;
     setLoading(true);
     setError('');
+    setItems([]);
+    setNext(null);
     const filter = new URLSearchParams({
       branch_id: branchId,
       ...(scope !== 'branch' ? {

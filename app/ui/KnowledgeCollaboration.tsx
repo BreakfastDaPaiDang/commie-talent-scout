@@ -58,7 +58,7 @@ export function KnowledgeIssues({api,writable,revision,onChanged,selectedId}:{ap
 
 function IssueSource({issue}:{issue:KnowledgeIssue}){
  if(!issue.source_json)return null;let source:{kind:string;title:string;quote:string;comment:string;author_name:string};try{source=JSON.parse(issue.source_json);}catch{return null;}
- return <section className="kb-issue-source"><p className="kb-muted">来自{source.kind==='category'?'分类解释':'文档'}「{source.title}」的批注</p><blockquote>{source.quote}</blockquote><p>{source.author_name}：{source.comment}</p></section>;
+ return <section className="kb-issue-source"><p className="kb-muted">来自{source.kind==='category'?'标签解释':'文档'}「{source.title}」的批注</p><blockquote>{source.quote}</blockquote><p>{source.author_name}：{source.comment}</p></section>;
 }
 
 export function KnowledgeHistory({api,branchId}:{api:KnowledgeApi;branchId:string}){

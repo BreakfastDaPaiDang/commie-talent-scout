@@ -23,6 +23,15 @@ await new Promise(r=>server.listen(8798,'127.0.0.1',r));
 const preview=await createViteServer({configFile:false,root:resolve('prototypes/frontend'),publicDir:resolve('public'),resolve:{dedupe:['react','react-dom']},server:{host:'127.0.0.1',port:5198,strictPort:true,fs:{allow:[resolve('.')]},proxy:{'/api':{target:base,changeOrigin:true}}}});await preview.listen();
 const browser=await chromium.launch({channel:process.env.CTS_TEST_BROWSER==='chrome'?'chrome':'msedge',headless:true}),context=await browser.newContext({viewport:{width:1440,height:1080}}),page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));await context.addCookies([{name:'cts_session',value:f.session,url:base}]);
 
+async function api(path,body){
+ const response=await context.request.post(base+'/api'+path,{headers:{Origin:base},data:{...body,request_id:request()}});
+ const result=await response.json();assert.equal(response.status(),200,JSON.stringify(result));return result;
+}
+const subject=await api('/archives/create',{type:'person',name:'虚构对象特征验收'});
+const category=await api('/tag-categories/create',{type:'person',name:'特征验收',color:'sage'}),tagIds=[];
+for(let i=1;i<=7;i++)tagIds.push((await api('/tags/create',{category_id:category.id,name:'特征'+i,description:'虚构特征的通用说明'})).id);
+await api('/archive-tags/update',{archive_id:subject.id,expected_version:subject.version??1,changes:tagIds.map(tag_id=>({tag_id,action:'add',evidence:[{kind:'member_instruction',note:'本次虚构验收明确提供的特征依据。'}]})),focus:[tagIds[6]]});
+const todo=await api('/work-tasks/create',{archive_id:subject.id,kind:'custom',title:'验证默认待办',purpose:'检查打开网站后直接看到工作',delivery:'保存验收结果',deadline_at:'2099-01-01T00:00:00.000Z'});
 const report=[];
 try{
  for(const width of [1440,390]){
@@ -31,15 +40,53 @@ try{
    ['外部人物','/people','.archive-head'],['社员','/members','.archive-head'],['任务','/tasks','.task-workspace'],
    ['仪表盘','/statistics','.statistics-page'],['知识库','/knowledge','.kb-workspace'],['Agent 接入','/agent','.agent-simple']
   ]){
-   await page.goto(base+'/');await page.locator('.whale-entrance--blue').waitFor();
+   await page.goto(base+'/home');await page.locator('.whale-entrance--blue').waitFor();
    await page.getByRole('link',{name,exact:true}).click();
    await page.waitForURL(url=>url.pathname===path);await page.locator(selector).first().waitFor();
    if(name==='外部人物')assert.equal(await page.locator('.archive-kind-switcher').count(),0);
-   await page.locator('.topbar .brand').click();await page.locator('.whale-constellation').waitFor();
+   await page.locator('.topbar .brand').click();await page.locator('.task-workspace').waitFor();
+   assert.equal(await page.getByRole('navigation',{name:'主要导航'}).getByRole('button',{name:'待办',exact:true}).getAttribute('aria-current'),'page');
    report.push({width,name,path,realHttp:true,returnHome:true});
   }
-  await page.goto(base+'/');await page.locator('.whale-entrance img').evaluateAll(els=>Promise.all(els.map(el=>el.decode())));
+  await page.goto(base+'/home');await page.locator('.whale-entrance img').evaluateAll(els=>Promise.all(els.map(el=>el.decode())));
   await page.screenshot({path:out+'/home-'+width+'.png',fullPage:true});
+ }
+ for(const width of [1440,390,320]){
+  await page.setViewportSize({width,height:width<700?844:1000});
+  await page.goto(base+'/');await page.locator('.task-index-item').filter({hasText:'验证默认待办'}).waitFor();
+  const listBox=await page.locator('.task-index-panel').boundingBox(),recommendationBox=await page.locator('.task-recommendation').boundingBox();
+  assert.ok(listBox.y<recommendationBox.y,'actionable work precedes recommendations');
+  if(width<700)assert.ok(listBox.y<500,'mobile first screen includes actionable work');
+  await page.screenshot({path:out+'/todo-list-'+width+'.png',fullPage:true});
+  await page.locator('.task-index-item').filter({hasText:'验证默认待办'}).click();
+  await page.locator('.task-object-features [aria-label="对象特征"]').waitFor();
+  await page.screenshot({path:out+'/todos-'+width+'.png',fullPage:true});
+  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false);
+  await page.goto(base+'/?archive='+subject.id);await page.locator('.entity-heading h1').filter({hasText:subject.name??'虚构对象特征验收'}).waitFor();
+  const features=page.locator('.archive-tags [aria-label="对象特征"]');await features.waitFor();
+  assert.ok((await features.locator('.tag-binding-button').first().innerText()).includes('特征7'));
+  assert.equal(await features.locator('.tag-binding-button').count(),6);
+  await features.getByRole('button',{name:'展开其余 1 项',exact:true}).click();assert.equal(await features.locator('.tag-binding-button').count(),7);
+  await features.locator('.tag-binding-button').filter({hasText:'特征1'}).click();
+  const evidence=page.getByRole('dialog').last();await evidence.getByText('本次虚构验收明确提供的特征依据。',{exact:true}).waitFor();
+  await evidence.screenshot({path:out+'/feature-evidence-'+width+'.png'});await page.keyboard.press('Escape');
+  await features.getByRole('button',{name:'收起特征',exact:true}).click();assert.equal(await features.locator('.tag-binding-button').count(),6);
+  await page.getByRole('button',{name:'编辑档案',exact:true}).click();const editor=page.getByRole('dialog',{name:'编辑档案',exact:true});
+  await editor.getByRole('tab',{name:'标签',exact:true}).click();assert.equal(await editor.locator('.tag-binding-button').count(),7);
+  await editor.screenshot({path:out+'/feature-editor-'+width+'.png'});assert.equal(await editor.evaluate(e=>e.scrollWidth>e.clientWidth+1),false);await page.keyboard.press('Escape');
+  await page.getByRole('button',{name:'编辑档案',exact:true}).click();const profile=page.getByRole('dialog',{name:'编辑档案',exact:true});
+  if(!await profile.getByRole('textbox',{name:'联系方式1',exact:true}).count())await profile.getByRole('button',{name:'＋ 添加联系方式',exact:true}).click();
+  await profile.getByLabel('联系方式1类型',{exact:true}).selectOption('邮箱');await profile.getByRole('textbox',{name:'联系方式1',exact:true}).fill('fixture-'+width+'@example.invalid');
+  await profile.getByRole('tab',{name:'标签',exact:true}).click();await profile.getByRole('tab',{name:'资料',exact:true}).click();
+  assert.equal(await profile.getByRole('textbox',{name:'联系方式1',exact:true}).inputValue(),'fixture-'+width+'@example.invalid');
+  await profile.getByRole('button',{name:'保存资料',exact:true}).click();await profile.waitFor({state:'detached'});await page.locator('.contact-pill').filter({hasText:'fixture-'+width+'@example.invalid'}).waitFor();
+  if(!await page.getByRole('textbox',{name:'新的观察记录',exact:true}).isVisible())await page.getByRole('button',{name:'开始撰写观察',exact:true}).click();
+  const observation='虚构前端纠偏 '+width+'px 完整发布验收。';await page.getByRole('textbox',{name:'新的观察记录',exact:true}).fill(observation);
+  await page.getByRole('button',{name:'发布记录',exact:true}).scrollIntoViewIfNeeded();await page.screenshot({path:out+'/composer-'+width+'.png',fullPage:true});
+  await page.getByRole('button',{name:'发布记录',exact:true}).click();await page.locator('.record-body').filter({hasText:observation}).waitFor();
+  const persisted=await context.request.get(base+'/api/archives/'+subject.id),saved=(await persisted.json()).archive;
+  assert.equal(saved.contacts[0].value,'fixture-'+width+'@example.invalid');
+  report.push({width,defaultTodo:true,legacyArchiveLink:true,focusedFeatureFirst:true,expandAndCollapse:true,evidence:true,completeEditor:true,profileSaved:true,observationPublished:true});
  }
  assert.deepEqual(errors,[]);writeFileSync(out+'/report.json',JSON.stringify(report,null,2));console.log(JSON.stringify(report));
 }catch(error){await page.screenshot({path:out+'/failure.png',fullPage:true}).catch(()=>{});console.log('PAGE ERRORS',errors);throw error;}

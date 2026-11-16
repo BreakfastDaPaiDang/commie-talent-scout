@@ -23,3 +23,5 @@
 .tag-definition-field textarea{width:100%;min-width:0;box-sizing:border-box;font:inherit;line-height:1.6;border:1px solid var(--line);border-radius:2px;background:var(--paper);color:var(--ink);padding:12px 14px;resize:vertical}
 .tag-catalog-dialog .tag-choice-list article{flex-wrap:wrap}.tag-catalog-dialog .tag-choice-list article>div{flex:1;min-width:140px;overflow-wrap:anywhere}.tag-catalog-dialog .tag-choice-list article>.button{min-height:44px}
 @media(max-width:600px){.tag-catalog-dialog{--form-pad:20px}.tag-catalog-dialog .modal-actions{flex-wrap:wrap}.tag-catalog-dialog .tag-definition-field{font-size:16px}}
+
+.object-features{min-width:0;max-width:100%;gap:8px}.object-features-toggle{min-height:36px;font-size:14px}.object-features .tag-binding-button{min-height:36px}.task-object-features{padding:0 24px 18px}.task-object-features .tag-summary{margin:0}@media(max-width:700px){.object-features .tag-binding-button,.object-features-toggle{min-height:44px}.task-object-features{padding:0 18px 16px}}

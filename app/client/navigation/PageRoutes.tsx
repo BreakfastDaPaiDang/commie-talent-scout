@@ -53,7 +53,8 @@ const views: Record<RouteId,(context:PageContext)=>React.ReactNode> = {
 };
 
 export function PageRoutes(context:PageContext) {
-  return views[resolveRoute(context.path)](context);
+  const archiveLink = ['archive','observation','event'].some(key=>new URLSearchParams(location.search).has(key));
+  return views[resolveRoute(context.path,archiveLink)](context);
 }
 
 export function PrimaryNavigation({path,legacyArchiveLink,navigate}:{path:string;legacyArchiveLink:boolean;navigate:(path:string)=>void}) {

@@ -1,3 +1,4 @@
+import {ObjectFeatures} from '../ui/ObjectFeatures';
 import { TagEvidence, kindLabels } from './TagEvidence';
 import { TagPicker } from './TagPicker';
 import { TagDefinitionDialog } from './TagMaintenance';
@@ -27,8 +28,7 @@ export function TagSummary({
   tags: TagLabel[];
   total?: number;
 }) {
-  const shown = [...tags].sort((a, b) => (a.focus || 4) - (b.focus || 4)).slice(0, 3);
-  return <div className="tag-summary">{shown.map(t => <TagChip key={t.tag_id} tag={t} />)}{total > shown.length && <span className="tag-more">+{total - shown.length}</span>}</div>;
+  return <ObjectFeatures tags={tags} total={total} compact limit={3}/>;
 }
 export function TagsSection({
   archive,
@@ -92,11 +92,11 @@ export function TagsSection({
         setError('');
         setAdd(true);
       }}>＋ 添加</button>}</header>}<PageError error={error} retry={onChanged} retryLabel="刷新档案版本" />{notice && <p className="form-notice" role="status">{notice}</p>}
-  {tags.length ? <div className="tag-bindings">{tags.map(t => <button key={t.tag_id} className="tag-binding-button" onClick={() => {
+  {tags.length ? <ObjectFeatures key={archive.id} tags={tags} limit={manage?Infinity:6} renderFeature={t => <button key={t.tag_id} className="tag-binding-button" onClick={() => {
         setSelected(t);
         setEditing(false);
         setError('');
-      }}><TagChip tag={t} />{t.deleted || t.category_deleted ? <small>已删除</small> : (!t.enabled || !t.category_enabled) && <small>已停用</small>}{t.merged_into && <small>已有合并去向</small>}</button>)}</div> : <p className="archive-no-contact">暂未记录标签</p>}
+      }}><TagChip tag={t} />{t.deleted || t.category_deleted ? <small>已删除</small> : (!t.enabled || !t.category_enabled) && <small>已停用</small>}{t.merged_into && <small>已有合并去向</small>}</button>} /> : <p className="archive-no-contact">暂未记录标签</p>}
   {add && <Modal title="添加标签" busy={busy} onClose={() => setAdd(false)}><TagChooser type={archive.type} boundIds={tags.map(t => t.tag_id)} onSelect={async id => {
         await save([{
           tag_id: id,

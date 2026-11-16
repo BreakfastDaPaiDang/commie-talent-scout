@@ -52,14 +52,14 @@ export async function verifyKnowledgeHelp(page,out,documentUrl){
   assert.equal(await page.evaluate(()=>document.activeElement?.getAttribute('aria-label')),'知识库教程');
   assert.deepEqual(await page.locator('.kb-categories').boundingBox(),original,'closing restores the original layout');
   await page.setViewportSize({width:1440,height:1080});await page.goto(documentUrl);await page.locator('.kb-article-title').waitFor();await trigger(page).click();
-  await page.getByRole('button',{name:'＋ 新条目',exact:true}).click();await tutorial(page).waitFor({state:'detached'});
-  assert.equal(await page.getByRole('dialog',{name:'新条目',exact:true}).count(),0,'dismissal click must not trigger the underlying action');
-  await page.getByRole('button',{name:'＋ 新条目',exact:true}).click();await page.getByRole('dialog',{name:'新条目',exact:true}).waitFor();await page.keyboard.press('Escape');
+  await page.getByRole('button',{name:'＋ 新文档',exact:true}).click();await tutorial(page).waitFor({state:'detached'});
+  assert.equal(await page.getByRole('dialog',{name:'新文档',exact:true}).count(),0,'dismissal click must not trigger the underlying action');
+  await page.getByRole('button',{name:'＋ 新文档',exact:true}).click();await page.getByRole('dialog',{name:'新文档',exact:true}).waitFor();await page.keyboard.press('Escape');
   await trigger(page).click();await page.mouse.click(900,1040);await tutorial(page).waitFor({state:'detached'});
-  await page.getByRole('button',{name:'分类：知性',exact:true}).click({button:'right'});
-  const category=page.getByRole('dialog',{name:'知性分类定义与留言',exact:true});await category.waitFor();
+  await page.getByRole('button',{name:'标签：知性',exact:true}).click({button:'right'});
+  const category=page.getByRole('dialog',{name:'知性标签定义与留言',exact:true});await category.waitFor();
   await trigger(page).click();await caption(page,'category-edit').waitFor();await caption(page,'category-comment').waitFor();await fitted(page);
-  await aligned(page,'category-close','.kb-category-drawer [aria-label="关闭分类侧栏"]');await page.screenshot({path:out+'/tutorial-category.png',fullPage:true});
+  await aligned(page,'category-close','.kb-category-drawer [aria-label="关闭标签侧栏"]');await page.screenshot({path:out+'/tutorial-category.png',fullPage:true});
   await close(page);assert.equal(await category.isVisible(),true,'help preserves the open category sidebar');await page.keyboard.press('Escape');await category.waitFor({state:'detached'});
   await page.getByRole('button',{name:'繁',exact:true}).click();
   for(const [tab,id] of [['分支','new-branch'],['议题','new-issue'],['历史','history-row']]){
@@ -77,7 +77,7 @@ export async function verifyKnowledgeHelp(page,out,documentUrl){
    assert.equal(await trigger(page).count(),1);await trigger(page).click();await fitted(page);
    assert.equal(await caption(page,'scope-main').count(),0,'hidden list controls have no captions on mobile detail');
    await aligned(page,'back','.kb-mobile-back');if(width===390)await page.screenshot({path:out+'/tutorial-mobile-detail.png',fullPage:true});await close(page);
-   await page.getByRole('button',{name:'← 条目',exact:true}).click();assert.equal(await trigger(page).count(),1);
+   await page.getByRole('button',{name:'← 文档',exact:true}).click();assert.equal(await trigger(page).count(),1);
    if(width===390)await page.screenshot({path:out+'/tutorial-mobile-entry.png',fullPage:true});
    await trigger(page).click();await fitted(page);
    for(const [id,text] of Object.entries(definitions)){assert.ok((await caption(page,id).innerText()).includes(text));await aligned(page,id,'[data-kb-help="'+id+'"]');}
