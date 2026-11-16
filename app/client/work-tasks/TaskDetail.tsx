@@ -1,3 +1,4 @@
+import {ObjectFeatures} from '../../ui/ObjectFeatures';
 import { notifyMembershipJoined } from "../MembershipNotice";
 import { MemberPicker } from "../ArchiveStateForm";
 import type { BoundMember } from "../../shared/archives";
@@ -108,7 +109,7 @@ export function TaskScene({
     label: '发起人',
     icon: 'people',
     value: <TaskInitiator task={task} />
-  }]} purpose={task.purpose} delivery={task.delivery} result={task.status !== 'open' && <section className="task-scene-section"><h3><Icon name="file" />任务结果</h3>{task.result_kind && <p>{taskResultLabel(task.result_kind)}</p>}<p>{task.result_text || task.closed_reason || '任务已关闭'}</p>{!!task.result_references?.length && archive && <div className="task-result-links">{task.result_references.map(reference => <button className="text-button" key={reference.observation_id} onClick={() => onOpenArchive(archive, task.id, reference.observation_id, reference.content_version)}>观察版本 {reference.content_version}</button>)}</div>}{task.result_references_restricted && <small className="comment-reference-hidden">部分观察引用当前不可见</small>}</section>} actions={<>
+  }]} features={archive&&<ObjectFeatures tags={archive.tag_summary?.tags??[]} total={archive.tag_summary?.total} compact/>} purpose={task.purpose} delivery={task.delivery} result={task.status !== 'open' && <section className="task-scene-section"><h3><Icon name="file" />任务结果</h3>{task.result_kind && <p>{taskResultLabel(task.result_kind)}</p>}<p>{task.result_text || task.closed_reason || '任务已关闭'}</p>{!!task.result_references?.length && archive && <div className="task-result-links">{task.result_references.map(reference => <button className="text-button" key={reference.observation_id} onClick={() => onOpenArchive(archive, task.id, reference.observation_id, reference.content_version)}>观察版本 {reference.content_version}</button>)}</div>}{task.result_references_restricted && <small className="comment-reference-hidden">部分观察引用当前不可见</small>}</section>} actions={<>
   {!dialog && <PageError error={error} />}
   {mine && task.status === 'open' && <><button className="button primary" disabled={busy} onClick={() => openDialog('complete')}><Icon name="check" />提交交付</button><button className="button quiet" disabled={busy} onClick={() => openDialog('extend')}><Icon name="history" />延期</button><button className="button quiet" disabled={busy} onClick={() => openDialog('release')}><Icon name="close" />放弃</button></>}
   {canReopen && <button className="button primary" disabled={busy} onClick={() => openDialog('reopen')}>重新开启</button>}

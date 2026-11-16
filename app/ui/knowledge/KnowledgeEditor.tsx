@@ -26,7 +26,7 @@ export function KnowledgeEditor({
     defaults = {
       title: doc?.title ?? '',
       body: doc?.body ?? '',
-      category: doc?.category_name ?? categories[0]?.name ?? '',
+      category: doc?.category_name ?? '',
       kind: doc?.kind ?? '知识',
       source: doc?.source ?? '',
       message: ''
@@ -62,8 +62,8 @@ export function KnowledgeEditor({
     'aria-label': {
       title: '标题',
       body: '正文',
-      category: '分类',
-      kind: '条目类型',
+      category: '标签',
+      kind: '文档类型',
       source: '来源',
       message: '修改说明'
     }[name],
@@ -76,7 +76,7 @@ export function KnowledgeEditor({
   async function save(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!fields.category.trim()) {
-      setError('请选择分类');
+      setError('请选择标签');
       return;
     }
     setBusy(true);
@@ -117,9 +117,9 @@ export function KnowledgeEditor({
       setBusy(false);
     }
   }
-  return <Modal title={doc ? '修改文档' : '新条目'} onClose={close} busy={busy} wide><form className="kb-form kb-editor" onSubmit={save}><div className="kb-editor-meta"><div className="kb-category-field"><span id="kb-editor-category-label">分类</span><button type="button" className="button kb-category-choice" aria-labelledby="kb-editor-category-label" disabled={busy} onClick={() => setPickingCategory(true)}>{fields.category ? <TagChip tag={{
+  return <Modal title={doc ? '修改文档' : '新文档'} onClose={close} busy={busy} wide><form className="kb-form kb-editor" onSubmit={save}><div className="kb-editor-meta kb-editor-tags"><div className="kb-category-field"><span id="kb-editor-category-label">标签</span><button type="button" className="button kb-category-choice" aria-labelledby="kb-editor-category-label" disabled={busy} onClick={() => setPickingCategory(true)}>{fields.category ? <TagChip tag={{
               name: fields.category
-            }} /> : <span>选择分类</span>}<span className="kb-muted">选择</span></button></div><label>条目类型<input list="kb-kind-options" required maxLength={30} {...field('kind')} /><datalist id="kb-kind-options">{['知识', '共识', '方法', '案例', '题目', '需求', '资源'].map(name => <option key={name} value={name} />)}</datalist></label></div><label>标题<input required maxLength={200} {...field('title')} /></label><label>正文<textarea rows={13} required maxLength={60000} placeholder="写下内容。可用 ## 表示小标题。" {...field('body')} /></label><label>修改说明<textarea rows={2} required maxLength={300} placeholder="这次新增或修改了什么，为什么？" {...field('message')} /></label><details><summary>来源（可选）</summary><label>来源<input maxLength={2000} {...field('source')} /></label></details>{error && <p className="form-error" role="alert">{error}</p>}<ModalActions><button className="button primary" disabled={busy}>{busy ? '正在保存…' : simple ? '保存草稿' : '保存到分支'}</button></ModalActions></form>{pickingCategory && <KnowledgeCategoryEditor api={api} branchId={branch.id} close={() => setPickingCategory(false)} done={c => {
+            }} /> : <span>选择标签</span>}<span className="kb-muted">选择</span></button></div></div><label>标题<input required maxLength={200} {...field('title')} /></label><label>正文<textarea rows={13} required maxLength={60000} placeholder="写下内容。可用 ## 表示小标题。" {...field('body')} /></label><label>修改说明<textarea rows={2} required maxLength={300} placeholder="这次新增或修改了什么，为什么？" {...field('message')} /></label><details><summary>来源（可选）</summary><label>来源<input maxLength={2000} {...field('source')} /></label></details>{error && <p className="form-error" role="alert">{error}</p>}<ModalActions><button className="button primary" disabled={busy}>{busy ? '正在保存…' : simple ? '保存草稿' : '保存到分支'}</button></ModalActions></form>{pickingCategory && <KnowledgeCategoryEditor api={api} branchId={branch.id} close={() => setPickingCategory(false)} done={c => {
       setFields((old: typeof defaults) => ({
         ...old,
         category: c.name

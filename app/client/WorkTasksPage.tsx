@@ -2,7 +2,7 @@ import { useTaskList } from './work-tasks/useTaskList';
 import { TaskLabels } from "./TaskLabels";
 import { taskMatchesLabels } from "../rules/task-labels";
 import { compareTaskBook, personalTaskCompletions } from "../rules/task-book";
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { type Member } from "./api";
 import { PageError } from "./ConnectionPages";
 import { Icon } from "../ui/icons";
@@ -33,6 +33,7 @@ export function WorkTasksPage({
     load,
     refresh
   } = useTaskList();
+  const workspace=useRef<HTMLElement>(null);
   const [view, setView] = useState<'book' | 'hall'>('book'),
     [listStatus, setListStatus] = useState('all'),
     [listLabel, setListLabel] = useState<string[]>([]),
@@ -45,6 +46,7 @@ export function WorkTasksPage({
       }
     });
   const [selectedId, setSelectedId] = useState<string | null>(() => new URLSearchParams(location.search).get('task'));
+  useLayoutEffect(()=>{if(selectedId && window.innerWidth<=700 && workspace.current)workspace.current.scrollTop=0;},[selectedId]);
   useEffect(() => {
     const sync = () => setSelectedId(new URLSearchParams(location.search).get('task'));
     window.addEventListener('popstate', sync);
@@ -78,7 +80,7 @@ export function WorkTasksPage({
   const recommendationPool = personal.filter(task => task.status === 'open' && !task.owner_id).sort(priorityFirst);
   const [recommendationIndex, setRecommendationIndex] = useState(0);
   const recommendation = recommendationPool.length ? recommendationPool[recommendationIndex % recommendationPool.length] ?? null : null;
-  return <main className="account-content work-tasks-page task-workspace"><div className="task-workspace-head"><ArchiveHead label="任务" count="" query={query} onQuery={value => {
+  return <main ref={workspace} className="account-content work-tasks-page task-workspace"><div className="task-workspace-head"><ArchiveHead label="待办" count="" query={query} onQuery={value => {
         setQuery(value);
         updateSelection(null);
       }} searchLabel="搜索任务" searchPlaceholder="搜索任务、相关对象" createControl={<CreateTask onSaved={refresh} />} /></div><nav className="task-page-tabs" aria-label="任务页面"><button className={view === 'book' ? 'active' : ''} onClick={() => {
@@ -91,14 +93,14 @@ export function WorkTasksPage({
  <PageError error={searchError} />{searching && <p role="status">正在搜索任务…</p>}
  {selectedId && !loading && !error && !selectedTask && <p className="form-error" role="alert">该任务不存在或当前不可见。<button className="text-button" onClick={() => updateSelection(null)}>返回任务簿</button></p>}
  {view === 'hall' ? <><PageError error={error} retry={() => void load()} />{loading && !tasks.length ? <p role="status">正在读取任务…</p> : <BoardHall tasks={tasks} searchTasks={searchTasks} actor={actor} selectedTask={selectedTask} onSelect={updateSelection} onChanged={refresh} onOpenArchive={onOpenArchive} />}</> : <><PageError error={error} retry={() => void load()} />{loading && !tasks.length ? <p role="status">正在读取任务…</p> : <TaskBookLayout selected={!!selectedTask} left={<>
- <TaskCompletionRecord {...completions} />
- <TaskRecommendation task={recommendation} onSelect={updateSelection} onRefresh={recommendationPool.length > 1 ? () => setRecommendationIndex(index => index + 1) : undefined} />
  <section className="task-index-panel" aria-label="任务簿"><div className="task-book-toolbar"><strong>我的任务</strong><small>（{personal.length}）</small><div className="task-book-controls"><button aria-expanded={filtersOpen} onClick={() => setFiltersOpen(v => !v)}><Icon name="filter" size={16} />{listStatus !== 'all' || listLabel.length > 0 ? '已筛选' : '筛选'}</button><button aria-label="刷新任务" title="刷新任务" disabled={loading} onClick={refresh}><Icon name="history" size={17} /></button></div></div>
  {filtersOpen && <div className="task-book-filters"><label>状态<select aria-label="任务状态" value={listStatus} onChange={e => setListStatus(e.target.value)}><option value="all">全部状态</option><option value="failed">未完成关闭</option><option value="ready">待提交</option><option value="active">进行中</option><option value="waiting">待接取</option><option value="cancelled">已取消</option></select></label><TaskLabels filter value={listLabel} onChange={setListLabel} /><button className="text-button" onClick={() => {
               setListStatus('all');
               setListLabel([]);
             }}>清除</button></div>}
  <div className="task-index">{visiblePersonal.length ? visiblePersonal.map(task => <TaskIndexItem key={task.id} task={task} actor={actor} selected={selectedId === task.id} onSelect={() => updateSelection(task.id)} onDismiss={() => dismiss(task.id + ':' + task.version)} />) : <p className="task-index-empty">{query.trim() ? '没有匹配的任务' : '暂时没有需要处理的任务'}</p>}</div></section>
+ <TaskCompletionRecord {...completions} />
+ <TaskRecommendation task={recommendation} onSelect={updateSelection} onRefresh={recommendationPool.length > 1 ? () => setRecommendationIndex(index => index + 1) : undefined} />
  </>} detail={selectedTask ? <div className="task-detail-column"><button className="text-button task-detail-back" onClick={() => updateSelection(null)}><Icon name="back" size={16} />返回任务簿</button><TaskScene key={selectedTask.id} task={selectedTask} actor={actor} onChanged={refresh} onOpenArchive={onOpenArchive} /></div> : <aside className="task-scene-empty"><h2>选择一项任务</h2><p>查看任务目的、交付要求与工作进展。</p></aside>} />}</>}
  </main>;
 }

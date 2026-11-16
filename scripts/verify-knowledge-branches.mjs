@@ -25,7 +25,7 @@ export async function verifyKnowledgeBranchDeletion(page,out,writer,documentUrl)
   await page.locator('.kb-branch-choices button.active').filter({hasText:'主分支'}).waitFor();
   assert.equal(await page.getByRole('button',{name:'删除分支',exact:true}).count(),0);
   assert.equal((await writer.branches()).branches.some(b=>b.id===branch.id),false);
-  if(mobile)await page.getByRole('button',{name:'← 条目',exact:true}).click();
+  if(mobile)await page.getByRole('button',{name:'← 文档',exact:true}).click();
   assert.equal(await page.locator('.kb-branch-box select').inputValue(),'main');
   assert.equal(await page.locator('.kb-branch-box option[value="'+branch.id+'"]').count(),0);
   await page.reload();await page.locator('.kb-branch-box option[value="main"]').waitFor({state:'attached'});
@@ -39,7 +39,7 @@ export async function verifyKnowledgeBranchDeletion(page,out,writer,documentUrl)
 export async function verifyEmptyKnowledgeChrome(page,out,documentUrl){
  const url=new URL(documentUrl);url.search='?scope=drafts&mode=git';
  await page.goto(url.href);await page.locator('.kb-empty').waitFor();
- assert.equal(await page.locator('.kb-breadcrumb').count(),0);
+ assert.equal(await page.locator('.kb-document-tags').count(),0);
  assert.equal(await page.getByRole('button',{name:'查看议题',exact:true}).count(),0);
  assert.equal(await page.locator('.kb-branch-extra').count(),0);
  assert.equal(await page.locator('.kb-branch-box button').count(),0);
@@ -48,7 +48,9 @@ export async function verifyEmptyKnowledgeChrome(page,out,documentUrl){
  assert.ok(Math.abs(geometry.gap)<2&&geometry.toggleBeforeHelp,'tutorial stays at the right edge next to the view switch');
  await page.screenshot({path:out+'/git-empty-desktop.png',fullPage:true});
  await page.getByRole('button',{name:'简',exact:true}).click();
- await page.locator('.kb-breadcrumb').filter({hasText:'知识条目'}).waitFor();
+ await page.locator('.kb-document-tags').waitFor({state:'attached'});
+ assert.equal(await page.locator('.kb-document-tags').innerText(),'');
+ assert.equal(await page.locator('.kb-breadcrumb').count(),0);
  await page.getByRole('button',{name:'查看议题',exact:true}).waitFor();
  await page.goto(documentUrl);
  return {mainLabel:true,noExpand:true,noBreadcrumb:true,noDuplicateIssue:true,simpleUnchanged:true};

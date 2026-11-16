@@ -13,14 +13,14 @@ const definitions:Definition[]=[
  {id:'scope-main',selector:'[data-kb-help="scope-main"]',text:'已形成共识，当前采用的正式内容',side:'bottom',width:138},
  {id:'scope-public',selector:'[data-kb-help="scope-public"]',text:'已经提交，供成员讨论和审核的候选内容',side:'bottom',width:138},
  {id:'scope-drafts',selector:'[data-kb-help="scope-drafts"]',text:'尚未提交，仅自己可见的个人内容',side:'bottom',width:138},
- {id:'search',selector:'.kb-search',text:'按关键词查找条目',side:'top'},
+ {id:'search',selector:'.kb-search',text:'按关键词查找文档',side:'top'},
  {id:'new-entry',selector:'[data-kb-help="new-entry"]',text:'写一篇新草稿',side:'top'},
  {id:'view',selector:'.kb-view-switch',text:'切换简洁与完整操作',side:'bottom'},
  {id:'share',selector:'.kb-detail-toolbar .share-link',text:'复制当前文档链接',side:'bottom'},
  {id:'branch',selector:'.kb-branch-box select',text:'切换当前查看的分支',side:'bottom'},
- {id:'back',selector:'.kb-mobile-back',text:'返回条目列表',side:'bottom'},
- {id:'category-add',selector:'.kb-category-add',text:'查找已有分类，或新建分类',side:'right'},
- {id:'category',selector:'.kb-categories button[aria-label^="分类："]',text:'点击筛选；右键或长按查看分类解释与留言',side:'bottom',width:190},
+ {id:'back',selector:'.kb-mobile-back',text:'返回文档列表',side:'bottom'},
+ {id:'category-add',selector:'.kb-category-add',text:'查找已有标签，或新建标签',side:'right'},
+ {id:'category',selector:'.kb-categories button[aria-label^="标签："]',text:'点击筛选；右键或长按查看标签解释与留言',side:'bottom',width:190},
  {id:'content',selector:'[data-kb-help="tab-content"]',text:'阅读当前文档正文',side:'bottom'},
  {id:'issues',selector:'[data-kb-help="tab-issues"], [data-kb-help="issues"]',text:'提出问题与修改建议',side:'bottom'},
  {id:'branches',selector:'[data-kb-help="tab-branches"]',text:'查看分支图、修改对比与合并情况',side:'bottom'},
@@ -33,10 +33,10 @@ const definitions:Definition[]=[
  {id:'quote',selector:'.kb-article .kb-body .kb-text',text:'选中文字，可添加批注',side:'bottom',members:true},
  {id:'annotation',selector:'.kb-annotation',text:'点击对照原文；右键或长按可回复、发起议题',side:'right',width:215,members:true},
  {id:'comment',selector:'.kb-article .kb-document-comments .kb-comment-form textarea, .kb-article .kb-document-comments .kb-comment-form .button.primary',text:'对整篇文档发表评论',side:'bottom'},
- {id:'category-edit',selector:'.kb-category-drawer button[aria-label="编辑分类"]',text:'编辑分类名称与解释',side:'left'},
- {id:'category-close',selector:'.kb-category-drawer button[aria-label="关闭分类侧栏"]',text:'收起分类解释与留言',side:'left'},
- {id:'category-quote',selector:'.kb-category-drawer .kb-body .kb-text',text:'选中分类解释中的文字，可添加批注',side:'left',members:true},
- {id:'category-comment',selector:'.kb-category-drawer .kb-comment-form textarea, .kb-category-drawer .kb-comment-form .button.primary',text:'对这个分类的解释发表评论',side:'left'},
+ {id:'category-edit',selector:'.kb-category-drawer button[aria-label="编辑标签"]',text:'编辑标签名称与解释',side:'left'},
+ {id:'category-close',selector:'.kb-category-drawer button[aria-label="关闭标签侧栏"]',text:'收起标签解释与留言',side:'left'},
+ {id:'category-quote',selector:'.kb-category-drawer .kb-body .kb-text',text:'选中标签解释中的文字，可添加批注',side:'left',members:true},
+ {id:'category-comment',selector:'.kb-category-drawer .kb-comment-form textarea, .kb-category-drawer .kb-comment-form .button.primary',text:'对这个标签的解释发表评论',side:'left'},
  {id:'branch-choice',selector:'.kb-branch-choices button',text:'切换查看这个分支的修改',side:'bottom'},
  {id:'merge-row',selector:'.kb-merge-row',text:'查看这次合并请求与同意情况',side:'bottom'},
  {id:'issue-row',selector:'.kb-issue-row',text:'阅读这个问题的讨论与结论',side:'bottom'},
@@ -135,7 +135,7 @@ export function KnowledgeHelp({root,writable,close}:{root:RefObject<HTMLElement|
      if(used.has(element)||definition.match&&!definition.match.test(element.textContent?.trim()??''))continue;
      const rect=visibleBox(element,bounds);if(!rect)continue;
      const pane=box((element.closest('.kb-category-drawer,.kb-list-pane,.kb-detail-pane')??workspace).getBoundingClientRect());
-     const text=definition.id==='category'?(writable?'点击筛选；右键或长按编辑分类与解释':'点击筛选；右键或长按查看分类解释'):definition.text;
+     const text=definition.id==='category'?(writable?'点击筛选；右键或长按编辑标签与解释':'点击筛选；右键或长按查看标签解释'):definition.text;
      const scopeIndex=['scope-main','scope-public','scope-drafts'].indexOf(definition.id);
      targets.push({...definition,text,element,rect,pane,label:element.getAttribute('aria-label')??element.textContent?.trim()??'',...(scopeIndex>=0?{scopeIndex}:{})});used.add(element);break;
     }
