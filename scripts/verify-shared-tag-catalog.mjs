@@ -15,14 +15,16 @@ export async function verifySharedTagCatalog(page,out,writer,documentUrl){
  await chooser.locator('.tag-choice-list article').filter({hasText:'协作方法'}).getByRole('button',{name:'选择',exact:true}).click();
  assert.equal(await editor.getByLabel('标题',{exact:true}).inputValue(),title);
  assert.equal(await editor.getByLabel('正文',{exact:true}).inputValue(),body);
- await editor.getByRole('button',{name:'标签',exact:true}).filter({hasText:'协作方法'}).waitFor();
+ await editor.getByRole('button',{name:'移除标签 协作方法',exact:true}).waitFor();
  await editor.getByLabel('修改说明',{exact:true}).fill('复用已有标签，不创建重复词条');
  await page.screenshot({path:out+'/shared-tags-document-editor.png',fullPage:true});
  await editor.getByRole('button',{name:'保存草稿',exact:true}).click();await editor.waitFor({state:'detached'});
  await page.getByRole('button',{name:'提交到审核',exact:true}).waitFor();await page.reload();
  await page.locator('.kb-document-tags').filter({hasText:'协作方法'}).waitFor();
  const current=new URL(page.url()),saved=await writer.document(current.searchParams.get('branch'),original.document_id);
- assert.equal(saved.category_name,'协作方法');assert.equal(saved.title,title);assert.equal(saved.body,body);
+ assert.deepEqual(saved.tags.map(tag=>tag.name),[original.category_name,'协作方法']);
+ const bySecond=await writer.list({branch_id:current.searchParams.get('branch'),category_id:saved.tags[1].id});
+ assert.ok(bySecond.documents.some(document=>document.document_id===original.document_id));assert.equal(saved.title,title);assert.equal(saved.body,body);
  assert.equal((await writer.categories()).categories.length,before);
 
  const base=new URL(documentUrl).origin,name='共享标签组件验收';

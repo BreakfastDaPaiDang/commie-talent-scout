@@ -6,7 +6,7 @@ import { runCommand } from './command.ts';
 import { workspaceSchemas } from './inputs.ts';
 export async function listCategories(context: ServiceContext, branchId = 'main') {
   await getBranch(context, branchId);
-  const rows = await context.stmt('SELECT c.*,(SELECT COUNT(*) FROM kw_items i JOIN kw_versions v ON v.id=i.version_id WHERE i.branch_id=? AND v.category_id=c.id AND v.deleted=0) AS count FROM kw_categories c WHERE (?=0 AND c.independent=1) OR EXISTS(SELECT 1 FROM kw_items i JOIN kw_versions v ON v.id=i.version_id WHERE i.branch_id=? AND v.category_id=c.id AND v.deleted=0) ORDER BY c.name', branchId, context.guest ? 1 : 0, branchId).all<KnowledgeCategory>();
+  const rows = await context.stmt('SELECT c.*,(SELECT COUNT(*) FROM kw_items i JOIN kw_versions v ON v.id=i.version_id WHERE i.branch_id=? AND EXISTS(SELECT 1 FROM kw_document_tags t WHERE t.version_id=v.id AND t.category_id=c.id) AND v.deleted=0) AS count FROM kw_categories c WHERE (?=0 AND c.independent=1) OR EXISTS(SELECT 1 FROM kw_items i JOIN kw_versions v ON v.id=i.version_id WHERE i.branch_id=? AND EXISTS(SELECT 1 FROM kw_document_tags t WHERE t.version_id=v.id AND t.category_id=c.id) AND v.deleted=0) ORDER BY c.name', branchId, context.guest ? 1 : 0, branchId).all<KnowledgeCategory>();
   return {
     categories: rows.results
   };
@@ -54,5 +54,5 @@ export async function defineCategory(context: ServiceContext, input: unknown) {
   return runCommand(context, a, 'category.define', at => prepareCategoryChanges(context, a, at));
 }
 export async function isCategoryPublic(context: ServiceContext, id: string) {
-  return !!(await context.stmt("SELECT 1 FROM kw_categories c WHERE c.id=? AND (c.independent=1 OR EXISTS(SELECT 1 FROM kw_items i JOIN kw_versions v ON v.id=i.version_id JOIN kw_branches b ON b.id=i.branch_id WHERE v.category_id=c.id AND v.deleted=0 AND b.visibility='members' AND b.state<>'closed'))", id).first());
+  return !!(await context.stmt("SELECT 1 FROM kw_categories c WHERE c.id=? AND (c.independent=1 OR EXISTS(SELECT 1 FROM kw_items i JOIN kw_versions v ON v.id=i.version_id JOIN kw_branches b ON b.id=i.branch_id WHERE EXISTS(SELECT 1 FROM kw_document_tags t WHERE t.version_id=v.id AND t.category_id=c.id) AND v.deleted=0 AND b.visibility='members' AND b.state<>'closed'))", id).first());
 }

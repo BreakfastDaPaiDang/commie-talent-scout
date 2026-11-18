@@ -3,6 +3,8 @@ import { notifyMembershipJoined } from "../MembershipNotice";
 import { MemberPicker } from "../ArchiveStateForm";
 import type { BoundMember } from "../../shared/archives";
 import { taskResultLabel } from "../../rules/task-delivery";
+import { taskTemplate, templateNames, type TaskTemplate } from './templates';
+import { TaskArchivePicker, type TaskArchive } from './TaskArchivePicker';
 import { TaskLabels } from "../TaskLabels";
 import { taskLabelKeys } from "../../rules/task-labels";
 import { taskCanReopen } from "../../rules/task-policy.ts";
@@ -57,6 +59,22 @@ export function TaskScene({
     [priority, setPriority] = useState<'P0' | 'P1' | 'P2'>(task.priority ?? 'P2'),
     [deadline, setDeadline] = useState(localDateTime(task.deadline_at)),
     [cancelReason, setCancelReason] = useState('');
+  const [editArchive, setEditArchive] = useState<TaskArchive | null>(null);
+  const [editTemplate, setEditTemplate] = useState<TaskTemplate | ''>('');
+  function applyTemplate(next: TaskTemplate) {
+    if (!window.confirm('使用此模板替换当前标题、任务目的和交付要求？')) return;
+    const copy = taskTemplate(next, editArchive?.name);
+    setTitle(copy.title);
+    setPurpose(copy.purpose);
+    setDelivery(copy.delivery);
+    setSelectedLabels(old => [...new Set([next, ...old.filter(key => key !== (editTemplate || 'custom'))])]);
+    setEditTemplate(next);
+  }
+  function chooseEditArchive(archive: TaskArchive | null) {
+    if (editTemplate && title === taskTemplate(editTemplate, editArchive?.name).title)
+      setTitle(taskTemplate(editTemplate, archive?.name).title);
+    setEditArchive(archive);
+  }
   const mine = task.owner_id === actor.id,
     canEdit = task.status === 'open' && (actor.role === 'admin' || task.created_by === actor.id || mine),
     canCancel = task.status === 'open' && (actor.role === 'admin' || task.created_by === actor.id && !task.owner_id || mine),
@@ -64,6 +82,8 @@ export function TaskScene({
   const newDeadline = new Date((dialog === 'reopen' ? Date.now() : Date.parse(task.deadline_at)) + days * 86400000).toISOString();
   function openDialog(value: typeof dialog) {
     setError('');
+    setEditTemplate('');
+    setEditArchive(task.archive_preview ?? null);
     setTitle(task.title);
     setPurpose(task.purpose);
     setDelivery(task.delivery);
@@ -118,17 +138,24 @@ export function TaskScene({
  {dialog === 'edit' && <Modal title="编辑任务" busy={busy} onClose={() => setDialog(null)}><form className="task-editor-form" onSubmit={e => {
         e.preventDefault();
         void command('edit', {
+          ...(editArchive && editArchive.id !== task.archive_id ? {archive_id: editArchive.id} : {}),
           title,
           purpose,
           delivery,
           labels: selectedLabels,
           priority,
-          deadline_at: iso(deadline)
+          ...(deadline !== localDateTime(task.deadline_at) ? {deadline_at: iso(deadline)} : {})
         });
-      }}><label>任务标题<input required maxLength={160} value={title} onChange={e => setTitle(e.target.value)} /></label><TaskLabels value={selectedLabels} onChange={setSelectedLabels} initialOptions={(task.label_keys ?? []).map((key, i) => ({
+      }}>{task.source === 'manual' && <>
+        <label>任务模板<select value={editTemplate} onChange={e => applyTemplate(e.target.value as TaskTemplate)}>
+          <option value="" disabled>保留当前内容</option>
+          {(['custom', 'monthly', 'onboarding'] as const).map(key => <option key={key} value={key}>{templateNames[key]}</option>)}
+        </select></label>
+        <TaskArchivePicker value={editArchive} onChange={chooseEditArchive} />
+      </>}<label>任务标题<input required maxLength={160} value={title} onChange={e => setTitle(e.target.value)} /></label><TaskLabels value={selectedLabels} onChange={setSelectedLabels} initialOptions={(task.label_keys ?? []).map((key, i) => ({
           key,
           name: task.labels?.[i] ?? key
-        }))} /><label>优先级<select value={priority} onChange={e => setPriority(e.target.value as 'P0' | 'P1' | 'P2')}><option value="P0">P0 · 最高</option><option value="P1">P1 · 重要</option><option value="P2">P2 · 常规</option></select></label><label>任务目的<textarea rows={4} required maxLength={4000} value={purpose} onChange={e => setPurpose(e.target.value)} /></label><label>交付要求<textarea rows={4} required maxLength={4000} value={delivery} onChange={e => setDelivery(e.target.value)} /></label><label>截止时间<input required type="datetime-local" value={deadline} onChange={e => setDeadline(e.target.value)} /></label><section className="task-editor-actions" aria-label="任务操作"><h3>任务操作</h3><div className="task-editor-actions-row">{task.status === 'open' && !task.owner_id && <button type="button" className="button primary" disabled={busy} onClick={() => void command('claim')}><Icon name="plus" size={16} />领取任务</button>}{mine && task.status === 'open' && <><button type="button" className="button primary" disabled={busy} onClick={() => openDialog('complete')}><Icon name="check" size={16} />提交交付</button><button type="button" className="button quiet" disabled={busy} onClick={() => openDialog('extend')}><Icon name="history" size={16} />延期</button><button type="button" className="button quiet" disabled={busy} onClick={() => openDialog('release')}><Icon name="close" size={16} />放弃</button></>}{canReopen && <button type="button" className="button primary" disabled={busy} onClick={() => openDialog('reopen')}>重新开启</button>}</div></section><PageError error={error} /><ModalActions><button className="button primary" disabled={busy}>{busy ? '正在保存…' : '保存任务'}</button></ModalActions>{canCancel && <details className="task-editor-danger"><summary>取消这项任务</summary><label>取消原因<input value={cancelReason} onChange={e => setCancelReason(e.target.value)} maxLength={500} /></label><button type="button" className="text-button" disabled={busy || !cancelReason.trim()} onClick={() => void command('cancel', {
+        }))} /><label>优先级<select value={priority} onChange={e => setPriority(e.target.value as 'P0' | 'P1' | 'P2')}><option value="P0">P0 · 最高</option><option value="P1">P1 · 重要</option><option value="P2">P2 · 常规</option></select></label><label>任务目的<textarea rows={4} required maxLength={4000} value={purpose} onChange={e => setPurpose(e.target.value)} /></label><label>交付要求<textarea rows={4} required maxLength={4000} value={delivery} onChange={e => setDelivery(e.target.value)} /></label><label>截止时间<input required type="datetime-local" value={deadline} onChange={e => setDeadline(e.target.value)} /></label><section className="task-editor-actions" aria-label="任务操作"><h3>任务操作</h3><div className="task-editor-actions-row">{task.status === 'open' && !task.owner_id && <button type="button" className="button primary" disabled={busy} onClick={() => void command('claim')}><Icon name="plus" size={16} />领取任务</button>}{mine && task.status === 'open' && <><button type="button" className="button primary" disabled={busy} onClick={() => openDialog('complete')}><Icon name="check" size={16} />提交交付</button><button type="button" className="button quiet" disabled={busy} onClick={() => openDialog('extend')}><Icon name="history" size={16} />延期</button><button type="button" className="button quiet" disabled={busy} onClick={() => openDialog('release')}><Icon name="close" size={16} />放弃</button></>}{canReopen && <button type="button" className="button primary" disabled={busy} onClick={() => openDialog('reopen')}>重新开启</button>}</div></section><PageError error={error} /><ModalActions><button className="button primary" disabled={busy || task.source === 'manual' && !editArchive && (!!task.archive_id || editTemplate === 'monthly' || editTemplate === 'onboarding')}>{busy ? '正在保存…' : '保存任务'}</button></ModalActions>{canCancel && <details className="task-editor-danger"><summary>取消这项任务</summary><label>取消原因<input value={cancelReason} onChange={e => setCancelReason(e.target.value)} maxLength={500} /></label><button type="button" className="text-button" disabled={busy || !cancelReason.trim()} onClick={() => void command('cancel', {
             reason: cancelReason.trim()
           })}>确认取消任务</button></details>}</form></Modal>}
  {(dialog === 'extend' || dialog === 'reopen') && <Modal title={dialog === 'extend' ? '延长任务期限' : '重新开启任务'} busy={busy} onClose={() => setDialog(null)}><form onSubmit={e => {

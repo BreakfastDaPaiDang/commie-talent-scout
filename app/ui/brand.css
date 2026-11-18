@@ -810,3 +810,5 @@ a:focus-visible {
     margin-bottom: 28px;
   }
 }
+
+.task-archive-options{display:flex;flex-wrap:wrap;gap:.4rem;max-height:12rem;overflow:auto;margin-top:.4rem}

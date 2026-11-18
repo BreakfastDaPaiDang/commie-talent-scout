@@ -18,8 +18,8 @@ try{
  await context.addCookies([{name,value:value.join('='),url:v.base}]);const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.goto(v.base+'/tasks',{waitUntil:'domcontentloaded'});
  await page.getByRole('button',{name:'新建',exact:true}).click();let dialog=page.getByRole('dialog',{name:'发布任务',exact:true});
- await dialog.getByText('调整交付和期限',{exact:true}).click();
- await dialog.locator('.task-advanced textarea').waitFor();
+ await dialog.getByText('调整接取期限',{exact:true}).click();
+ await dialog.getByLabel('交付要求',{exact:true}).waitFor();
  assert.equal(await dialog.locator('.monthly-task-tools').count(),0);
  mkdirSync('tmp/verification/rule-retirement',{recursive:true});
  await dialog.locator('.task-advanced input').scrollIntoViewIfNeeded();

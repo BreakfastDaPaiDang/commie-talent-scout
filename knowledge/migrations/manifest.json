@@ -15,6 +15,11 @@
                                                             "backwards_compatible":  true,
                                                             "reason":  "Adds independent document branches, immutable commits, three-member consent, explicit multi-candidate selection, issues and anchored comments; preserves legacy records and private draft ownership."
                                                         },
+                       "0005_document_tags.sql": {
+                           "sha256": "27239383e4b55e83939353e10386c4510a47da6a3f3ae62464e1019251145901",
+                           "backwards_compatible": true,
+                           "reason": "Adds versioned secondary tags. Existing writers and primary categories remain valid."
+                       },
                        "0004_reviews_and_categories.sql":  {
                                                                "sha256":  "068fc146eb26e26fc09eb8a96e9cf02f99d614db58c201eeefa34614b1563054",
                                                                "backwards_compatible":  true,
