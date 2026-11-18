@@ -24,11 +24,17 @@ try{
  const a=await api('/archives/create',{type:'person',name:'虚构人员认可验收',request_id:uuid()}),o=await api('/observations/create',{archive_id:a.id,body:'已在实际协作中完成一项文案校对，能说明依据并及时反馈困难。',request_id:uuid()});
  const input={archive_id:a.id,round_number:1,observation_id:o.id,content_version:1,request_id:uuid()};
  await page.goto(base+'/?archive='+a.id);await page.getByRole('button',{name:'认可此人',exact:true}).waitFor();
+ assert.equal(await page.locator('.personnel-recognition').count(),0);
  const contrastChecks=[];
  for(const width of [1440,390]){await page.setViewportSize({width,height:width===390?844:1000});await page.getByRole('button',{name:'认可此人',exact:true}).click();const dialog=page.getByRole('dialog',{name:'认可此人',exact:true});await dialog.waitFor();await dialog.getByText('本月剩余 2/2 份',{exact:false}).waitFor();
   for(const theme of ['light','night']){await page.evaluate(theme=>document.documentElement.dataset.theme=theme,theme);assert.equal(await dialog.evaluate(el=>el.scrollWidth>el.clientWidth+1),false);const contrast=await dialog.locator('blockquote').evaluate(el=>{const s=getComputedStyle(el),luminance=color=>{const rgb=color.match(/[\d.]+/g).slice(0,3).map(n=>{const c=Number(n)/255;return c<=.04045?c/12.92:((c+.055)/1.055)**2.4;});return rgb[0]*.2126+rgb[1]*.7152+rgb[2]*.0722;};const a=luminance(s.color),b=luminance(s.backgroundColor);return(Math.max(a,b)+.05)/(Math.min(a,b)+.05);});assert.ok(contrast>=4.5,`${theme} ${width}px evidence contrast ${contrast}`);contrastChecks.push({theme,width,contrast});await dialog.screenshot({path:`${out}/confirm-${width}-${theme}.png`});}
   await page.evaluate(()=>document.documentElement.dataset.theme='light');await dialog.screenshot({path:`${out}/confirm-${width}.png`});if(width===1440)await dialog.getByRole('button',{name:'关闭'}).click();}
- await page.getByRole('dialog',{name:'认可此人',exact:true}).getByRole('button',{name:'确认认可',exact:true}).click();await page.getByRole('dialog',{name:'认可此人',exact:true}).waitFor({state:'detached'});await page.getByText('人员认可 1/3',{exact:false}).waitFor();
+ await page.getByRole('dialog',{name:'认可此人',exact:true}).getByRole('button',{name:'确认认可',exact:true}).click();await page.getByRole('dialog',{name:'认可此人',exact:true}).waitFor({state:'detached'});const records=page.locator('.personnel-recognition details'),toggle=records.locator('summary');
+ await page.getByText('已有 1 人认可',{exact:true}).waitFor();
+ assert.equal(await records.getAttribute('open'),null);
+ assert.doesNotMatch(await page.locator('.personnel-recognition').innerText(),/本月剩余|三名社员/);
+ await toggle.focus();await page.keyboard.press('Enter');await records.getByRole('button',{name:'撤回认可'}).waitFor();
+ await page.keyboard.press('Enter');assert.equal(await records.getAttribute('open'),null);
  assert.equal((await api('/personnel-recognition/'+a.id)).quota.remaining,1);
  const guide=await mcp('get_usage_guide',{topic:'personnel_recognition'});assert.ok(guide.rules.some(s=>s.includes('明确授权')));
  const second=await mcp('recognize_person',input);assert.equal(second.count,2);assert.equal(second.task_id,null);const replay=await mcp('recognize_person',input);assert.equal(replay.replayed,true);assert.equal((await mcp('get_personnel_recognition',{archive_id:a.id})).quota.remaining,1);
@@ -36,6 +42,16 @@ try{
  assert.equal(f.sqlite.prepare('SELECT count(*) n FROM work_tasks WHERE archive_id=?').get(a.id).n,1);assert.equal(f.sqlite.prepare('SELECT owner_id FROM work_tasks WHERE id=?').get(third.task_id).owner_id,null);
  await page.reload();await page.getByRole('link',{name:'查看人事审核任务 ↗'}).waitFor();await page.locator('.personnel-recognition summary').click();assert.equal(await page.getByRole('link',{name:'查看依据 · 版本 1',exact:true}).count(),3);await page.screenshot({path:out+'/recognized-mobile.png',fullPage:true});
  await page.getByRole('link',{name:'查看人事审核任务 ↗'}).click();await page.getByRole('button',{name:'领取任务',exact:true}).waitFor();
+ // A withdrawn last vote still has a history, even with zero active recognitions.
+ const other=await api('/archives/create',{type:'person',name:'虚构撤回记录',request_id:uuid()});
+ const otherObs=await api('/observations/create',{archive_id:other.id,body:'第二份样本观察。',request_id:uuid()});
+ await api('/personnel-recognition/recognize',{archive_id:other.id,observation_id:otherObs.id,content_version:1,round_number:1,request_id:uuid()});
+ await page.goto(base+'/people?archive='+other.id);await page.getByText('已有 1 人认可',{exact:true}).click();
+ await page.getByRole('button',{name:'撤回认可',exact:true}).click();
+ await page.getByRole('button',{name:'确认撤回',exact:true}).click();
+ await page.getByRole('dialog',{name:'撤回人员认可'}).waitFor({state:'detached'});
+ await page.reload();await page.getByText('认可记录',{exact:true}).click();
+ await records.getByText('已撤回',{exact:true}).waitFor();
  // Existing task delivery remains the only route from review to onboarding to membership.
  let claim=await api('/work-tasks/claim',{id:third.task_id,expected_version:1,request_id:uuid()});let evidence=await api('/observations/create',{archive_id:a.id,body:'本轮审核有依据地确认通过。',request_id:uuid()});
  let delivered=await api('/work-tasks/complete',{id:third.task_id,expected_version:claim.version,result_kind:'audit_passed',result_text:'审核通过',references:[{observation_id:evidence.id,content_version:1}],request_id:uuid()});assert.equal(delivered.archive_status,'已加入待对接');

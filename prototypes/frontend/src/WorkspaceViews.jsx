@@ -1,4 +1,4 @@
-import {RecognitionProgress,RecognitionButton,RecognitionConfirmation} from '../../../app/ui/PersonnelRecognition';
+import {RecognitionProgress} from '../../../app/ui/PersonnelRecognition';
 import {archivePrimaryAction} from '../../../app/rules/archive-states';
 import {RelatedTasksFrame,DetailActions} from '../../../app/ui/TaskBook';
 import {prototypeReminder} from './model.js';
@@ -166,7 +166,7 @@ export function Detail({ w }) {
 
 </>}/>
           <ArchiveLifecycleNotice deleted={false} closed={locked} onReopen={()=>w.setDialog({type:'state',mode:'reopen',nextState:entity.lastOpenState??'视奸观察'})}/>
-          {new URLSearchParams(location.search).has('personnel-recognition')&&<RecognitionProgress count={2}><RecognitionButton onClick={()=>{}}/><RecognitionConfirmation name={entity.name} version={1} remaining={1} excerpt="已在一次实际协作中完成任务，并提供具体工作记录。"/></RecognitionProgress>}{!new URLSearchParams(location.search).has('personnel-recognition')&&archivePrimaryAction({type:entity.type,status:entity.state,closed:locked})&&<div className="archive-primary-action"><DetailActions><button className="button primary" onClick={()=>w.setDialog({type:'state',nextState:archivePrimaryAction({type:entity.type,status:entity.state}).status})}><Icon name="check"/>{archivePrimaryAction({type:entity.type,status:entity.state}).label}</button></DetailActions></div>}
+          {new URLSearchParams(location.search).has('personnel-recognition')&&<RecognitionProgress count={2}><ul className="recognition-votes"><li>示例社员甲</li><li>示例社员乙</li></ul></RecognitionProgress>}{!new URLSearchParams(location.search).has('personnel-recognition')&&archivePrimaryAction({type:entity.type,status:entity.state,closed:locked})&&<div className="archive-primary-action"><DetailActions><button className="button primary" onClick={()=>w.setDialog({type:'state',nextState:archivePrimaryAction({type:entity.type,status:entity.state}).status})}><Icon name="check"/>{archivePrimaryAction({type:entity.type,status:entity.state}).label}</button></DetailActions></div>}
           <RelatedTasksFrame history={taskHistory} onHistory={setTaskHistory} count={0}><p className="stream-status">{taskHistory?'暂无已关闭的关联任务':'暂无开启中的关联任务'}</p></RelatedTasksFrame>
           <TimelineTabs id={entity.id} value={materialPane?'materials':w.recordView==='records'?'observations':w.recordView} onChange={value=>{setMaterialPane(value==='materials');if(value!=='materials')w.setRecordView(value==='observations'?'records':value);}} deletedCount={w.deletedCount} materialCount={materialCounts[entity.id]??0}/>
           <div hidden={!materialPane} role="tabpanel" id={entity.id+'-materials'} aria-labelledby={entity.id+'-tab-materials'}><MaterialsPreview key={entity.id} entity={entity} actor={actor} locked={locked} onCount={count=>setMaterialCounts(c=>({...c,[entity.id]:count}))}/></div>

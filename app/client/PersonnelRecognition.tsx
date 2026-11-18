@@ -20,7 +20,6 @@ type Summary = {
     state: string;
   } | null;
   count: number;
-  eligible: boolean;
   can_recognize: boolean;
   quota: {
     remaining: number;
@@ -97,11 +96,23 @@ export function PersonnelRecognitionScope({
     summary,
     select
   }}>{archive.type === 'person' && archive.person_role !== 'member' && !archive.deleted && <>
- <PageError error={!selected && !withdrawing ? error : ''} retry={() => setRetry(n => n + 1)} />{summary && <RecognitionProgress count={summary.count} taskHref={summary.task_id ? '/tasks?task=' + summary.task_id : undefined}><details><summary>认可记录{summary.eligible ? ` · 本月剩余 ${summary.quota.remaining}/2 份` : ''}</summary>{summary.votes.length ? <ul className="recognition-votes">{summary.votes.map(v => <li key={v.id}><strong>{v.name}</strong>{v.evidence_deleted ? <span>依据已删除</span> : <a href={'/people?archive=' + archive.id + '&observation=' + v.observation_id + '&version=' + v.content_version}>查看依据 · 版本 {v.content_version}</a>}{v.withdrawn_at && <span>已撤回</span>}{v.id === summary.mine?.id && !v.withdrawn_at && !archive.closed && <button className="text-button" onClick={() => {
-                setWithdrawing(true);
-                setRequestId(crypto.randomUUID());
-                setError('');
-              }}>撤回认可</button>}</li>)}</ul> : <p className="secondary-copy">阅读观察记录后，可在记录下方认可此人。</p>}{!summary.eligible && <p className="secondary-copy">绑定正式社员档案的个人账号可以认可。</p>}{summary.round?.state === 'closed' && <p className="secondary-copy">上轮已结束，旧认可不计入新一轮。</p>}</details></RecognitionProgress>}
+    <PageError error={!selected && !withdrawing ? error : ''} retry={() => setRetry(n => n + 1)} />
+    {summary && <RecognitionProgress count={summary.count} previousRound={summary.round?.state === 'closed'}
+      taskHref={summary.task_id ? '/tasks?task=' + summary.task_id : undefined}>
+      {summary.votes.length > 0 && <ul className="recognition-votes">{summary.votes.map(v => <li key={v.id}>
+        <strong>{v.name}</strong>
+        {v.evidence_deleted ? <span>依据已删除</span> :
+          <a href={'/people?archive=' + archive.id + '&observation=' + v.observation_id + '&version=' + v.content_version}>查看依据 · 版本 {v.content_version}</a>}
+        {v.withdrawn_at && <span>已撤回</span>}
+        {v.id === summary.mine?.id && !v.withdrawn_at && !archive.closed &&
+          <button className="text-button" onClick={() => {
+            setWithdrawing(true);
+            setRequestId(crypto.randomUUID());
+            setError('');
+          }}>撤回认可</button>}
+      </li>)}</ul>}
+    </RecognitionProgress>}
+
  </>}{children}{(selected || withdrawing) && summary && <Modal title={withdrawing ? '撤回人员认可' : '认可此人'} busy={busy} onClose={() => {
       setSelected(null);
       setWithdrawing(false);
