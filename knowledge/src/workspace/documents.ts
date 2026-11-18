@@ -1,7 +1,7 @@
 import { KnowledgeError, uid } from "../types.ts";
 import type { KnowledgeBranch, KnowledgeVersion, KnowledgeCategory, KnowledgeDiff } from "../../../app/shared/knowledge.ts";
 import type { ServiceContext } from './context.ts';
-import { getBranch, getDocument, assertEditable, prepareCommit, getVersion } from './records.ts';
+import { getBranch, getDocument, assertEditable, prepareCommit, getVersion, tagProjection, withTags, type TaggedRow } from './records.ts';
 import { listCategories } from './categories.ts';
 import { runCommand } from './command.ts';
 import { workspaceSchemas } from './inputs.ts';
@@ -21,14 +21,14 @@ export async function listDocuments(context: ServiceContext, input: unknown) {
     scopeArgs = [];
   }
   const from = 'FROM kw_items i JOIN kw_branches b ON b.id=i.branch_id JOIN kw_versions v ON v.id=i.version_id LEFT JOIN kw_categories c ON c.id=v.category_id';
-  const where = `${scope} AND v.deleted=0 AND (? IS NULL OR v.category_id=?) AND (v.title LIKE ? ESCAPE '!' OR v.body LIKE ? ESCAPE '!')`,
+  const where = `${scope} AND v.deleted=0 AND (? IS NULL OR EXISTS(SELECT 1 FROM kw_document_tags t WHERE t.version_id=v.id AND t.category_id=?)) AND (v.title LIKE ? ESCAPE '!' OR v.body LIKE ? ESCAPE '!')`,
     args = [...scopeArgs, a.category_id ?? null, a.category_id ?? null, pattern, pattern];
-  const rows = await context.stmt(`SELECT v.*,i.branch_id,c.name AS category_name ${from} WHERE ${where} ORDER BY v.created_at DESC,v.id,i.branch_id LIMIT ? OFFSET ?`, ...args, a.limit + 1, a.offset).all<KnowledgeVersion>();
-  const categories = a.scope === 'public' || a.scope === 'drafts' ? (await context.stmt(`SELECT c.*,COUNT(*) AS count ${from} WHERE ${scope} AND v.deleted=0 AND c.id IS NOT NULL GROUP BY c.id ORDER BY c.name`, ...scopeArgs).all<KnowledgeCategory>()).results : (await listCategories(context, branch.id)).categories;
+  const rows = await context.stmt(`SELECT v.*,i.branch_id,c.name AS category_name,${tagProjection} ${from} WHERE ${where} ORDER BY v.created_at DESC,v.id,i.branch_id LIMIT ? OFFSET ?`, ...args, a.limit + 1, a.offset).all<TaggedRow>();
+  const categories = a.scope === 'public' || a.scope === 'drafts' ? (await context.stmt(`SELECT c.*,COUNT(*) AS count FROM kw_items i JOIN kw_branches b ON b.id=i.branch_id JOIN kw_versions v ON v.id=i.version_id JOIN kw_document_tags t ON t.version_id=v.id JOIN kw_categories c ON c.id=t.category_id WHERE ${scope} AND v.deleted=0 AND c.id IS NOT NULL GROUP BY c.id ORDER BY c.name`, ...scopeArgs).all<KnowledgeCategory>()).results : (await listCategories(context, branch.id)).categories;
   if (!context.guest && (a.scope === 'public' || a.scope === 'drafts')) for (const c of (await context.stmt('SELECT *,0 AS count FROM kw_categories WHERE independent=1 ORDER BY name').all<KnowledgeCategory>()).results) if (!categories.some(x => x.id === c.id)) categories.push(c);
   return {
     branch,
-    documents: rows.results.slice(0, a.limit),
+    documents: rows.results.slice(0, a.limit).map(withTags),
     next_offset: rows.results.length > a.limit ? a.offset + a.limit : null,
     categories
   };
@@ -56,6 +56,17 @@ export async function saveDocument(context: ServiceContext, input: unknown) {
     if (!category) statements.push(context.stmt('INSERT INTO kw_categories(id,name,updated_at) VALUES(?,?,?)', categoryId, a.category, at));
     if (!old) statements.push(context.stmt('INSERT INTO kw_documents VALUES(?,?,?,?)', documentId, context.actor.id, context.actor.name, at));
     statements.push(context.stmt('INSERT INTO kw_versions VALUES(?,?,?,?,?,?,?,?,?,?,?)', versionId, documentId, a.title, a.body, categoryId, a.kind, a.source, 0, context.actor.id, context.actor.name, at), prepareCommit(context, commitId, b, a.message, at), context.stmt('INSERT INTO kw_changes VALUES(?,?,?,?)', commitId, documentId, old?.id ?? null, versionId), context.stmt('INSERT INTO kw_items(branch_id,document_id,version_id) VALUES(?,?,?) ON CONFLICT(branch_id,document_id) DO UPDATE SET version_id=excluded.version_id', b.id, documentId, versionId), context.stmt('UPDATE kw_branches SET head_id=?,version=version+1,updated_at=? WHERE id=?', commitId, at, b.id));
+    const additional = [...new Set(a.additional_tags ?? old?.tags?.filter(t => t.id !== old.category_id).map(t => t.name) ?? [])]
+      .filter(name => name !== a.category);
+    if (additional.length) {
+      const visible = (await listCategories(context, b.id)).categories;
+      const known = new Map(visible.map(tag => [tag.name, tag.id]));
+      for (const [index, name] of additional.entries()) {
+        const id = known.get(name);
+        if (!id) throw new KnowledgeError(400, 'TAG_NOT_FOUND', '标签不可用，请重新选择');
+        statements.push(context.stmt('INSERT INTO kw_version_tags VALUES(?,?,?)', versionId, id, index + 1));
+      }
+    }
     return {
       statements,
       result: {
@@ -77,7 +88,7 @@ export async function removeDocument(context: ServiceContext, input: unknown) {
       version = uid(),
       commit = uid();
     return {
-      statements: [context.stmt('INSERT INTO kw_versions SELECT ?,document_id,title,body,category_id,kind,source,1,?,?,? FROM kw_versions WHERE id=?', version, context.actor.id, context.actor.name, at, v.id), prepareCommit(context, commit, b, a.message, at), context.stmt('INSERT INTO kw_changes VALUES(?,?,?,?)', commit, v.document_id, v.id, version), context.stmt('UPDATE kw_items SET version_id=? WHERE branch_id=? AND document_id=?', version, b.id, v.document_id), context.stmt('UPDATE kw_branches SET head_id=?,version=version+1,updated_at=? WHERE id=?', commit, at, b.id)],
+      statements: [context.stmt('INSERT INTO kw_versions SELECT ?,document_id,title,body,category_id,kind,source,1,?,?,? FROM kw_versions WHERE id=?', version, context.actor.id, context.actor.name, at, v.id), context.stmt('INSERT INTO kw_version_tags SELECT ?,category_id,position FROM kw_version_tags WHERE version_id=?', version, v.id), prepareCommit(context, commit, b, a.message, at), context.stmt('INSERT INTO kw_changes VALUES(?,?,?,?)', commit, v.document_id, v.id, version), context.stmt('UPDATE kw_items SET version_id=? WHERE branch_id=? AND document_id=?', version, b.id, v.document_id), context.stmt('UPDATE kw_branches SET head_id=?,version=version+1,updated_at=? WHERE id=?', commit, at, b.id)],
       result: {
         id: v.document_id,
         branch_id: b.id,

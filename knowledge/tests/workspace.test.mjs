@@ -75,3 +75,29 @@ test('guest history exposes only published main commits, not intermediate drafts
  assert.equal((await guest.commitDetail('main',merged.commit_id)).changes[0].after.id,revision.version_id);
  await assert.rejects(guest.commitDetail('main',d.commit_id),e=>e.code==='NOT_FOUND');await assert.rejects(guest.commitDetail('main',revision.commit_id),e=>e.code==='NOT_FOUND');assert.deepEqual((await guest.issues()).issues,[]);await assert.rejects(guest.issue(issue.id),e=>e.code==='NOT_FOUND');
 }finally{f.close();}});
+
+test('document tags are versioned and searchable in drafts, public review and main',async()=>{
+ const f=setup();try{
+  const w=f.w[0],extra=await w.editCategory({branch_id:'main',name:'新人对接',request_id:request()});
+  const b=await w.createBranch({name:'对接流程',visibility:'private',request_id:request()});
+  const d=await w.save({branch_id:b.id,expected_version:b.version,category:'知性',additional_tags:['新人对接','新人对接'],title:'对接流程',body:'正文',message:'新增流程',request_id:request()});
+  const byTag={category_id:extra.id};
+  assert.equal((await w.list({...byTag,scope:'drafts'})).documents.length,1);
+  assert.equal((await f.w[1].list({...byTag,scope:'drafts'})).documents.length,0);
+  assert.equal((await w.list({...byTag,scope:'main'})).documents.length,0);
+  assert.deepEqual((await w.get(b.id,d.id)).document.tags.map(t=>t.name),['知性','新人对接']);
+  const m=await w.submitReview({branch_id:b.id,document_id:d.id,version_id:d.version_id,expected_version:d.version,request_id:request()});
+  assert.equal((await w.list({...byTag,scope:'public'})).documents.length,1);
+  await agree(f,m);
+  const main=await w.list({...byTag,scope:'main'});
+  assert.deepEqual(main.documents.map(v=>v.document_id),[d.id]);
+  assert.equal(main.categories.find(c=>c.id===extra.id).count,1);
+  const branch=await w.createBranch({name:'修订',request_id:request()});
+  const edit={branch_id:branch.id,document_id:d.id,title:'修订标题',body:'正文',category:'知性',message:'修订'};
+  const v=await w.save({...edit,expected_version:branch.version,request_id:request()});
+  assert.equal((await w.get(branch.id,d.id)).document.tags.length,2);
+  await w.save({...edit,additional_tags:[],expected_version:v.version,request_id:request()});
+  assert.equal((await w.list({...byTag,branch_id:branch.id})).documents.length,0);
+  assert.equal((await w.get('main',d.id)).document.tags.length,2);
+ }finally{f.close();}
+});

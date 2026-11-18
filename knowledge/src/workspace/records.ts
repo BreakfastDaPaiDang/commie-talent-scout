@@ -15,14 +15,22 @@ export function assertEditable(context: ServiceContext, b: KnowledgeBranch, vers
   if (b.state !== 'open') throw new KnowledgeError(409, 'BRANCH_CLOSED', '该分支已经结束，请新建分支');
   if (b.version !== version) throw new KnowledgeError(409, 'CONFLICT', '分支已变化，请刷新后核对');
 }
+// All callers read labels from the selected immutable version, including review diffs.
+export const tagProjection = `(SELECT json_group_array(json_object('id', c.id, 'name', c.name) ORDER BY t.position)
+  FROM kw_document_tags t JOIN kw_categories c ON c.id=t.category_id WHERE t.version_id=v.id) AS tags_json`;
+export type TaggedRow = KnowledgeVersion & {tags_json: string};
+export function withTags({tags_json, ...version}: TaggedRow): KnowledgeVersion {
+  return {...version, tags: JSON.parse(tags_json)};
+}
 export async function getDocument(context: ServiceContext, branchId: string, id: string) {
   await getBranch(context, branchId);
-  const v = await context.stmt('SELECT v.*,c.name AS category_name FROM kw_items i JOIN kw_versions v ON v.id=i.version_id LEFT JOIN kw_categories c ON c.id=v.category_id WHERE i.branch_id=? AND i.document_id=?', branchId, id).first<KnowledgeVersion>();
+  const v = await context.stmt(`SELECT v.*,c.name AS category_name,${tagProjection} FROM kw_items i JOIN kw_versions v ON v.id=i.version_id LEFT JOIN kw_categories c ON c.id=v.category_id WHERE i.branch_id=? AND i.document_id=?`, branchId, id).first<TaggedRow>();
   if (!v || v.deleted) throw new KnowledgeError(404, 'NOT_FOUND', '文档不存在或已在此分支移除');
-  return v;
+  return withTags(v);
 }
 export async function getVersion(context: ServiceContext, id: string | null) {
-  return id ? await context.stmt('SELECT v.*,c.name AS category_name FROM kw_versions v LEFT JOIN kw_categories c ON c.id=v.category_id WHERE v.id=?', id).first<KnowledgeVersion>() : null;
+  const row = id ? await context.stmt(`SELECT v.*,c.name AS category_name,${tagProjection} FROM kw_versions v LEFT JOIN kw_categories c ON c.id=v.category_id WHERE v.id=?`, id).first<TaggedRow>() : null;
+  return row ? withTags(row) : null;
 }
 export function prepareCommit(context: ServiceContext, id: string, b: KnowledgeBranch, message: string, at: string, mergeParent: string | null = null) {
   return context.stmt('INSERT INTO kw_commits VALUES(?,?,?,?,?,?,?,?)', id, b.id, b.head_id, mergeParent, message, context.actor.id, context.actor.name, at);

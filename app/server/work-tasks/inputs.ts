@@ -64,6 +64,7 @@ export const workTaskExtendInput = z.object({
   request_id: requestId
 }).strict();
 export const workTaskEditInput = z.object({
+  archive_id: z.uuid().optional(),
   id: z.uuid(),
   expected_version: expectedVersion,
   title: z.string().trim().min(1).max(160).optional(),
@@ -73,7 +74,7 @@ export const workTaskEditInput = z.object({
   priority: z.enum(taskPriorities).optional(),
   deadline_at: z.string().datetime().optional(),
   request_id: requestId
-}).strict().refine(a => a.title !== undefined || a.purpose !== undefined || a.delivery !== undefined || a.labels !== undefined || a.priority !== undefined || a.deadline_at !== undefined, {
+}).strict().refine(a => a.archive_id !== undefined || a.title !== undefined || a.purpose !== undefined || a.delivery !== undefined || a.labels !== undefined || a.priority !== undefined || a.deadline_at !== undefined, {
   message: '至少需要调整一项任务内容'
 });
 export const workTaskReopenInput = z.object({

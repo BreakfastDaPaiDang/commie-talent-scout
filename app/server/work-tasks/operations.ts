@@ -263,6 +263,7 @@ export async function editTask(context: ServiceContext, input: unknown) {
     parameters: {
       id: a.id,
       expected_version: a.expected_version,
+      archive_id: a.archive_id,
       title: a.title,
       purpose: a.purpose,
       delivery: a.delivery,
@@ -276,6 +277,23 @@ export async function editTask(context: ServiceContext, input: unknown) {
     assertOpenTask(context, task);
     if (context.actor.role !== 'admin' && task.created_by !== context.actor.id && task.owner_id !== context.actor.id) throw new Failure(403, 'TASK_EDIT_FORBIDDEN', '只有创建者或当前负责人可以维护任务内容');
     if (a.deadline_at !== undefined && Date.parse(a.deadline_at) <= Date.now()) throw new Failure(400, 'DEADLINE_REQUIRED', '截止时间必须仍在未来');
+    const linking = a.archive_id !== undefined && a.archive_id !== task.archive_id;
+    const guards: D1PreparedStatement[] = [];
+    if (linking) {
+      if (task.source !== 'manual') throw new Failure(409, 'RULE_TASK_ARCHIVE', '自动任务关联其来源档案');
+      const eligible = `EXISTS (SELECT 1 FROM archives WHERE id=? AND type='person' AND closed=0 AND deleted=0)
+        AND NOT EXISTS (SELECT 1 FROM work_overview_followups WHERE task_id=?)
+        AND NOT EXISTS (SELECT 1 FROM work_recommendation_links WHERE task_id=?)
+        AND NOT EXISTS (SELECT 1 FROM personnel_recognition_rounds WHERE task_id=?)
+        AND NOT EXISTS (SELECT 1 FROM work_task_comment_versions WHERE task_id=? AND references_json <> '[]')
+        AND NOT EXISTS (SELECT 1 FROM work_task_events WHERE task_id=? AND kind='task.completed')`;
+      const args = [a.archive_id!, task.id, task.id, task.id, task.id, task.id];
+      if (!(await context.stmt('SELECT 1 WHERE ' + eligible, ...args).first()))
+        throw new Failure(409, 'TASK_ARCHIVE_CONFLICT', '请选择开启的人物档案，已绑定业务记录的任务须保留原对象');
+      const guard = uid();
+      guards.push(context.stmt('INSERT INTO mutation_guards VALUES(?,CASE WHEN ' + eligible + ' THEN 1 ELSE 0 END)', guard, ...args),
+        context.stmt('DELETE FROM mutation_guards WHERE id=?', guard));
+    }
     const labelPlan = a.labels === undefined ? {
       keys: JSON.parse(task.labels_json || '[]') as string[],
       statements: []
@@ -292,7 +310,7 @@ export async function editTask(context: ServiceContext, input: unknown) {
         labels_json: JSON.stringify(labelKeys),
         priority: nextPriority
       },
-      changed = next.title !== task.title || next.purpose !== task.purpose || next.delivery !== task.delivery || next.deadline_at !== task.deadline_at || next.labels_json !== task.labels_json || next.priority !== task.priority;
+      changed = linking || next.title !== task.title || next.purpose !== task.purpose || next.delivery !== task.delivery || next.deadline_at !== task.deadline_at || next.labels_json !== task.labels_json || next.priority !== task.priority;
     if (!changed) return {
       result: {
         id: task.id,
@@ -305,6 +323,7 @@ export async function editTask(context: ServiceContext, input: unknown) {
     const result = {
       id: task.id,
       status: task.status,
+      archive_id: a.archive_id ?? task.archive_id,
       title: next.title,
       purpose: next.purpose,
       delivery: next.delivery,
@@ -316,7 +335,8 @@ export async function editTask(context: ServiceContext, input: unknown) {
     };
     return {
       result,
-      statements: [...labelPlan.statements, context.stmt("INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(SELECT 1 FROM work_tasks t WHERE t.id=? AND t.version=? AND t.status='open' AND (t.created_by=? OR t.owner_id=? OR ?='admin')) THEN 1 ELSE 0 END)", key, a.id, a.expected_version, context.actor.id, context.actor.id, context.actor.role), context.stmt('UPDATE work_tasks SET title=?,purpose=?,delivery=?,deadline_at=?,labels_json=?,priority=?,updated_at=?,version=version+1 WHERE id=? AND version=? AND status=\'open\'', next.title, next.purpose, next.delivery, next.deadline_at, next.labels_json, next.priority, at, a.id, a.expected_version), context.event(a.id, 'task.edited', {
+      statements: [...guards, ...labelPlan.statements, context.stmt("INSERT INTO mutation_guards VALUES(?,CASE WHEN EXISTS(SELECT 1 FROM work_tasks t WHERE t.id=? AND t.version=? AND t.status='open' AND (t.created_by=? OR t.owner_id=? OR ?='admin')) THEN 1 ELSE 0 END)", key, a.id, a.expected_version, context.actor.id, context.actor.id, context.actor.role), context.stmt('UPDATE work_tasks SET archive_id=?,title=?,purpose=?,delivery=?,deadline_at=?,labels_json=?,priority=?,updated_at=?,version=version+1 WHERE id=? AND version=? AND status=\'open\'', result.archive_id, next.title, next.purpose, next.delivery, next.deadline_at, next.labels_json, next.priority, at, a.id, a.expected_version), context.event(a.id, 'task.edited', {
+        archive_id: task.archive_id,
         title: task.title,
         purpose: task.purpose,
         delivery: task.delivery,

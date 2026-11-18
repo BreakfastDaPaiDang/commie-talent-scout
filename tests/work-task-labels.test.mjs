@@ -39,3 +39,17 @@ test('member paused availability roundtrips through creation, filters and state 
  for(const state of ['请假','可接工作','暂不接工作','失联']){a=await service.setState({id:a.id,expected_version:a.version,status:'已入伙',member_status:state,member_ids:[],request_id:uuid()});assert.equal((await service.get(a.id)).member_status,state);}
  const before=(await service.get(a.id)).version;const tasks=new WorkTasks(f.env,f.actor,'web');await tasks.create(input({archive_id:a.id}));assert.equal((await service.get(a.id)).member_status,'失联');assert.equal((await service.get(a.id)).version,before);
 });
+
+test('manual tasks can link to a member independently of their monthly task and replay the edit',async t=>{
+ const f=fixture();t.after(f.close);
+ const tasks=new WorkTasks(f.env,f.actor,'web'),archives=new Archives(f.env,f.actor,'web');
+ const person=await historicalArchive(f,archives,{type:'person',name:'虚构新社员',status:'已入伙',request_id:uuid()});
+ const task=await tasks.create(input());
+ const command={id:task.id,expected_version:task.version,archive_id:person.id,request_id:uuid()};
+ const result=await tasks.edit(command);assert.equal(result.archive_id,person.id);
+ assert.equal((await tasks.edit(command)).replayed,true);
+ const detail=await tasks.detail(task.id);assert.equal(detail.task.archive_id,person.id);
+ await assert.rejects(tasks.edit({...command,expected_version:result.version,archive_id:uuid(),request_id:uuid()}),e=>e.code==='TASK_ARCHIVE_CONFLICT');
+ f.sqlite.prepare("UPDATE work_tasks SET source='rule' WHERE id=?").run(task.id);
+ await assert.rejects(tasks.edit({...command,expected_version:result.version,archive_id:uuid(),request_id:uuid()}),e=>e.code==='RULE_TASK_ARCHIVE');
+});
