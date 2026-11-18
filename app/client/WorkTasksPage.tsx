@@ -80,7 +80,7 @@ export function WorkTasksPage({
   const recommendationPool = personal.filter(task => task.status === 'open' && !task.owner_id).sort(priorityFirst);
   const [recommendationIndex, setRecommendationIndex] = useState(0);
   const recommendation = recommendationPool.length ? recommendationPool[recommendationIndex % recommendationPool.length] ?? null : null;
-  return <main ref={workspace} className="account-content work-tasks-page task-workspace"><div className="task-workspace-head"><ArchiveHead label="待办" count="" query={query} onQuery={value => {
+  return <main ref={workspace} className="account-content work-tasks-page task-workspace"><div className="task-workspace-head"><ArchiveHead label="任务" count="" query={query} onQuery={value => {
         setQuery(value);
         updateSelection(null);
       }} searchLabel="搜索任务" searchPlaceholder="搜索任务、相关对象" createControl={<CreateTask onSaved={refresh} />} /></div><nav className="task-page-tabs" aria-label="任务页面"><button className={view === 'book' ? 'active' : ''} onClick={() => {
