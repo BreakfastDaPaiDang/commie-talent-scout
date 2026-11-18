@@ -55,7 +55,8 @@ test('task book keeps the personal action list separate from other members work'
 
 test('hall defaults to 30 days of closures, can show 90 or all, and resets without hiding old open work',async()=>{
  const f=environment();f.w.history.replaceState(null,'','http://localhost/tasks');
- const ago=(days:number)=>new Date(Date.now()-days*86400000).toISOString();
+ const fixtureTime=Date.now();
+ const ago=(days:number)=>new Date(fixtureTime-days*86400000).toISOString();
  const rows=[
  {...task,id:'open',title:'长期开放',created_at:ago(180),updated_at:ago(180)},
  ...[10,60,120].map(days=>({...task,id:'closed-'+days,title:'关闭'+days,status:'cancelled',closed_at:ago(days),updated_at:ago(0)}))
