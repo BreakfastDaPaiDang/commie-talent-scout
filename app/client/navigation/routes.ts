@@ -10,9 +10,9 @@ type RouteDefinition = {
 
 // The same definitions select a page and provide its primary navigation entry.
 export const routes: readonly RouteDefinition[] = [
-  {id: 'tasks', path: '/tasks', navigation: '待办'},
   {id: 'people', path: '/people', navigation: '外部人物'},
   {id: 'organizations', path: '/organizations', navigation: '组织'},
+  {id: 'tasks', path: '/tasks', navigation: '任务'},
   {id: 'members', path: '/members', navigation: '社员'},
   {id: 'statistics', path: '/statistics', aliases: ['/statistics/work'], navigation: '统计', navigationPrefix: '/statistics/'},
   {id: 'knowledge', path: '/knowledge', navigation: '知识库'},

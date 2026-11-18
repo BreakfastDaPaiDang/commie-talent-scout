@@ -4,7 +4,7 @@ import {primaryNavigation,resolveRoute} from '../app/client/navigation/routes.ts
 
 test('primary navigation retains all six pages and organizations opens its own route',()=>{
   const navigation=primaryNavigation('/organizations');
-  assert.deepEqual(navigation.map(item=>item.title),['待办','外部人物','组织','社员','统计','知识库']);
+  assert.deepEqual(navigation.map(item=>item.title),['外部人物','组织','任务','社员','统计','知识库']);
   assert.equal(navigation.filter(item=>item.active).length,1);
   assert.equal(navigation.find(item=>item.active)?.path,'/organizations');
   for(const item of navigation)assert.equal(resolveRoute(item.path),item.id);
