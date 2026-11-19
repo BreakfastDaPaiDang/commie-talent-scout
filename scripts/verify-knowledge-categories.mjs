@@ -196,16 +196,23 @@ export async function verifyKnowledgeCategories(page,out,services,documentUrl) {
     await tagReviewRow(page,proposedName).waitFor();
   }
   for(const member of others)await member.approveTag({id:rename.id,request_id:randomUUID()});
-  await page.setViewportSize({width:1440,height:1080});
   await page.goto(renameUrl);
   detail=await readTagReview(page,proposedName);
   await detail.getByLabel('2 / 3 人认可',{exact:true}).waitFor();
   await approveTag(detail).click();
   detail=await readTagReview(page,proposedName,'已入库');
   await detail.getByLabel('3 / 3 人认可',{exact:true}).waitFor();
+  await page.getByRole('button',{name:'← 列表',exact:true}).click();
+  await page.getByRole('searchbox',{name:'搜索知识库'}).waitFor();
   await tagReviewRow(page,proposedName).waitFor({state:'detached'});
   assert.equal(new URL(page.url()).searchParams.get('tagProposal'),rename.id);
   assert.equal((await writer.category('main',proposal.category_id)).name,proposedName);
+
+  await page.setViewportSize({width:1440,height:1080});
+  await page.goto(renameUrl);
+  await readTagReview(page,proposedName,'已入库');
+  await current.getByText(definition,{exact:true}).waitFor();
+  await proposed.getByText(proposedDefinition,{exact:true}).waitFor();
 
   await page.goto(documentUrl);
   drawer=await inspectTag(page,proposedName);
