@@ -5,7 +5,8 @@ import { KnowledgeDocumentBody } from './KnowledgeComments';
 import { KnowledgeAvatar } from './KnowledgeDocumentActivity';
 import { KnowledgeCategoryDrawer, KnowledgeCategoryEditor } from './KnowledgeCategories';
 import { KnowledgeReviewBar, KnowledgeReviewDetail, reviewDeadline, votingClosed } from './KnowledgeReview';
-import { KnowledgeTagProposals } from './KnowledgeTagProposals';
+import { KnowledgeTagReviewDetail } from './KnowledgeTagProposals';
+import { remainingVoteTime } from '../shared/knowledge';
 import { KnowledgeHelp, KnowledgeHelpButton } from './KnowledgeHelp';
 import { KnowledgeBranches, KnowledgeBranchForm, KnowledgeIssues, KnowledgeHistory } from './KnowledgeCollaboration';
 import type { KnowledgeApi, KnowledgeCategory, KnowledgeIdentity, KnowledgeVersion } from '../shared/knowledge';
@@ -21,7 +22,7 @@ import './knowledge-index.css';
 const versionTabs: [Tab, string][] = [
   ['content', '内容'], ['issues', '议题'], ['branches', '分支'], ['history', '历史'],
 ];
-const noSelection = {documentId: null, reviewId: null, reviewHead: null, issueId: null};
+const noSelection = {documentId: null, reviewId: null, reviewHead: null, issueId: null, tagProposalId: null};
 const knowledgeDate = new Intl.DateTimeFormat('sv-SE', {timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit'});
 
 function Byline({name, at}: {name: string; at: string}) {
@@ -41,15 +42,30 @@ function IndexTitle({title, tags = []}: {title: string; tags?: KnowledgeVersion[
   </span>;
 }
 
+function ReviewIndexEntry({title, tags, author, count, voted, deadline, expires, selected, onSelect}: {
+  title: string; tags?: KnowledgeVersion['tags']; author: string; count: number; voted: boolean;
+  deadline: string; expires?: string | null; selected: boolean; onSelect: () => void;
+}) {
+  return <button type="button" aria-current={selected || undefined}
+    className={'kb-entry kb-review-entry' + (selected ? ' selected' : '')} onClick={onSelect}>
+    <IndexTitle title={title} tags={tags} />
+    <span className="kb-index-meta">
+      <span>{author}</span>
+      {deadline && <time dateTime={expires ?? undefined}>{deadline}</time>}
+      <span>{count}/3{voted ? ' · 已认可' : ''}</span>
+    </span>
+  </button>;
+}
+
 export function KnowledgeWorkspace({api, identity}: {api: KnowledgeApi; identity: KnowledgeIdentity}) {
   const canWrite = identity.can_write;
   const navigation = useKnowledgeNavigation(canWrite);
   const {
-    scope, issueId, reviewId, reviewHead, mode, branchId, documentId, tab, mobileDetail, navigate,
+    scope, issueId, reviewId, reviewHead, tagProposalId, mode, branchId, documentId, tab, mobileDetail, navigate,
   } = navigation;
   const {
     search, revision, merges, reviewMatches, branches, list, drafts, category, setCategory, query,
-    setQuery, doc, loadingDoc, loadingMerges, reviewError, error, refresh,
+    setQuery, doc, loadingDoc, loadingMerges, reviewError, tagQueue, tagDetail, error, refresh,
   } = useKnowledgeData(api, canWrite, navigation);
   const workspace = useRef<HTMLElement>(null);
   const detailScroll = useRef<HTMLDivElement>(null);
@@ -62,7 +78,6 @@ export function KnowledgeWorkspace({api, identity}: {api: KnowledgeApi; identity
   const [tagQuery, setTagQuery] = useState('');
   const [tagError, setTagError] = useState('');
   const tagInspection = useRef<symbol | null>(null);
-  const [tagBallotCount, setTagBallotCount] = useState(0);
   const [removing, setRemoving] = useState(false);
   const [help, setHelp] = useState(false);
   const [now, setNow] = useState(Date.now);
@@ -89,7 +104,7 @@ export function KnowledgeWorkspace({api, identity}: {api: KnowledgeApi; identity
 
   useEffect(() => {
     detailScroll.current?.scrollTo(0, 0);
-  }, [reviewId, documentId, branchId, tab]);
+  }, [reviewId, tagProposalId, documentId, branchId, tab]);
 
   useEffect(() => {
     if (review && review.branch_id !== branchId) navigate({branchId: review.branch_id}, 'replace');
@@ -100,6 +115,9 @@ export function KnowledgeWorkspace({api, identity}: {api: KnowledgeApi; identity
       (merge.author_id === identity.id && (merge.changes?.length ?? 0) > 1)))
     .sort((a, b) => (a.expires_at ?? '').localeCompare(b.expires_at ?? '') || a.id.localeCompare(b.id));
   const term = search.toLowerCase();
+  const visibleTagReviews = (tagQueue.data?.proposals ?? []).filter(proposal =>
+    Date.parse(proposal.expires_at) > now && (!category || proposal.category_id === category) &&
+    [proposal.name, proposal.definition].some(value => value.toLowerCase().includes(term)));
   const visibleReviews = reviewMatches ? activeReviews.filter(merge => {
     const changes = merge.changes ?? [];
     if (category && !changes.some(change => change.tags.some(tag => tag.id === category))) return false;
@@ -126,24 +144,26 @@ export function KnowledgeWorkspace({api, identity}: {api: KnowledgeApi; identity
       }
     }
   }
-  const listLoading = list.loading || (all && (drafts.loading || loadingMerges || !reviewMatches && !reviewError));
-  const listError = list.error || (all && (drafts.error || reviewError));
+  const listLoading = list.loading || (all && (drafts.loading || loadingMerges || !reviewMatches && !reviewError || tagQueue.loading));
+  const listError = list.error || (all && (drafts.error || reviewError || tagQueue.error));
   const firstDraft = all ? drafts.items[0] : undefined;
   const firstReview = all && !firstDraft ? visibleReviews[0] : undefined;
-  const firstDocument = firstDraft ?? (!firstReview ? list.items[0] : undefined);
+  const firstTagReview = all && !firstDraft && !firstReview ? visibleTagReviews[0] : undefined;
+  const firstDocument = firstDraft ?? list.items[0];
 
   useEffect(() => {
-    if (tab !== 'content' || documentId || reviewId || listLoading) return;
+    if (tab !== 'content' || documentId || reviewId || tagProposalId || listLoading) return;
     const desktop = window.matchMedia('(min-width: 701px)');
     function openFirst() {
       if (simple && !desktop.matches) return;
       if (firstReview) navigate({reviewId: firstReview.id, reviewHead: firstReview.head_id, branchId: firstReview.branch_id}, 'replace');
+      else if (firstTagReview) navigate({tagProposalId: firstTagReview.id, branchId: 'main'}, 'replace');
       else if (firstDocument) navigate({documentId: firstDocument.document_id, branchId: firstDocument.branch_id ?? branchId}, 'replace');
     }
     openFirst();
     desktop.addEventListener('change', openFirst);
     return () => desktop.removeEventListener('change', openFirst);
-  }, [simple, tab, documentId, reviewId, listLoading, branchId, firstReview, firstDocument, navigate]);
+  }, [simple, tab, documentId, reviewId, tagProposalId, listLoading, branchId, firstReview, firstTagReview, firstDocument, navigate]);
 
   function selectTag(id: string) {
     if (id === category) return;
@@ -173,12 +193,29 @@ export function KnowledgeWorkspace({api, identity}: {api: KnowledgeApi; identity
     setNotice('');
   }
 
+  function selectTagReview(id: string) {
+    navigate({...noSelection, tagProposalId: id, mode: 'simple', scope: 'all', branchId: 'main', tab: 'content', mobileDetail: true});
+    setNotice('');
+  }
+
+  function tagEdited(tag: KnowledgeCategory, proposalId?: string) {
+    if (proposalId && simple) {
+      setCategoryPanel(null);
+      setCategory('');
+      setQuery('');
+      selectTagReview(proposalId);
+    } else {
+      setCategoryPanel({tag, branchId: simple ? 'main' : branchId});
+    }
+    refresh();
+  }
+
   function openTab(value: Tab) {
-    navigate({mode: 'git', scope: simple ? 'branch' : scope, tab: value, mobileDetail: true});
+    navigate({mode: 'git', scope: simple ? 'branch' : scope, tab: value, tagProposalId: null, mobileDetail: true});
   }
 
   function openIssue(id: string) {
-    navigate({mode: 'git', scope: simple ? 'branch' : scope, tab: 'issues', issueId: id, reviewId: null, reviewHead: null, mobileDetail: true});
+    navigate({mode: 'git', scope: simple ? 'branch' : scope, tab: 'issues', issueId: id, reviewId: null, reviewHead: null, tagProposalId: null, mobileDetail: true});
     setCategoryPanel(null);
     refresh();
   }
@@ -214,6 +251,12 @@ export function KnowledgeWorkspace({api, identity}: {api: KnowledgeApi; identity
   async function inspectTag(id: string) {
     const tagged = tags.get(id);
     if (!tagged) return;
+    const proposal = tagged.tag.pending && tagQueue.data?.proposals.find(item => item.category_id === id);
+    if (proposal) {
+      closeTagPicker();
+      selectTagReview(proposal.id);
+      return;
+    }
     const request = Symbol();
     tagInspection.current = request;
     setTagError('');
@@ -257,7 +300,7 @@ export function KnowledgeWorkspace({api, identity}: {api: KnowledgeApi; identity
   const modeLabel = simple ? '版本协作' : '返回普通视图';
   const documentTags = doc ? tagsFor(doc) : [];
   const documentState = branchId === 'main' ? '已入库' : branch?.visibility === 'private' ? '我的草稿' : branch?.state === 'merged' ? '已合入的分支版本' : '分支中的修改';
-  const noDocuments = !list.items.length && (!all || !drafts.items.length && !visibleReviews.length && !tagBallotCount);
+  const noDocuments = !list.items.length && (!all || !drafts.items.length && !visibleReviews.length && !visibleTagReviews.length);
   const editorBranch = simple && !editor?.document ? branches.find(candidate => candidate.id === 'main') : branch;
   const shareDocument = doc && (branchId === 'main' || branch?.visibility === 'members') && <ShareLink path={'/knowledge?' + new URLSearchParams({
     document: doc.document_id,
@@ -313,22 +356,17 @@ export function KnowledgeWorkspace({api, identity}: {api: KnowledgeApi; identity
           </section>}
           {!!visibleReviews.length && <section className="kb-index-group" aria-label="待认可">
             <h2>待认可</h2>
-            {visibleReviews.map(merge => {
-              const selected = merge.id === reviewId;
-              const deadline = reviewDeadline(merge, now);
-              return <button type="button" key={merge.id} aria-current={selected || undefined}
-                className={'kb-entry kb-review-entry' + (selected ? ' selected' : '')}
-                onClick={() => selectReview(merge.id, merge.head_id, merge.branch_id)}>
-                <IndexTitle title={merge.title} tags={merge.changes?.[0]?.tags} />
-                <span className="kb-index-meta">
-                  <span>{merge.author_name}</span>
-                  {deadline && <time dateTime={merge.expires_at!}>{deadline}</time>}
-                  <span>{merge.approval_count}/3{merge.approved_by_me ? ' · 已认可' : ''}</span>
-                </span>
-              </button>;
-            })}
+            {visibleReviews.map(merge => <ReviewIndexEntry key={merge.id} title={merge.title} tags={merge.changes?.[0]?.tags}
+              author={merge.author_name} count={merge.approval_count} voted={!!merge.approved_by_me} selected={merge.id === reviewId}
+              deadline={reviewDeadline(merge, now)} expires={merge.expires_at} onSelect={() => selectReview(merge.id, merge.head_id, merge.branch_id)} />)}
           </section>}
-          <KnowledgeTagProposals api={api} revision={revision} onChanged={refresh} canWrite={canWrite} search={search} category={category} onCount={setTagBallotCount} />
+          {!!visibleTagReviews.length && <section className="kb-index-group" aria-label="标签待认可">
+            <h2>标签待认可</h2>
+            {visibleTagReviews.map(proposal => <ReviewIndexEntry key={proposal.id} title={proposal.name}
+              author={proposal.author_name} count={proposal.approval_count} voted={!!proposal.approved_by_me} selected={proposal.id === tagProposalId}
+              deadline={remainingVoteTime(proposal.expires_at, Math.max(now, Date.parse(proposal.created_at) || 0))} expires={proposal.expires_at}
+              onSelect={() => selectTagReview(proposal.id)} />)}
+          </section>}
         </>}
         {all ? !!list.items.length && <section className="kb-index-group" aria-label="已入库">
           <h2>已入库</h2>
@@ -344,7 +382,7 @@ export function KnowledgeWorkspace({api, identity}: {api: KnowledgeApi; identity
     <section className="kb-detail-pane" aria-label="知识库内容">
       <div ref={detailScroll} className="kb-detail-scroll">
         <header className="kb-detail-toolbar">
-          <button className="kb-mobile-back text-button" onClick={() => navigate({mobileDetail: false}, 'replace')}>← 文档</button>
+          <button className="kb-mobile-back text-button" onClick={() => navigate({mobileDetail: false}, 'replace')}>{tagProposalId ? '← 列表' : '← 文档'}</button>
           {canWrite && <div className="kb-view-switch"><button className="button quiet" onClick={changeMode}>{modeLabel}</button></div>}
           {!simple && shareDocument}
           <KnowledgeHelpButton active={help} onClick={openHelp} />
@@ -355,7 +393,11 @@ export function KnowledgeWorkspace({api, identity}: {api: KnowledgeApi; identity
         </nav>}
         {error && <div className="kb-notice error" role="alert">{error}<button className="text-button" onClick={refresh}>重试</button></div>}
         {notice && <div className="kb-notice" role="status">{notice}<button aria-label="关闭提示" onClick={() => setNotice('')}>×</button></div>}
-        {tab === 'content' && (simple && reviewId ? review ?
+        {tab === 'content' && (all && tagProposalId ? tagDetail.data ?
+          <KnowledgeTagReviewDetail key={tagProposalId} api={api} identity={identity} now={now} onChanged={refresh} proposal={tagDetail.data.proposal} /> :
+          <div className="kb-empty">{tagDetail.loading ? <p role="status">正在读取标签提议…</p> :
+            <p role="alert">{tagDetail.error} <button className="text-button" onClick={refresh}>重试</button></p>}</div> :
+          simple && reviewId ? review ?
           <KnowledgeReviewDetail key={review.id + review.head_id} api={api} merge={review} identity={identity} revision={revision}
             now={now} requestedHead={reviewHead} onChanged={refresh} onCollaborate={collaborateOnReview}
             onOpenCurrent={() => selectReview(review.id, review.head_id, review.branch_id)}
@@ -408,7 +450,7 @@ export function KnowledgeWorkspace({api, identity}: {api: KnowledgeApi; identity
           onReview={merge => selectReview(merge.id, merge.head_id, merge.branch_id)} />}
         {tab === 'history' && <KnowledgeHistory key={branchId + revision} api={api} branchId={branchId} />}
       </div>
-      {tab === 'content' && !reviewId && doc && branch && canWrite && <KnowledgeReviewBar key={branchId + doc.id} api={api} branch={branch} document={doc}
+      {tab === 'content' && !reviewId && !tagProposalId && doc && branch && canWrite && <KnowledgeReviewBar key={branchId + doc.id} api={api} branch={branch} document={doc}
         actorId={identity.id} now={now} merge={merges.find(m => m.branch_id === branchId && m.state === 'open')}
         onSubmitted={(bid, id, head) => {
           if (simple) selectReview(id, head, bid);
@@ -446,14 +488,13 @@ export function KnowledgeWorkspace({api, identity}: {api: KnowledgeApi; identity
           onCreate={canWrite ? () => {closeTagPicker(); setNewCategory(true);} : undefined} createLabel="＋ 新建标签" />
       </div>
     </Modal>}
-    {newCategory && <KnowledgeCategoryEditor api={api} branchId={simple ? 'main' : branchId} startCreating initialName={tagQuery} close={() => setNewCategory(false)} done={tag => {
+    {newCategory && <KnowledgeCategoryEditor api={api} branchId={simple ? 'main' : branchId} startCreating initialName={tagQuery} close={() => setNewCategory(false)} done={(tag, proposalId) => {
       setNewCategory(false);
-      setCategoryPanel({tag, branchId: simple ? 'main' : branchId});
-      refresh();
+      tagEdited(tag, proposalId);
     }} />}
     {categoryPanel && <KnowledgeCategoryDrawer key={categoryPanel.tag.id} api={api} category={categoryPanel.tag} branchId={categoryPanel.branchId}
       identity={identity} close={() => setCategoryPanel(null)}
-      onChanged={tag => {setCategoryPanel({...categoryPanel, tag}); refresh();}} onIssue={openIssue} />}
+      onChanged={tagEdited} onIssue={openIssue} />}
     {removing && doc && branch && <RemoveDocument api={api} branch={branch} document={doc} close={() => setRemoving(false)} done={() => {
       setRemoving(false);
       navigate({documentId: null}, 'replace');

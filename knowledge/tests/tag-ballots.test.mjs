@@ -15,7 +15,12 @@ test('article and tag use separate ballots, even when created together', async (
     for(const voter of [a,b,c]) await voter.approve({id:ballot.id,head_id:ballot.head_id,request_id:request()});
     assert.equal((await guest.get('main',doc.id)).document.tags.length,0);
     assert.equal((await a.get('main',doc.id)).document.tags[0].pending,1);
-    assert.equal((await a.tagProposals()).proposals[0].approval_count,0);
+    const [pending]=(await a.tagProposals()).proposals;
+    assert.deepEqual(await a.tagProposal(tag.proposal_id),pending);
+    assert.equal(pending.author_id,a.actor.id);
+    assert.equal(pending.created_at,f.clock());
+    assert.equal(pending.state,'pending');
+    assert.deepEqual(pending.approvers,[]);
     const input={id:tag.proposal_id,request_id:request()};
     assert.deepEqual(await a.approveTag(input),await a.approveTag(input));
     await a.approveTag({...input,request_id:request()});
@@ -23,12 +28,21 @@ test('article and tag use separate ballots, even when created together', async (
     await alias.approveTag({...input,request_id:request()});
     const rebound=new KnowledgeWorkspace(f.db,{...f.actors[0],membership_id:request()},f.clock);
     await rebound.approveTag({...input,request_id:request()});
-    assert.equal((await a.tagProposals()).proposals[0].approval_count,1);
+    const [once]=(await a.tagProposals()).proposals;
+    assert.equal(once.approval_count,1);
+    assert.equal((await alias.tagProposal(tag.proposal_id)).approved_by_me,1);
+    assert.equal((await rebound.tagProposal(tag.proposal_id)).approved_by_me,1);
+    assert.deepEqual(once.approvers,[{id:a.actor.id,name:a.actor.name,created_at:f.clock()}]);
     await b.approveTag({...input,request_id:request()});
     assert.equal((await guest.get('main',doc.id)).document.tags.length,0);
     assert.equal((await c.approveTag({...input,request_id:request()})).adopted,true);
     assert.equal((await guest.get('main',doc.id)).document.tags[0].id,tag.id);
     assert.equal((await a.tagProposals()).proposals.length,0);
+    const adopted=await a.tagProposal(tag.proposal_id);
+    assert.equal(adopted.state,'approved');
+    assert.equal(adopted.pending,1);
+    assert.equal(adopted.approval_count,3);
+    assert.deepEqual(adopted.approvers.map(v=>v.id).sort(),[a,b,c].map(w=>w.actor.id).sort());
   } finally { f.close(); }
 });
 
@@ -44,12 +58,50 @@ test('tag voting closes on day seven and resubmission preserves the previous vot
     await b.approveTag({...input,request_id:request()});
     f.advance(1);
     await assert.rejects(c.approveTag({...input,request_id:request()}),e=>e.code==='TAG_VOTE_CLOSED');
+    assert.deepEqual((await a.tagProposals()).proposals,[]);
+    const elapsed=await a.tagProposal(tag.proposal_id);
+    assert.equal(elapsed.state,'expired');
+    assert.equal(elapsed.approval_count,2);
+    assert.equal(f.sqlite.prepare('SELECT state FROM kw_tag_proposals WHERE id=?').get(tag.proposal_id).state,'pending');
     const retry=await a.editCategory({id:tag.id,name:'验证方法',definition:'修订后重提',expected_version:1,request_id:request()});
     assert.notEqual(retry.proposal_id,tag.proposal_id);
     assert.equal((await a.tagProposals()).proposals[0].approval_count,0);
     for(const w of [a,b,c])await w.approveTag({id:retry.proposal_id,request_id:request()});
     assert.equal((await a.category('main',tag.id)).definition,'修订后重提');
     assert.equal(f.sqlite.prepare('SELECT count(*) n FROM kw_tag_votes WHERE proposal_id=?').get(tag.proposal_id).n,2);
+    assert.equal(f.sqlite.prepare('SELECT state FROM kw_tag_proposals WHERE id=?').get(tag.proposal_id).state,'expired');
+    const expired=await a.tagProposal(tag.proposal_id);
+    assert.equal(expired.state,'expired');
+    assert.equal(expired.pending,1);
+    assert.deepEqual(expired.approvers,elapsed.approvers);
+    f.advance(7*86400000);
+    assert.equal((await a.tagProposal(retry.proposal_id)).state,'approved');
+  } finally {f.close();}
+});
+
+test('adopted edits retain the original comparison after subsequent category versions',async()=>{
+  const f=fixture({through:'0003_knowledge_workspace.sql'});
+  try {
+    const id=request();
+    f.sqlite.prepare('INSERT INTO kw_categories(id,name,definition,updated_at) VALUES(?,?,?,?)').run(id,'旧标签','第一版词义',f.clock());
+    applyMigration(f.sqlite,'0004_reviews_and_categories.sql');
+    f.sqlite.prepare('UPDATE kw_categories SET independent=1 WHERE id=?').run(id);
+    for(const migration of ['0005_document_tags.sql','0006_review_deadlines.sql','0007_tag_proposals.sql']) applyMigration(f.sqlite,migration);
+    const [a,b,c]=f.actors.map(actor=>new KnowledgeWorkspace(f.db,actor,f.clock));
+
+    async function edit(expected_version,name,definition) {
+      const ballot=await a.editCategory({id,name,definition,expected_version,request_id:request()});
+      for(const voter of [a,b,c]) await voter.approveTag({id:ballot.proposal_id,request_id:request()});
+      return ballot.proposal_id;
+    }
+    const first=await edit(1,'修改标签','第二版词义');
+    const second=await edit(2,'最终标签','第三版词义');
+    const old=await a.tagProposal(first);
+    assert.equal(old.state,'approved');
+    assert.equal(old.pending,0);
+    assert.deepEqual([old.current_name,old.current_definition,old.name,old.definition],['旧标签','第一版词义','修改标签','第二版词义']);
+    const next=await a.tagProposal(second);
+    assert.deepEqual([next.current_name,next.current_definition],['修改标签','第二版词义']);
   } finally {f.close();}
 });
 

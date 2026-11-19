@@ -41,7 +41,23 @@ export function locateAnnotation(body:string,comment:KnowledgeComment,versionId:
  return exact.length===1?{start:exact[0],end:exact[0]+comment.quote.length}:null;
 }
 
-export type KnowledgeTagProposal={id:string;category_id:string;name:string;definition:string;current_name:string;current_definition:string;pending:number;author_name:string;expires_at:string;approval_count:number;approved_by_me:number};
+export type KnowledgeTagProposal = {
+  id: string;
+  category_id: string;
+  name: string;
+  definition: string;
+  current_name: string;
+  current_definition: string;
+  pending: number;
+  author_id: string;
+  author_name: string;
+  created_at: string;
+  expires_at: string;
+  state: 'pending' | 'approved' | 'expired';
+  approvers: {id: string; name: string; created_at: string}[];
+  approval_count: number;
+  approved_by_me: number;
+};
 
 export function remainingVoteTime(deadline:string, now:number) {
   const minutes=Math.max(0,Math.ceil((Date.parse(deadline)-now)/60_000));

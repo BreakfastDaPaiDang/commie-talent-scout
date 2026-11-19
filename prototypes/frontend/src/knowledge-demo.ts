@@ -1,4 +1,4 @@
-import type {KnowledgeActivity,KnowledgeActivityPage,KnowledgeApi,KnowledgeVersion} from '../../../app/shared/knowledge';
+import type {KnowledgeActivity,KnowledgeActivityPage,KnowledgeApi,KnowledgeTagProposal,KnowledgeVersion} from '../../../app/shared/knowledge';
 // Preview data only. Formal identity, consent and persistence are enforced by the service.
 export function knowledgeDemo():KnowledgeApi{
  const actor={id:'preview-member',name:'示例成员',kind:'member',can_write:true},at='2026-11-13T04:00:00.000Z',main:any={id:'main',name:'主分支',owner_id:actor.id,owner_name:actor.name,visibility:'members',state:'open',head_id:'preview-initial',base_head_id:null,version:1,created_at:at,updated_at:at};
@@ -8,7 +8,7 @@ export function knowledgeDemo():KnowledgeApi{
  const initial=titles.map((title,i)=>({id:crypto.randomUUID(),document_id:crypto.randomUUID(),title,body:i===0?'从参与意愿、能力与投入、协作与支持三个方面，梳理审核需要重点了解的内容。\n\n## 参与意愿\n了解对方加入的动机与期望，确认其对组织定位与现状有基本认识。\n\n## 能力与投入\n结合过往经历或作品判断实际水平。了解可以投入的时间与精力。\n\n## 协作与支持\n了解沟通方式与协作习惯，以及所需的资源、工具和指导。':['','通过提问、举例与小任务，了解理解深度。','围绕作品、经历与具体情境展开交流。','先整理已有材料，明确仍需了解的问题。','参与条件与联系入口见正文。'][i],category_id:categories[i===4?1:0].id,category_name:categories[i===4?1:0].name,kind:kinds[i],source:'',deleted:0,author_id:actor.id,author_name:actor.name,created_at:at}));
  const documents=new Map<string,any[]>([['main',initial]]),bases=new Map<string,any[]>(),comments:any[]=[],merges:any[]=[],issues:any[]=[],commits:any[]=[{id:main.head_id,branch_id:'main',parent_id:null,merge_parent_id:null,message:'示例共识',author_id:actor.id,author_name:actor.name,created_at:at}],changes=new Map<string,any[]>();
  changes.set(main.head_id,initial.map(after=>({document_id:after.document_id,before:null,after})));
- const tagProposals:any[]=[];
+ const tagProposals:KnowledgeTagProposal[]=[];
  const hasTag=(doc:KnowledgeVersion,id:string|null)=>doc.category_id===id || !!doc.tags?.some(tag=>tag.id===id);
  const version=()=>crypto.randomUUID(),date=()=>new Date().toISOString(),visible=(branch:string)=>documents.get(branch)??[],cats=(branch:string)=>categories.map(c=>({...c,count:visible(branch).filter(d=>!d.deleted&&hasTag(d,c.id)).length})).filter(c=>c.independent||c.count>0);
  function commit(branch:any,message:string,before:any,after:any){const id=version();commits.unshift({id,branch_id:branch.id,parent_id:branch.head_id,merge_parent_id:null,message,author_id:actor.id,author_name:actor.name,created_at:date()});changes.set(id,[{document_id:after.document_id,before,after}]);branch.head_id=id;branch.version++;return id;}
@@ -118,7 +118,12 @@ export function knowledgeDemo():KnowledgeApi{
     categories:categories.map(c=>{const tagged=all.filter(d=>hasTag(d,c.id));return {...c,count:tagged.length,branch_id:tagged[0]?.branch_id};}).filter(c=>c.independent||c.count)};
   }
   else if(url.pathname.startsWith('/documents/'))result={document:visible(b).find(d=>d.document_id===url.pathname.split('/').pop())};
-  else if(url.pathname==='/tag-proposals')result={proposals:tagProposals.filter(p=>!p.adopted&&p.expires_at>date())};
+  else if(url.pathname==='/tag-proposals')result={proposals:tagProposals.filter(p=>p.state==='pending'&&p.expires_at>date())};
+  else if(url.pathname.startsWith('/tag-proposals/')){
+   const proposal=tagProposals.find(p=>p.id===url.pathname.split('/').pop());
+   if(!proposal)throw new Error('找不到这份标签提议。');
+   result={proposal:{...proposal,state:proposal.state==='pending'&&proposal.expires_at<=date()?'expired':proposal.state}};
+  }
   else if(url.pathname==='/categories')result={categories:cats(b)};
   else if(url.pathname==='/comments'){
    const documentId=q.get('document_id');
@@ -168,14 +173,24 @@ export function knowledgeDemo():KnowledgeApi{
   else if(path==='/categories'||path==='/categories/definition'){
     let c=categories.find(c=>c.id===a.id);
     if(!c){c={id:version(),name:a.name,definition:a.definition,version:1,pending:1,independent:1,updated_at:date()};categories.push(c);}
-    const p={id:version(),category_id:c.id,name:a.name??c.name,definition:a.definition,current_name:c.name,current_definition:c.definition,pending:c.pending??0,author_name:actor.name,expires_at:new Date(Date.now()+7*86400000).toISOString(),approval_count:0,approved_by_me:0};
+    const p:KnowledgeTagProposal={id:version(),category_id:c.id,name:a.name??c.name,definition:a.definition,current_name:c.name,current_definition:c.definition,
+      pending:c.pending??0,state:'pending',author_id:actor.id,author_name:actor.name,created_at:date(),expires_at:expires(),approval_count:0,approved_by_me:0,approvers:[]};
     tagProposals.push(p);result={id:c.id,version:c.version,pending:c.pending,proposal_id:p.id,expires_at:p.expires_at};
   }
   else if(path==='/tag-proposals/approve'){
     const p=tagProposals.find(t=>t.id===a.id);
-    if(!p||p.expires_at<=date())throw new Error('本轮标签认可已结束');
-    if(!p.approved_by_me){p.approval_count++;p.approved_by_me=1;}
-    result={id:p.id,approval_count:p.approval_count,approved_by_me:1};
+    if(!p||p.state!=='pending'||p.expires_at<=date())throw new Error('本轮标签认可已结束');
+    if(!p.approved_by_me){
+      p.approval_count++;
+      p.approved_by_me=1;
+      p.approvers.push({id:actor.id,name:actor.name,created_at:date()});
+    }
+    if(p.approval_count>=3){
+      p.state='approved';
+      const tag=categories.find(c=>c.id===p.category_id);
+      Object.assign(tag,{name:p.name,definition:p.definition,pending:0,version:tag.version+1,updated_at:date()});
+    }
+    result={id:p.id,approval_count:p.approval_count,approved_by_me:1,adopted:p.state==='approved'};
   }
   else if(path==='/reviews'){
    const doc=visible(a.branch_id).find(d=>d.document_id===a.document_id);

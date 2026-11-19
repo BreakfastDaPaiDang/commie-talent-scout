@@ -28,6 +28,7 @@ workspaceApp.get('/branches',async c=>c.json(await c.get('workspace').branches()
 workspaceApp.get('/documents',async c=>c.json(await c.get('workspace').list(c.req.query())));
 workspaceApp.get('/documents/:id',async c=>c.json(await c.get('workspace').get(branch(c.req.query('branch_id')),c.req.param('id'))));
 workspaceApp.get('/tag-proposals',async c=>c.json(await c.get('workspace').tagProposals()));
+workspaceApp.get('/tag-proposals/:id',async c=>c.json({proposal:await c.get('workspace').tagProposal(c.req.param('id'))}));
 workspaceApp.get('/categories',async c=>c.json(await c.get('workspace').categories(branch(c.req.query('branch_id')))));
 workspaceApp.get('/diff',async c=>c.json(await c.get('workspace').diff(branch(c.req.query('branch_id')))));
 workspaceApp.get('/merges',async c=>c.json(await c.get('workspace').mergeRequests(z.string().trim().max(100).default('').parse(c.req.query('search')))));

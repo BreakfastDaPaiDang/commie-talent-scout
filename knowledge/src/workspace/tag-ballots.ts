@@ -4,17 +4,57 @@ import type { KnowledgeTagProposal } from '../../../app/shared/knowledge.ts';
 import type { ServiceContext } from './context.ts';
 import { runCommand } from './command.ts';
 
+const proposalFields = `p.id,p.category_id,p.name,p.definition,p.author_id,p.author_name,p.created_at,p.expires_at,p.state,
+  c.name AS current_name,c.definition AS current_definition,c.pending,
+  (SELECT json_group_array(json_object('id',v.actor_id,'name',v.actor_name,'created_at',v.created_at) ORDER BY v.created_at,v.actor_id)
+    FROM kw_tag_votes v WHERE v.proposal_id=p.id) AS approvers_json,
+  EXISTS(SELECT 1 FROM kw_tag_votes v WHERE v.proposal_id=p.id AND (v.membership_id=? OR v.actor_id=?)) AS approved_by_me`;
+const proposalSource = 'FROM kw_tag_proposals p JOIN kw_categories c ON c.id=p.category_id';
+type TagProposalRow = Omit<KnowledgeTagProposal, 'approvers' | 'approval_count'> & {approvers_json: string};
+
+function projectProposal({approvers_json, ...row}: TagProposalRow, at: string): KnowledgeTagProposal {
+  const approvers = JSON.parse(approvers_json) as KnowledgeTagProposal['approvers'];
+  const state = row.state === 'pending' && row.expires_at <= at ? 'expired' : row.state;
+  return {...row, state, approvers, approval_count: approvers.length};
+}
+
 export async function listTagProposals(context: ServiceContext) {
-  if (!context.showPendingTags) return {proposals: []};
   const actor = context.actor;
-  const result = await context.stmt(`SELECT p.id,p.category_id,p.name,p.definition,p.author_name,p.expires_at,
-    c.name current_name,c.definition current_definition,c.pending,
-    (SELECT count(*) FROM kw_tag_votes v WHERE v.proposal_id=p.id) approval_count,
-    EXISTS(SELECT 1 FROM kw_tag_votes v WHERE v.proposal_id=p.id AND (v.membership_id=? OR v.actor_id=?)) approved_by_me
-    FROM kw_tag_proposals p JOIN kw_categories c ON c.id=p.category_id
+  if (!context.showPendingTags || 'kind' in actor) return {proposals: []};
+  const at = context.clock();
+  const rows = await context.stmt(`SELECT ${proposalFields} ${proposalSource}
     WHERE p.state='pending' AND p.expires_at>? ORDER BY p.expires_at,p.id`,
-    'membership_id' in actor ? actor.membership_id : null,actor.id,context.clock()).all<KnowledgeTagProposal>();
-  return {proposals: result.results};
+    actor.membership_id,actor.id,at).all<TagProposalRow>();
+  return {proposals: rows.results.map(row => projectProposal(row, at))};
+}
+
+export async function getTagProposal(context: ServiceContext, id: string): Promise<KnowledgeTagProposal> {
+  const actor = context.actor;
+  if (!context.showPendingTags || 'kind' in actor) throw new KnowledgeError(404,'NOT_FOUND','标签提议不存在或不可见');
+  const at = context.clock();
+  const row = await context.stmt(`SELECT ${proposalFields},p.base_version,c.version AS category_version,c.definition_version_id
+    ${proposalSource} WHERE p.id=?`,actor.membership_id,actor.id,id)
+    .first<TagProposalRow & {base_version: number;category_version: number;definition_version_id: string | null}>();
+  if (!row) throw new KnowledgeError(404,'NOT_FOUND','标签提议不存在或不可见');
+  const {base_version, category_version, definition_version_id, ...fields} = row;
+  const proposal = projectProposal(fields, at);
+  if (base_version >= category_version) return proposal;
+
+  // A proposal's creation receipt keeps its original new-tag flag after approval updates the category.
+  const original = proposal.author_id === 'system' ? {pending: 1} : await context.stmt(`SELECT
+    json_extract(result_json,'$.pending') AS pending FROM kw_requests
+    WHERE actor_id=? AND created_at=? AND json_extract(result_json,'$.proposal_id')=? LIMIT 1`,
+    proposal.author_id,proposal.created_at,id).first<{pending: number | null}>();
+  const base = original?.pending === 1 ? null : await context.stmt(`SELECT v.title,v.body FROM kw_versions v
+    WHERE v.document_id=? AND v.rowid<=(SELECT rowid FROM kw_versions WHERE id=?)
+    ORDER BY v.rowid DESC LIMIT 1 OFFSET ?`, 'category-'+proposal.category_id,definition_version_id,category_version-base_version)
+    .first<{title: string;body: string}>();
+  return {
+    ...proposal,
+    pending: original?.pending ?? Number(base_version === 1 && !base),
+    current_name: base?.title ?? '',
+    current_definition: base?.body ?? '',
+  };
 }
 
 const vote = z.object({id: z.uuid(),request_id: z.uuid()}).strict();

@@ -12,7 +12,7 @@ type EditorProps={
   initialName?:string;
   startCreating?:boolean;
   close:()=>void;
-  done:(category:KnowledgeCategory)=>void;
+  done:(category:KnowledgeCategory, proposalId?:string)=>void;
 };
 
 function normalize(text:string) {
@@ -52,7 +52,7 @@ export function KnowledgeCategoryEditor({api,branchId,category,initialName='',st
         branch_id:branchId,...(category?{id:category.id,expected_version:category.version}:{}),name,definition,
       });
       // For a rename, the effective version stays visible until the ballot passes.
-      done(category??{...result,name:name.trim(),definition,count:0,updated_at:new Date().toISOString()});
+      done(category??{...result,name:name.trim(),definition,count:0,updated_at:new Date().toISOString()},result.proposal_id);
     } catch(e) {setError((e as Error).message);}
     finally {setBusy(false);}
   }
@@ -89,7 +89,7 @@ type DrawerProps={
   branchId:string;
   identity:KnowledgeIdentity;
   close:()=>void;
-  onChanged:(category:KnowledgeCategory)=>void;
+  onChanged:(category:KnowledgeCategory, proposalId?:string)=>void;
   onIssue:(id:string)=>void;
 };
 
@@ -131,6 +131,6 @@ export function KnowledgeCategoryDrawer({api,category,branchId,identity,close,on
       <KnowledgeDocumentBody key={definitionDocument.id} api={api} identity={identity} document={definitionDocument}
         categoryId={category.id} branchId={branchId} writable={identity.can_write} onIssue={onIssue}/>}
     {editing&&<KnowledgeCategoryEditor api={api} branchId={branchId} category={category} close={()=>setEditing(false)}
-      done={updated=>{setEditing(false);setSubmitted(true);onChanged(updated);}}/>}
+      done={(updated,proposalId)=>{setEditing(false);setSubmitted(true);onChanged(updated,proposalId);}}/>}
   </aside>;
 }

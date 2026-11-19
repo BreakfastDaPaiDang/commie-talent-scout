@@ -62,6 +62,7 @@ export class KnowledgeWorkspace {
     return branches.deleteBranch(this.context, input);
   }
   tagProposals() { return ballots.listTagProposals(this.context); }
+  tagProposal(id: string) { return ballots.getTagProposal(this.context, id); }
   approveTag(input: unknown) { return ballots.approveTag(this.context,input); }
   categories(branchId = 'main') {
     return categories.listCategories(this.context, branchId);

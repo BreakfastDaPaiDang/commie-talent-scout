@@ -44,6 +44,37 @@ const browser=await chromium.launch({channel:process.env.CTS_TEST_BROWSER==='chr
 const documentUrl=base+'/knowledge?scope=main&document='+first.id;
 async function fitted(){const sizes=await page.evaluate(()=>({width:innerWidth,scroll:document.documentElement.scrollWidth,workspace:document.querySelector('.kb-workspace')?.getBoundingClientRect().width}));assert.ok(sizes.scroll<=sizes.width+1,JSON.stringify(sizes));}
 async function selectSentence(){await page.locator('.kb-body [data-kb-start]').filter({hasText:'结合过往经历或作品判断实际水平。'}).scrollIntoViewIfNeeded();await page.evaluate(()=>{const sentence='结合过往经历或作品判断实际水平。',span=[...document.querySelectorAll('.kb-body [data-kb-start]')].find(n=>n.textContent.includes(sentence)),walker=document.createTreeWalker(span,NodeFilter.SHOW_TEXT);let node;while(node=walker.nextNode()){const at=node.textContent.indexOf(sentence);if(at>=0){const range=document.createRange();range.setStart(node,at);range.setEnd(node,at+sentence.length);const selection=getSelection();selection.removeAllRanges();selection.addRange(range);break;}}});await page.getByRole('toolbar',{name:'选中文字操作'}).waitFor();}
+
+async function verifyKnowledgeAgentEntry(){
+ const handoff=page.locator('.agent-page .agent-simple');
+ const agentHeading=handoff.getByRole('heading',{name:/如果你被难住了/});
+ const steps=handoff.locator('.agent-connect-steps li');
+ const article=page.locator('.kb-article-title').getByRole('heading',{name:titles[0],exact:true});
+ await page.goto(base+'/agent');
+ await agentHeading.waitFor();
+ const expectedSteps=await steps.allTextContents();
+ assert.equal(expectedSteps.length,3);
+ for(const width of [1440,390,320]){
+  const mobile=width<700;
+  await page.setViewportSize({width,height:mobile?844:1080});
+  await page.goto(documentUrl);
+  await article.waitFor();
+  if(mobile)await page.getByRole('button',{name:'打开工具导航',exact:true}).click();
+  const tools=page.locator(mobile?'.mobile-menu':'.topbar-tools');
+  await tools.getByRole('button',{name:'Agent 接入',exact:true}).click();
+  await page.waitForURL(url=>url.pathname==='/agent');
+  await agentHeading.waitFor();
+  await handoff.getByRole('button',{name:'复制提示词给 Agent',exact:true}).waitFor();
+  assert.deepEqual(await steps.allTextContents(),expectedSteps);
+  await fitted();
+  await page.goBack();
+  await article.waitFor();
+  assert.equal(new URL(page.url()).searchParams.get('document'),first.id);
+ }
+ await page.setViewportSize({width:1440,height:1080});
+ return {desktop:true,mobile390:true,mobile320:true};
+}
+
 const report={desktop:false,mobile:false,prototype:false,comments:false,annotation:false,merge:false,multipleCandidates:false,catalog:false,gift:false,night:false,category:false,errors};
 try{
  await page.goto(documentUrl);await page.getByRole('heading',{name:titles[0],exact:true}).last().waitFor();await fitted();assert.equal(await page.locator('.kb-branch-box').count(),0);assert.equal(await page.getByRole('button',{name:'已入库',exact:true}).getAttribute('aria-pressed'),'true');assert.equal(await page.locator('.kb-category-drawer').count(),0);
@@ -98,6 +129,7 @@ try{
  assert.equal(await flatEditor.getByLabel('文档类型',{exact:true}).count(),0);assert.equal(await flatEditor.locator('.tag-chip').count(),0);
  assert.doesNotMatch(await flatEditor.innerText(),/分类|条目/);await page.screenshot({path:out+'/flat-editor-desktop.png',fullPage:true});await page.keyboard.press('Escape');
  report.flatTags={noBreadcrumb:true,noKind:true,explicitTag:true,filterChangesDetail:true,clearRestoresList:true,nestedEditor:true};
+ report.agentEntry=await verifyKnowledgeAgentEntry();
  assert.deepEqual(errors,[]);writeFileSync(out+'/report.json',JSON.stringify(report,null,2));console.log(JSON.stringify(report));
 }catch(error){await page.screenshot({path:out+'/failure.png',fullPage:true}).catch(()=>{});writeFileSync(out+'/failure.txt',String(error)+'\n'+JSON.stringify(errors));throw error;}
 finally{await browser.close();await preview.close();await new Promise(r=>server.close(r));await f.close();}
