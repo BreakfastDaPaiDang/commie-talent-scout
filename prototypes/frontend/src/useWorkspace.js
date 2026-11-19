@@ -343,7 +343,7 @@ export function useWorkspace() {
       },
       "观察记录已发布",
     );
-    if (recognize) setRecognitions(previous => ({...previous, [entity.id]: {id, name: actor.name}}));
+    if (recognize) setRecognitions(previous => ({...previous, [entity.id]: {id, name: actor.name, avatar: actor.avatar}}));
     clearDraft();
   }
   function changeRecord(

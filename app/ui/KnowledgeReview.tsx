@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
-import type { KnowledgeApi, KnowledgeBranch, KnowledgeDiff, KnowledgeMerge, KnowledgeVersion } from '../shared/knowledge';
+import type { KnowledgeApi, KnowledgeBranch, KnowledgeDiff, KnowledgeIdentity, KnowledgeMerge, KnowledgeVersion } from '../shared/knowledge';
 import { remainingVoteTime } from '../shared/knowledge';
+import { KnowledgeAvatar } from './KnowledgeDocumentActivity';
+import { Icon } from './icons';
+import { KnowledgeDocumentBody } from './KnowledgeComments';
 import { Modal, ModalActions } from './Modal';
 import { ShareLink } from './ShareLink';
 import { TagChip } from './TagCatalog';
@@ -12,7 +15,8 @@ export function votingClosed(merge: KnowledgeMerge, now: number) {
 export function reviewDeadline(merge: KnowledgeMerge, now: number) {
   if (!merge.expires_at || merge.state !== 'open') return '';
   if (votingClosed(merge, now)) return '投票已截止';
-  return remainingVoteTime(merge.expires_at, now);
+  // A newly submitted version may arrive between two countdown ticks.
+  return remainingVoteTime(merge.expires_at, Math.max(now, Date.parse(merge.created_at)));
 }
 
 export function reviewStatus(merge: KnowledgeMerge, now: number) {
@@ -22,14 +26,14 @@ export function reviewStatus(merge: KnowledgeMerge, now: number) {
   if (merge.head_id !== merge.current_head_id) return '版本已变更';
   if ((merge.changes?.length ?? 0) > 1) return '需逐篇提交';
   if (merge.approval_count >= 3) return '已达标 · 待处理';
-  if (merge.approved_by_me) return '我已同意';
-  return '我需认可';
+  return '待认可';
 }
 
 type ReviewDetailProps = {
   api: KnowledgeApi;
   merge: KnowledgeMerge;
-  actorId: string;
+  identity: KnowledgeIdentity;
+  onIssue: (id: string) => void;
   revision: number;
   now: number;
   requestedHead: string | null;
@@ -41,7 +45,7 @@ type ReviewDetailProps = {
 };
 
 export function KnowledgeReviewDetail({
-  api, merge, actorId, revision, now, requestedHead, onChanged, onCollaborate, onOpenCurrent, onReadDocument, onResubmitted,
+  api, merge, identity, onIssue, revision, now, requestedHead, onChanged, onCollaborate, onOpenCurrent, onReadDocument, onResubmitted,
 }: ReviewDetailProps) {
   const [diff, setDiff] = useState<{branch: KnowledgeBranch; changes: KnowledgeDiff[]} | null>(null);
   const [readError, setReadError] = useState('');
@@ -111,17 +115,35 @@ export function KnowledgeReviewDetail({
   const changes = current && !outdated && !readError ? diff?.changes : undefined;
   const bundle = (changes?.length ?? merge.changes?.length ?? 0) > 1;
   const canVote = changes?.length === 1 && status.state === 'open' && !status.expired && !votingClosed(status, now) && !status.approved_by_me;
-  const canResubmit = bundle && diff?.branch.state === 'open' && diff.branch.owner_id === actorId;
+  const canResubmit = bundle && diff?.branch.state === 'open' && diff.branch.owner_id === identity.id;
   const deadline = reviewDeadline(status, now);
+  const ballot = <section className="kb-review-ballot" aria-label="版本认可">
+    <div className="kb-ballot-numbers" aria-label={status.approval_count + ' / 3 人认可'}>
+      <span>版本认可</span><strong>{status.approval_count}</strong><span> / 3 人</span>
+    </div>
+    {!!status.approvers?.length && <ul className="kb-ballot-members" aria-label="认可成员">
+      {status.approvers.map(person => <li key={person.id}><KnowledgeAvatar size="tiny" name={person.name} id={person.id} identity={identity} />{person.name}</li>)}
+    </ul>}
+    {deadline && <time dateTime={status.expires_at!}>{deadline}</time>}
+    <div className="kb-review-buttons">
+      {canVote && <button className="button primary" onClick={approve} disabled={busy}>{busy ? '正在提交…' : '认可此版本'}</button>}
+      {!canVote && !!status.approved_by_me && status.state === 'open' && <span className="kb-mine-vote"><Icon name="check" size={16}/>我已认可</span>}
+      {status.state === 'merged' && changes?.length === 1 && !changes[0].proposed.deleted &&
+        <button className="button quiet" onClick={() => onReadDocument(changes[0].document_id)}>查看已入库文档</button>}
+    </div>
+  </section>;
+
   return <article className="kb-review-detail">
     <header className="kb-review-title">
       <h1>{merge.title}</h1>
+      <span className={'kb-review-state' + (status.state === 'merged' ? ' is-adopted' : '')}>{outdated ? '旧版链接' : reviewStatus(status, now)}</span>
       {!outdated && current && <ShareLink path={'/knowledge?' + new URLSearchParams({review: merge.id, head: merge.head_id})} label="分享审核" />}
     </header>
-    <div className="kb-review-summary">
-      <p>{reviewStatus(status, now)} · {status.approval_count} / 3 人同意{deadline && <>{' · '}<time dateTime={status.expires_at!}>{deadline}</time></>}</p>
-      <p className="kb-muted">{merge.author_name}</p>
-      {merge.reason && <p>{merge.reason}</p>}
+    <div className="kb-review-byline">
+      <KnowledgeAvatar size="tiny" name={merge.author_name} id={merge.author_id} identity={identity} />
+      <span>{merge.author_name}</span><time dateTime={merge.created_at}>{new Date(merge.created_at).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})}</time>
+    </div>
+    <div className="kb-review-notices">
       {outdated && <p role="status">此链接所指的版本已经更新。</p>}
       {!outdated && !current && <p role="status">内容已修改，提交新版本后可以继续审核。</p>}
       {readError && <p role="alert" className="form-error">{readError} <button type="button" className="text-button" onClick={onChanged}>重试</button></p>}
@@ -130,45 +152,49 @@ export function KnowledgeReviewDetail({
       {vote?.pending === 'conflict' && <p role="status">主分支也有修改，请在版本协作中处理冲突。</p>}
       {bundle && <p role="status">这项旧审核包含多篇文档。请逐篇重新提交审核。</p>}
       {!outdated && current && !readError && !changes && <p role="status">正在读取变更…</p>}
-      <div className="kb-review-buttons">
-        {canVote && <button className="button primary" onClick={approve} disabled={busy}>{busy ? '正在提交…' : '同意此版本'}</button>}
-        {outdated && current && status.state === 'open' && <button className="button" onClick={onOpenCurrent}>查看当前审核</button>}
-        {status.state === 'open' && (bundle || !current || status.approval_count >= 3) &&
-          <button className="button quiet" onClick={onCollaborate}>打开分支</button>}
-        {status.state === 'merged' && changes?.length === 1 && !changes[0].proposed.deleted &&
-          <button className="button" onClick={() => onReadDocument(changes[0].document_id)}>查看已入库文档</button>}
-      </div>
+      {outdated && current && status.state === 'open' && <button className="button" onClick={onOpenCurrent}>查看当前审核</button>}
+      {status.state === 'open' && (bundle || !current || status.approval_count >= 3) &&
+        <button className="button quiet" onClick={onCollaborate}>打开分支</button>}
     </div>
     {changes?.map(change => {
-      const comparison = !change.proposed.deleted && change.current && !change.current.deleted;
-      return <section className="kb-diff" key={change.document_id}>
+      const currentVersion = change.current && change.current.id !== change.proposed.id && !change.current.deleted && !change.proposed.deleted ? change.current : null;
+      const originalLines = currentVersion && new Set(currentVersion.body.split('\n'));
+      const renamed = currentVersion && currentVersion.title !== change.proposed.title;
+      return <section className="kb-diff kb-review-page" key={change.document_id}>
         {(bundle || change.proposed.title !== merge.title) && <h2>{change.proposed.title}</h2>}
-        {change.conflict && <p className="form-error">主分支也修改了这篇文档。</p>}
-        {comparison ? <div className="kb-diff-columns">
-          <div className="kb-review-version">
-            <h3>已入库版本</h3>
-            <ReviewVersion version={change.current!} showTitle={change.current!.title !== change.proposed.title} />
-          </div>
-          <div className="kb-review-version">
-            <h3>提议版本</h3>
-            <ReviewVersion version={change.proposed} showTitle={change.current!.title !== change.proposed.title} />
-          </div>
-        </div> : <div className="kb-review-reading">
-          {!!change.proposed.deleted && <p className="kb-muted">拟移除的文档</p>}
-          <ReviewVersion version={change.proposed} />
-        </div>}
-        {canResubmit && <button className="button" disabled={busy} onClick={() => resubmit(change)}>单独提交这篇文档</button>}
+        {change.conflict && <p className="form-error">已入库的文档也有修改。</p>}
+        {!!change.proposed.deleted && <p className="kb-review-removal">拟移除的文档</p>}
+        {merge.reason && merge.reason !== '提交审核' && <p className="kb-review-reason"><span>提交说明</span>{merge.reason}</p>}
+        <KnowledgeDocumentBody document={change.proposed} branchId={merge.branch_id} api={api} writable={identity.can_write}
+          identity={identity} onIssue={onIssue} review={{id: merge.id, head_id: merge.head_id}} revision={revision}
+          lineClassName={originalLines ? line => originalLines.has(line) ? undefined : 'kb-line-added' : undefined}
+          renderBody={body => currentVersion ? <div className="kb-diff-columns">
+            <section className="kb-review-version"><h3>已入库版本</h3>{renamed && <h4>{currentVersion.title}</h4>}
+              <ReviewTags version={currentVersion}/><StaticVersionBody body={currentVersion.body} proposedBody={change.proposed.body}/>
+            </section>
+            <section className="kb-review-version kb-proposed-version"><h3>修订版本</h3>{renamed && <h4>{change.proposed.title}</h4>}
+              <ReviewTags version={change.proposed}/>{body}
+            </section>
+          </div> : <div className="kb-review-reading"><ReviewTags version={change.proposed}/>{body}</div>}
+          footer={bundle ? canResubmit && <button className="button" disabled={busy} onClick={() => resubmit(change)}>单独提交这篇文档</button> : ballot} />
       </section>;
     })}
   </article>;
 }
 
-function ReviewVersion({version, showTitle}: {version: KnowledgeVersion; showTitle?: boolean}) {
-  return <>
-    {showTitle && <h4>{version.title}</h4>}
-    {!!version.tags?.length && <div className="kb-review-version-tags">{version.tags.map(tag => <TagChip key={tag.id} tag={tag} />)}</div>}
-    <p className="kb-prose">{version.body}</p>
-  </>;
+function ReviewTags({version}: {version: KnowledgeVersion}) {
+  return version.tags?.length ? <div className="kb-review-version-tags">{version.tags.map(tag => <TagChip key={tag.id} tag={tag}/>)}</div> : null;
+}
+
+function StaticVersionBody({body, proposedBody}: {body: string; proposedBody: string}) {
+  const proposedLines = new Set(proposedBody.split('\n'));
+  return <div className="kb-body">{body.split('\n').map((line, i) => {
+    if (!line.trim()) return null;
+    const heading = line.match(/^#{1,3}\s+(.+)$/);
+    const removed = proposedLines.has(line) ? undefined : 'kb-line-removed';
+    return heading ? <h2 key={i} className={removed}>{heading[1]}</h2> :
+      <p key={i} className={removed ? 'kb-text ' + removed : 'kb-text'}>{line}</p>;
+  })}</div>;
 }
 
 type ReviewBarProps = {
@@ -238,10 +264,10 @@ export function KnowledgeReviewBar({api, actorId, branch, document, merge, now, 
     {!submitting && error && <p role="alert" className="form-error">{error}</p>}
     {current ? <>
       <div className="kb-review-progress">
-        <span>{reviewStatus(merge, now)} · {merge.approval_count} / 3 人同意{deadline && <>{' · '}<time dateTime={merge.expires_at!}>{deadline}</time></>}</span>
+        <span>{reviewStatus(merge, now)} · {merge.approval_count} / 3 人认可{deadline && <>{' · '}<time dateTime={merge.expires_at!}>{deadline}</time></>}</span>
         <button className="text-button" onClick={onBranches}>查看审核</button>
       </div>
-      {canApprove && <button className="button primary" disabled={busy || approved || !!merge.approved_by_me} onClick={approve}>{approved || merge.approved_by_me ? '我已同意' : '同意此版本'}</button>}
+      {canApprove && <button className="button primary" disabled={busy || approved || !!merge.approved_by_me} onClick={approve}>{approved || merge.approved_by_me ? '我已认可' : '认可此版本'}</button>}
     </> : <button className="button primary" onClick={() => {setError(''); setSubmitting(true);}}>提交到审核</button>}
     {submitting && <Modal title="提交到审核" onClose={() => setSubmitting(false)} wide busy={busy}>
       <form className="kb-form kb-review-preview" onSubmit={submit}>

@@ -48,8 +48,8 @@ export async function verifyEmptyKnowledgeChrome(page,out,documentUrl){
  assert.ok(Math.abs(geometry.gap)<2&&geometry.toggleBeforeHelp,'tutorial stays at the right edge next to the view switch');
  await page.screenshot({path:out+'/git-empty-desktop.png',fullPage:true});
  await page.getByRole('button',{name:'返回普通视图',exact:true}).click();
- await page.locator('.kb-document-tags').waitFor({state:'attached'});
- assert.equal(await page.locator('.kb-document-tags').innerText(),'');
+ await page.locator('.kb-article-title,.kb-review-title').first().waitFor();
+ assert.equal(await page.locator('.kb-detail-toolbar .kb-document-tags').count(),0);
  assert.equal(await page.locator('.kb-breadcrumb').count(),0);
  assert.equal(await page.getByRole('button',{name:'查看议题',exact:true}).count(),0);
  await page.goto(documentUrl);

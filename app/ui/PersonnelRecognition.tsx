@@ -1,26 +1,54 @@
-import React from 'react';
+import React, {useId, useState} from 'react';
+import {Avatar} from './Avatar';
+import {Icon} from './icons';
 import './personnel-recognition.css';
-export function RecognitionProgress({count, required = 3, previousRound, taskHref, children}: {
+
+type RecognitionVoter = {
+  id: string;
+  name: string;
+  avatarSrc?: string;
+  avatarFallbackSrc?: string;
+};
+
+export function RecognitionIdentity({name, avatarSrc, avatarFallbackSrc}: Omit<RecognitionVoter, 'id'>) {
+  return <span className="recognition-identity">
+    <span aria-hidden="true"><Avatar name={name} src={avatarSrc} fallbackSrc={avatarFallbackSrc} size="micro" /></span>
+    <span>{name}</span>
+  </span>;
+}
+
+export function RecognitionSummary({count, required = 3, voters, previousRound, reviewTask, children}: {
   count: number;
   required?: number;
+  voters: RecognitionVoter[];
   previousRound?: boolean;
-  taskHref?: string;
+  reviewTask?: {href: string; started: boolean};
   children?: React.ReactNode;
 }) {
-  if (!children && !taskHref) return null;
-  const label = previousRound ? '上轮认可记录' : '人员认可';
+  const [open, setOpen] = useState(false);
+  const recordsId = useId();
+  if (!children && !reviewTask) return null;
+  const started = reviewTask?.started;
   return <section className="personnel-recognition" aria-label="人员认可">
-    {children && <details><summary>
-      <span>{label}</span>
-      {!previousRound && <>
-        <progress max={required} value={count} aria-label="人员认可进度" />
-        <span className="recognition-segments" aria-hidden="true">
-          {Array.from({length: required}, (_, index) => <span key={index} className={index < count ? 'is-active' : undefined} />)}
-        </span>
-        <strong>{count}/{required}</strong>
-      </>}
-    </summary>{children}</details>}
-    {taskHref && <a href={taskHref}>查看人事审核任务 ↗</a>}
+    <div className={`recognition-bar${started ? ' is-reviewing' : ''}`}>
+      {children && <div className="recognition-heading">
+        {started && <span className="recognition-mark"><Icon name="check" size={14} /></span>}
+        <strong>{previousRound ? '上轮认可记录' : '人员认可'}</strong>
+        {!previousRound && <span className="recognition-count" aria-live="polite"><strong>{count}</strong>/{required} 人</span>}
+      </div>}
+      {!previousRound && voters.length > 0 && <ul className="recognition-people" aria-label="认可成员">
+        {voters.map(({id, ...voter}) => <li key={id}><RecognitionIdentity {...voter} /></li>)}
+      </ul>}
+      <div className="recognition-actions">
+        {children && <button className="recognition-disclosure" type="button" aria-expanded={open} aria-controls={recordsId} onClick={() => setOpen(!open)}>
+          {open ? '收起认可依据' : '查看认可依据'}<Icon name="down" size={14} />
+        </button>}
+        {reviewTask && <a className="recognition-task" href={reviewTask.href}>
+          {started ? '已发起审核' : previousRound ? '查看上轮审核任务' : '查看人事审核任务'}<Icon name="arrow" size={14} />
+        </a>}
+      </div>
+    </div>
+    {children && <div id={recordsId} hidden={!open}>{children}</div>}
   </section>;
 }
 export function RecognitionButton({

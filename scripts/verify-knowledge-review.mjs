@@ -7,9 +7,9 @@ const day = 24 * 60 * 60 * 1000;
 const screen = {width:1440,height:1080};
 const viewportFits = page => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1);
 const detail = page => page.locator('.kb-review-detail');
-const group = (page, title) => page.locator('.kb-todo-group').filter({has:page.getByRole('heading',{name:title,exact:true})});
-const entry = (page, title) => page.locator('.kb-entry').filter({has:page.getByRole('heading',{name:title,exact:true})});
-const approval = page => page.getByRole('button',{name:'同意此版本',exact:true});
+const group = (page, title) => page.getByRole('region',{name:title,exact:true});
+const entry = (page, title) => page.locator('.kb-entry').filter({has:page.getByText(title,{exact:true})});
+const approval = page => page.getByRole('button',{name:'认可此版本',exact:true});
 
 async function saveDraft(writer,title,body,category,visibility='private') {
   const branch=await writer.createBranch({name:title,visibility,request_id:request()});
@@ -19,7 +19,7 @@ async function saveDraft(writer,title,body,category,visibility='private') {
 }
 
 function submit(writer,draft) {
-  return writer.submitReview({branch_id:draft.branch.id,expected_version:draft.document.version,document_id:draft.document.id,version_id:draft.version.id,reason:'核对范围和审核截止时间',request_id:request()});
+  return writer.submitReview({branch_id:draft.branch.id,expected_version:draft.document.version,document_id:draft.document.id,version_id:draft.version.id,reason:'补充了可以结合实际作品追问的问题。',request_id:request()});
 }
 
 async function memberContext(browser,f,actor,base) {
@@ -36,50 +36,77 @@ export async function verifyKnowledgeReviewQueue(page,browser,out,f,services,doc
   const [writer,reader,third]=services;
   const base=new URL(documentUrl).origin,workbench=base+'/knowledge';
   const candidateUrl=merge=>workbench+'?'+new URLSearchParams({review:merge.id,head:merge.head_id});
-  const submitted=await saveDraft(writer,'审核候选：项目交接','交接时请留下可核对的项目链接。','组织');
-  const ending=await saveDraft(writer,'审核候选：活动报名','回读提交时间，再安排报名确认。','知性');
-  const draft=await saveDraft(writer,'个人草稿：交接记录','仅作者可见的交接记录。','组织');
+  const submitted=await saveDraft(writer,'从作品追问实际分工','先让对方选一件熟悉的作品，再围绕一次具体决定展开交流。\n\n## 适用情况\n对方提到参与过写稿、剪辑或研究，并且有作品可以一起看。\n\n## 提问示例\n这件作品里哪一段是你负责的？收到过什么反馈？你后来改了哪里？','组织');
+  const excerpt=submitted.version.body.split('\n')[0];
+  const ending=await saveDraft(writer,'如何安排第一次沟通','回读提交时间，再安排报名确认。','知性');
+  const draft=await saveDraft(writer,'一次文案交接的复盘','仅作者可见的交接记录。','组织');
   const foreign=await saveDraft(reader,'成员私稿：报名备注','仅另一名成员可读。','知性');
   const publicReview=await submit(writer,submitted);
   const endingReview=await submit(writer,ending);
   const deadline=new Date(Date.now()+2*day).toISOString();
   f.k.sqlite.prepare('UPDATE kw_merges SET expires_at=? WHERE id=?').run(deadline,endingReview.id);
 
+  await page.setViewportSize(screen);
   await page.goto(workbench);
   const scopes=page.getByRole('navigation',{name:'知识库范围'});
-  await scopes.getByRole('button',{name:'待办',exact:true}).waitFor();
-  assert.deepEqual(await scopes.getByRole('button').allTextContents(),['待办','已入库']);
-  assert.equal(await scopes.getByRole('button',{name:'待办',exact:true}).getAttribute('aria-pressed'),'true');
+  await scopes.getByRole('button',{name:'全部',exact:true}).waitFor();
+  assert.deepEqual(await scopes.getByRole('button').allTextContents(),['全部','已入库']);
+  assert.equal(await scopes.getByRole('button',{name:'全部',exact:true}).getAttribute('aria-pressed'),'true');
   assert.equal(await page.locator('.kb-branch-box,.kb-graph,.kb-content-tabs').count(),0);
-  const needed=group(page,'我需认可');
+  const needed=group(page,'待认可');
   await needed.locator('.kb-entry').filter({hasText:submitted.version.title}).waitFor();
   await group(page,'我的草稿').locator('.kb-entry').filter({hasText:draft.version.title}).waitFor();
   assert.equal(await entry(page,foreign.version.title).count(),0);
   assert.equal(await entry(page,submitted.version.title).locator('time').getAttribute('datetime'),publicReview.expires_at);
   assert.equal(await entry(page,ending.version.title).locator('time').getAttribute('datetime'),deadline);
   assert.equal(Date.parse(publicReview.expires_at)-Date.parse((await writer.mergeRequest(publicReview.id)).created_at),7*day);
-  await page.screenshot({path:out+'/todo-desktop.png',fullPage:true});
+  await group(page,'已入库').locator('.kb-entry').first().waitFor();
+  const firstDraft=group(page,'我的草稿').locator('.kb-index-title').first();
+  await page.locator('.kb-article-title').getByRole('heading',{name:await firstDraft.textContent(),exact:true}).waitFor();
+  await page.screenshot({path:out+'/all-desktop.png',fullPage:true});
+  const search=page.getByRole('searchbox',{name:'搜索知识库'});
+  await search.fill('参与过写稿');
+  await page.waitForFunction(title=>{
+    const group=document.querySelector('section[aria-label="待认可"]');
+    return group?.querySelectorAll('.kb-entry').length===1 && group.innerText.includes(title) &&
+      !document.querySelector('section[aria-label="我的草稿"],section[aria-label="已入库"]');
+  },submitted.version.title);
+  await search.fill('');
+  await group(page,'我的草稿').locator('.kb-entry').first().waitFor();
+  await scopes.getByRole('button',{name:'已入库',exact:true}).click();
+  await page.locator('.kb-article-title').waitFor();
+  assert.equal(await group(page,'待认可').count(),0);
+  await page.goBack();
+  await group(page,'待认可').locator('.kb-entry').first().waitFor();
 
   await entry(page,submitted.version.title).click();
-  await detail(page).getByText(submitted.version.body,{exact:true}).waitFor();
+  await detail(page).getByText(excerpt,{exact:true}).waitFor();
   assert.equal(await detail(page).locator('.kb-diff-columns').count(),0);
-  assert.equal(await detail(page).getByText(submitted.version.title,{exact:true}).count(),1);
+  assert.equal(await detail(page).getByRole('heading',{name:submitted.version.title,exact:true}).count(),1);
   assert.equal((await detail(page).innerText()).includes(publicReview.head_id.slice(0,8)),false);
   await detail(page).getByRole('button',{name:'分享审核',exact:true}).waitFor();
   assert.equal(await detail(page).getByRole('button',{name:'打开分支',exact:true}).count(),0);
+  const activity=detail(page).locator('.kb-document-comments');
+  await activity.getByRole('heading',{name:/评论与历史/}).waitFor();
+  const note='如果作品由两人合作，可以请对方挑一段自己改过的内容。';
+  await activity.getByRole('textbox').first().fill(note);
+  await activity.getByRole('button',{name:/发表评论|^发送$|发布评论/}).click();
+  await activity.locator('.work-task-comment').getByText(note,{exact:true}).waitFor();
+  await page.locator('.kb-detail-scroll').evaluate(el=>el.scrollTop=0);
   await page.screenshot({path:out+'/candidate-desktop.png',fullPage:true});
   await page.getByRole('button',{name:'版本协作',exact:true}).click();
   await page.locator('.kb-branches .kb-graph').waitFor();
   assert.equal(await page.locator('.kb-branch-box select').inputValue(),publicReview.branch_id);
   assert.equal(new URL(page.url()).searchParams.get('tab'),'branches');
   await page.getByRole('button',{name:'返回普通视图',exact:true}).click();
-  await detail(page).getByText(submitted.version.body,{exact:true}).waitFor();
+  await detail(page).getByText(excerpt,{exact:true}).waitFor();
   await approval(page).click();
-  await detail(page).getByText(/我已同意 · 1 \/ 3 人同意/).waitFor();
-  const completed=group(page,'其他待认可');
+  await detail(page).getByLabel('1 / 3 人认可',{exact:true}).waitFor();
+  await detail(page).getByText('我已认可',{exact:true}).waitFor();
+  const completed=group(page,'待认可');
   await completed.locator('.kb-entry').filter({hasText:submitted.version.title}).waitFor();
-  const headings=await page.locator('.kb-todo-group > h2').allTextContents();
-  assert.deepEqual(headings,['我需认可','我的草稿','其他待认可']);
+  const headings=await page.locator('.kb-index-group > h2').allTextContents();
+  assert.deepEqual(headings,['我的草稿','待认可','已入库']);
 
   const otherContext=await memberContext(browser,f,reader.actor,base);
   try {
@@ -90,18 +117,31 @@ export async function verifyKnowledgeReviewQueue(page,browser,out,f,services,doc
     const privateRead=await otherContext.request.get(base+'/api/knowledge-workspace/documents/'+draft.document.id+'?branch_id='+draft.branch.id);
     assert.ok([403,404].includes(privateRead.status()),'direct private document request is rejected');
     await other.goto(candidateUrl(publicReview));
-    await detail(other).getByText(submitted.version.body,{exact:true}).waitFor();
+    await detail(other).getByText(excerpt,{exact:true}).waitFor();
+    await detail(other).getByRole('list',{name:'认可成员'}).getByText(writer.actor.name,{exact:true}).waitFor();
+    await other.screenshot({path:out+'/document-and-ballot-desktop.png',fullPage:true});
+    await detail(other).locator('.work-task-comment').filter({hasText:note}).getByRole('button',{name:'回复',exact:true}).click();
+    const reply=detail(other).getByRole('textbox',{name:/回复/});
+    await reply.fill('可以，再补问对方根据反馈改了哪一句。');
+    await reply.locator('xpath=ancestor::form').getByRole('button',{name:/发送|回复|评论|发布/}).last().click();
+    await detail(other).getByText('可以，再补问对方根据反馈改了哪一句。',{exact:true}).waitFor();
     await approval(other).click();
-    await detail(other).getByText(/我已同意 · 2 \/ 3 人同意/).waitFor();
+    await detail(other).getByLabel('2 / 3 人认可',{exact:true}).waitFor();
+    await detail(other).getByRole('list',{name:'认可成员'}).getByText(reader.actor.name,{exact:true}).waitFor();
+    await detail(other).getByText('我已认可',{exact:true}).waitFor();
+    await other.screenshot({path:out+'/review-with-voters-desktop.png',fullPage:true});
   } finally {
     await otherContext.close();
   }
   await third.approve({id:publicReview.id,head_id:publicReview.head_id,request_id:request()});
   await page.goto(candidateUrl(publicReview));
-  await detail(page).getByText(/已入库 · 3 \/ 3 人同意/).waitFor();
+  await detail(page).getByLabel('3 / 3 人认可',{exact:true}).waitFor();
+  await detail(page).locator('.kb-review-state').getByText('已入库',{exact:true}).waitFor();
   assert.equal(await approval(page).count(),0);
   await detail(page).getByRole('button',{name:'查看已入库文档'}).click();
   await page.locator('.kb-article-title').getByRole('heading',{name:submitted.version.title}).waitFor();
+  await page.locator('.kb-document-activity').getByText(note,{exact:true}).waitFor();
+  await page.locator('.kb-document-activity').getByText('可以，再补问对方根据反馈改了哪一句。',{exact:true}).waitFor();
 
   for (const width of [390,320]) {
     await page.setViewportSize({width,height:844});
@@ -123,13 +163,14 @@ export async function verifyKnowledgeReviewQueue(page,browser,out,f,services,doc
 
   f.k.sqlite.prepare('UPDATE kw_merges SET expires_at=? WHERE id=?').run(new Date(Date.now()-1000).toISOString(),endingReview.id);
   await page.goto(candidateUrl(endingReview));
-  await detail(page).getByText(/审核已过期.*投票已截止/).waitFor();
+  await detail(page).getByText('审核已过期',{exact:true}).waitFor();
+  await detail(page).getByText('投票已截止',{exact:true}).waitFor();
   assert.equal(await approval(page).count(),0);
   await group(page,'我的草稿').locator('.kb-entry').filter({hasText:ending.version.title}).click();
   assert.equal(await page.getByRole('button',{name:'分享文档',exact:true}).count(),0);
   await page.getByRole('button',{name:'提交到审核',exact:true}).click();
   await page.getByRole('dialog',{name:'提交到审核'}).getByRole('button',{name:'公开并提交审核'}).click();
-  await detail(page).getByText(/我需认可 · 0 \/ 3 人同意/).waitFor();
+  await detail(page).getByLabel('0 / 3 人认可',{exact:true}).waitFor();
   const newReview=new URL(page.url()).searchParams.get('review');
   assert.notEqual(newReview,endingReview.id);
   assert.equal((await writer.mergeRequest(newReview)).approval_count,0);
@@ -140,7 +181,7 @@ export async function verifyKnowledgeReviewQueue(page,browser,out,f,services,doc
   const removalReview=await writer.submitReview({branch_id:deleteBranch.id,expected_version:removed.version,document_id:submitted.document.id,version_id:removedVersion.id,reason:'审阅被移除的内容',request_id:request()});
   await page.goto(candidateUrl(removalReview));
   await detail(page).getByText('拟移除的文档',{exact:true}).waitFor();
-  await detail(page).getByText(submitted.version.body,{exact:true}).waitFor();
+  await detail(page).getByText(excerpt,{exact:true}).waitFor();
   assert.equal(await detail(page).locator('.kb-diff-columns').count(),0);
   await approval(page).waitFor();
   await page.screenshot({path:out+'/removal-candidate-desktop.png',fullPage:true});
@@ -173,5 +214,5 @@ export async function verifyKnowledgeReviewQueue(page,browser,out,f,services,doc
   assert.deepEqual(resubmitted.changes.map(change=>change.document_id),[legacy.document.id]);
   assert.equal(resubmitted.approval_count,0);
   await page.goto(documentUrl);
-  return {defaultTodo:true,order:true,independentDeadline:true,twoMemberSessions:true,privateDrafts:true,openedCandidate:true,versionEntry:true,deletionPreview:true,voted:true,adopted:true,expired:true,staleShare:true,legacySingleDocument:true,mobile390:true,mobile320:true};
+  return {defaultAll:true,order:true,independentDeadline:true,twoMemberSessions:true,privateDrafts:true,openedCandidate:true,versionEntry:true,deletionPreview:true,voted:true,adopted:true,expired:true,staleShare:true,legacySingleDocument:true,mobile390:true,mobile320:true};
 }

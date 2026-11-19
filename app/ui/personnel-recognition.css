@@ -1,32 +1,113 @@
 .personnel-recognition {
-  display:flex;
-  align-items:flex-start;
-  flex-wrap:wrap;
-  gap:4px 16px;
-  margin:10px 0;
+  container: personnel-recognition / inline-size;
+  margin: 14px 0;
+  font-size: 15px;
 }
-.personnel-recognition details { flex:1; min-width:0; }
-.personnel-recognition summary {
-  min-height:44px;
-  display:grid;
-  grid-template-columns:auto minmax(24px,100px) auto max-content;
-  justify-content:start;
-  align-items:center;
-  gap:10px;
-  cursor:pointer;
-  list-style:none;
+
+.recognition-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0 16px;
+  min-height: 52px;
+  padding-inline: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper);
 }
-.personnel-recognition summary::-webkit-details-marker { display:none; }
-.personnel-recognition summary::after { content:'▾'; color:var(--muted); }
-.personnel-recognition details[open] summary::after { content:'▴'; }
-.personnel-recognition summary strong { font-variant-numeric:tabular-nums; }
-.personnel-recognition progress { width:100%; height:8px; accent-color:var(--accent,#f52f29); }
-.recognition-segments { display:none; }
-.personnel-recognition > a { display:inline-flex; align-items:center; min-height:44px; }
-.recognition-votes { list-style:none; padding:0; margin:0 0 10px; }
-.recognition-votes li { display:flex; flex-wrap:wrap; align-items:center; gap:2px 12px; padding:6px 0; border-top:1px solid var(--line); overflow-wrap:anywhere; }
-.recognition-votes li > a,.recognition-votes li > button { display:inline-flex; align-items:center; gap:4px; min-height:32px; }
-.recognition-votes li > a span { color:var(--muted); }
+
+.recognition-bar.is-reviewing {
+  --recognition-review-text: var(--theme-green-text, #316641);
+  --recognition-review-fill: var(--theme-green-soft, #edf5eb);
+  border-color: color-mix(in srgb, var(--recognition-review-text) 18%, var(--recognition-review-fill));
+  background: var(--recognition-review-fill);
+}
+
+.recognition-heading {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  font-size: 16px;
+  white-space: nowrap;
+}
+
+.recognition-count { font-variant-numeric: tabular-nums; }
+.recognition-count strong { color: var(--theme-red-text, #b52926); }
+.is-reviewing .recognition-count strong { color: var(--recognition-review-text); }
+
+.recognition-mark {
+  display: grid;
+  place-items: center;
+  width: 21px;
+  height: 21px;
+  border-radius: 50%;
+  color: var(--recognition-review-fill);
+  background: var(--recognition-review-text);
+}
+
+.recognition-people {
+  display: flex;
+  align-items: center;
+  flex: 1 1 12rem;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  min-width: 0;
+  margin: 0;
+  padding: 0 0 0 15px;
+  border-inline-start: 1px solid var(--line);
+  list-style: none;
+}
+
+.recognition-people > li { max-width: 100%; }
+.recognition-identity { display: inline-flex; align-items: center; gap: 6px; min-width: 0; overflow-wrap: anywhere; }
+.recognition-identity .avatar { width: 24px; height: 24px; border-radius: 4px; }
+
+.recognition-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 14px;
+  margin-inline-start: auto;
+}
+
+.recognition-actions > * {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 44px;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.recognition-disclosure { color: var(--theme-blue-text, #255581); }
+.recognition-disclosure[aria-expanded="true"] svg { transform: rotate(180deg); }
+.recognition-task { color: var(--recognition-review-text, var(--ink)); font-weight: 650; }
+.recognition-actions > *:is(:hover, :focus-visible) { text-decoration: underline; text-underline-offset: 3px; }
+
+.recognition-votes { list-style: none; padding: 0; margin: 4px 0 0; }
+.recognition-votes li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 14px;
+  padding: 4px 12px;
+  border-bottom: 1px solid var(--line);
+  overflow-wrap: anywhere;
+}
+
+.recognition-votes li > a,.recognition-votes li > button { display: inline-flex; align-items: center; gap: 4px; min-height: 44px; }
+.recognition-votes li > a { color: var(--theme-blue-text, #255581); font-size: 14px; text-decoration: underline; text-underline-offset: 3px; }
+.recognition-votes li > a span,.recognition-vote-state { color: var(--muted); font-size: 14px; }
+.recognition-votes li > button { margin-inline-start: auto; font-size: 13px; color: var(--muted); }
+.recognition-votes li > button:is(:hover, :focus-visible) { color: var(--ink); }
+
+@container personnel-recognition (max-width: 575px) {
+  .recognition-bar { padding-inline: 11px; }
+  .recognition-people { flex-basis: 100%; padding: 0 0 3px; border-inline-start: 0; }
+  .recognition-actions { margin-inline-start: 0; }
+}
+
 .recognition-confirmation blockquote { margin:16px 0; padding:12px 16px; border-left:3px solid var(--accent,#f52f29); background:var(--wash); color:var(--ink); white-space:pre-wrap; overflow-wrap:anywhere; max-height:180px; overflow:auto; }
 .recognition-button { color:var(--accent,#f52f29)!important; }
 .recognition-confirmation p { overflow-wrap:anywhere; }
@@ -34,19 +115,6 @@
 .recognition-composer-option input { width:18px; height:18px; accent-color:var(--accent,#f52f29); }
 .recognition-publish-error { overflow-wrap:anywhere; margin:8px 0; }
 .recognition-publish-error .text-button { min-height:44px; margin-inline-end:12px; }
-@media(min-width:801px) {
-  .personnel-recognition progress,.recognition-segments { grid-row:1; grid-column:2; }
-  .personnel-recognition progress { opacity:0; }
-  .recognition-segments { display:flex; gap:5px; }
-  .recognition-segments > span { flex:1; height:6px; border-radius:2px; background:color-mix(in srgb,var(--ink) 22%,transparent); }
-  .recognition-segments > .is-active { background:var(--accent,#f52f29); }
-  .recognition-votes li { column-gap:16px; }
-  .recognition-votes li > a { font-size:14px; text-decoration:underline; text-underline-offset:3px; }
-  .recognition-votes li > button { margin-inline-start:auto; font-size:13px; color:var(--muted); }
-  .recognition-votes li > button:hover,.recognition-votes li > button:focus-visible { color:var(--ink); }
-}
 @media(max-width:600px) {
-  .personnel-recognition details { flex-basis:100%; }
   .recognition-confirmation blockquote { max-height:25vh; }
-  .recognition-votes li > a,.recognition-votes li > button { min-height:44px; }
 }

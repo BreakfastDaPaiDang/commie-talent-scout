@@ -1,6 +1,7 @@
 import React,{useEffect,useState} from 'react';
 import {Modal,ModalActions} from './Modal';
 import {Discussion} from './KnowledgeComments';
+import {KnowledgeVersionModal} from './KnowledgeHistoryDetails';
 import {reviewDeadline,reviewStatus,votingClosed} from './KnowledgeReview';
 import type {KnowledgeApi,KnowledgeBranch,KnowledgeCommit,KnowledgeDiff,KnowledgeIssue,KnowledgeMerge} from '../shared/knowledge';
 
@@ -71,6 +72,26 @@ function IssueSource({issue}:{issue:KnowledgeIssue}){
 }
 
 export function KnowledgeHistory({api,branchId}:{api:KnowledgeApi;branchId:string}){
- const [commits,setCommits]=useState<KnowledgeCommit[]>([]),[next,setNext]=useState<number|null>(null),[detail,setDetail]=useState<any>(null),[error,setError]=useState('');useEffect(()=>{let active=true;setDetail(null);api.read('/history?branch_id='+encodeURIComponent(branchId)).then(r=>{if(active){setCommits(r.commits);setNext(r.next_offset);}}).catch(e=>{if(active)setError(e.message);});return()=>{active=false;};},[api,branchId]);
- return <section className="kb-history"><h1>历史</h1>{error&&<p className="form-error" role="alert">{error}</p>}{commits.map(c=><button key={c.id} className="kb-history-row" onClick={async()=>{try{setDetail(await api.read('/history/'+c.id+'?branch_id='+encodeURIComponent(branchId)));}catch(e){setError((e as Error).message);}}}><strong>{c.message}</strong><span>{c.author_name} · {new Date(c.created_at).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai'})}</span></button>)}{!commits.length&&<p className="kb-muted">还没有提交记录</p>}{next!==null&&<button className="button" onClick={async()=>{try{const r=await api.read('/history?branch_id='+encodeURIComponent(branchId)+'&offset='+next);setCommits(old=>[...old,...r.commits]);setNext(r.next_offset);}catch(e){setError((e as Error).message);}}}>更早的记录</button>}{detail&&<Modal title="版本内容" onClose={()=>setDetail(null)} wide><div className="kb-form"><h3>{detail.commit.message}</h3>{detail.changes.map((c:any)=><section key={c.document_id}><h3>{c.after.title}</h3><p className="kb-prose">{c.after.deleted?'此版本移除了文档':c.after.body}</p></section>)}</div></Modal>}</section>;
+ const [commits,setCommits]=useState<KnowledgeCommit[]>([]),[next,setNext]=useState<number|null>(null),[commitId,setCommitId]=useState<string|null>(null),[error,setError]=useState('');
+ const path='/history?branch_id='+encodeURIComponent(branchId);
+ useEffect(()=>{
+  let active=true;
+  setCommitId(null);setCommits([]);setNext(null);setError('');
+  api.read<{commits:KnowledgeCommit[];next_offset:number|null}>(path).then(r=>{
+   if(active){setCommits(r.commits);setNext(r.next_offset);}
+  }).catch(e=>{if(active)setError(e.message);});
+  return()=>{active=false;};
+ },[api,path]);
+ return <section className="kb-history">
+  <h1>历史</h1>{error&&<p className="form-error" role="alert">{error}</p>}
+  {commits.map(c=><button key={c.id} className="kb-history-row" onClick={()=>setCommitId(c.id)}>
+   <strong>{c.message}</strong><span>{c.author_name} · {new Date(c.created_at).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai'})}</span>
+  </button>)}
+  {!commits.length&&<p className="kb-muted">还没有提交记录</p>}
+  {next!==null&&<button className="button" onClick={async()=>{
+   try{const r=await api.read<{commits:KnowledgeCommit[];next_offset:number|null}>(path+'&offset='+next);setCommits(old=>[...old,...r.commits]);setNext(r.next_offset);}
+   catch(e){setError((e as Error).message);}
+  }}>更早的记录</button>}
+  {commitId&&<KnowledgeVersionModal api={api} target={{branchId,commitId}} close={()=>setCommitId(null)}/>}
+ </section>;
 }

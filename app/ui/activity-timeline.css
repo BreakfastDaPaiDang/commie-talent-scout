@@ -1,0 +1,30 @@
+.task-history-title{display:flex;align-items:center;gap:8px;margin:0 0 16px;font-size:18px}
+.task-history-title>span{color:var(--theme-muted,#8b9191);font-size:13px;font-weight:400}
+.task-comment-compose{margin:0 0 22px;display:grid;grid-template-columns:30px minmax(0,1fr);gap:10px}
+.task-comment-compose>svg{background:#c5292d;color:#fff;border-radius:50%;width:30px;height:30px;padding:6px;margin-top:8px}
+.task-comment-compose textarea{width:100%;min-height:65px;font:inherit;font-size:14px;padding:13px;border:1px solid var(--theme-line,#9ba2a1);resize:vertical;background:var(--theme-surface,#fff);box-sizing:border-box}
+.task-comment-compose button{grid-column:2;justify-self:end}
+.task-comment-compose textarea:focus{outline:1px solid #bf3338}
+.task-activity{display:grid;gap:0;border-left:1px dashed var(--theme-line,#cfd4cf);margin:0 0 0 14px;padding-left:24px}
+.task-activity-entry{position:relative;padding:0 0 21px;min-width:0}
+.task-activity-entry:before{content:'';position:absolute;left:-29px;top:7px;width:7px;height:7px;border:1px solid var(--theme-line,#b7bfbb);border-radius:50%;background:var(--theme-surface,#fff)}
+.task-event-entry{font-size:13px;color:var(--theme-muted,#8b9393);line-height:1.7}
+.task-event-entry>header{display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap}
+.task-event-entry>header strong{font-weight:500;color:var(--theme-muted,#687375)}
+.task-event-entry details{margin-top:5px}
+.task-event-entry details summary{cursor:pointer;color:var(--theme-muted,#8b9393)}
+.task-event-entry ul{padding-left:16px;margin:8px 0;overflow-wrap:anywhere}
+.task-event-entry small{display:block}
+.task-history-loading{font-size:14px;color:var(--theme-muted,#8b9393)}
+.work-task-comment{border-bottom:1px solid var(--theme-line,#eceeea);padding:0 0 16px}
+.work-task-comment>header{display:flex;align-items:center;gap:8px;font-size:14px;flex-wrap:wrap}
+.work-task-comment>header time{margin-left:auto;color:var(--theme-muted,#919897);font-size:12px}
+.work-task-comment .record-body{font-size:15px;line-height:1.85;padding:8px 0;overflow-wrap:anywhere}
+.work-task-comment .record-body p{margin:4px 0}
+.work-task-comment>footer{display:flex;gap:14px;justify-content:flex-end;font-size:12px;color:var(--theme-muted,#7a8483)}
+
+@media(max-width:800px){
+  .task-history-title{font-size:17px}
+  .task-activity{padding-left:19px}
+  .task-activity-entry:before{left:-24px}
+}

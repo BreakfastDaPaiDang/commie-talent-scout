@@ -11,13 +11,13 @@ type Placement=Box&{ax:number;ay:number;ex:number;ey:number};
 const definitions:Definition[]=[
  {id:'help',selector:'.kb-help-button',text:'按钮说明已开启',side:'bottom',width:190},
  {id:'scope-main',selector:'[data-kb-help="scope-main"]',text:'已形成共识，当前采用的正式内容',side:'bottom',width:138},
- {id:'scope-todo',selector:'[data-kb-help="scope-todo"]',text:'查看需要认可的候选内容与自己的草稿',side:'bottom',width:138},
+ {id:'scope-all',selector:'[data-kb-help="scope-all"]',text:'查看自己的草稿、待认可和已入库文档',side:'bottom',width:138},
  {id:'scope-public',selector:'[data-kb-help="scope-public"]',text:'查看提交给成员审核的文档版本',side:'bottom',width:138},
  {id:'scope-drafts',selector:'[data-kb-help="scope-drafts"]',text:'尚未提交，仅自己可见的个人内容',side:'bottom',width:138},
  {id:'search',selector:'.kb-search',text:'在当前范围内查找',side:'top'},
  {id:'new-entry',selector:'[data-kb-help="new-entry"]',text:'写一篇新草稿',side:'top'},
  {id:'view',selector:'.kb-view-switch, .kb-list-collaboration',text:'在普通视图和版本协作之间切换',side:'bottom'},
- {id:'share',selector:'.kb-detail-toolbar .share-link',text:'复制当前文档链接',side:'bottom'},
+ {id:'share',selector:'.kb-reading-actions .share-link, .kb-review-title .share-link, .kb-detail-toolbar .share-link',text:'复制当前版本的链接',side:'bottom'},
  {id:'branch',selector:'.kb-branch-box select',text:'切换当前查看的分支',side:'bottom'},
  {id:'back',selector:'.kb-mobile-back',text:'返回文档列表',side:'bottom'},
  {id:'category',selector:'[data-kb-help="tags"]',text:'搜索标签，筛选文档或查看标签解释',side:'bottom',width:190},
@@ -25,14 +25,14 @@ const definitions:Definition[]=[
  {id:'issues',selector:'[data-kb-help="tab-issues"], [data-kb-help="issues"]',text:'提出问题与修改建议',side:'bottom'},
  {id:'branches',selector:'[data-kb-help="tab-branches"]',text:'查看分支图、修改对比与合并情况',side:'bottom'},
  {id:'history',selector:'[data-kb-help="tab-history"], [data-kb-help="history"]',text:'查看过去的修改',side:'bottom'},
- {id:'edit',selector:'[data-kb-help="edit"]',text:'在分支中修改正文',side:'bottom'},
+ {id:'edit',selector:'[data-kb-help="edit"]',text:'打开文档编辑表单',side:'bottom'},
  {id:'remove',selector:'[data-kb-help="remove"]',text:'从当前分支移除这篇文档',side:'top'},
  {id:'submit',selector:'.kb-review-bar > button',match:/^提交到审核$/,text:'核对这篇草稿，再公开提交审核',side:'top'},
- {id:'approve',selector:'.kb-review-bar > button, .kb-review-buttons > button',match:/^同意此版本$/,text:'认可这一版内容。七天内需要三名正式成员同意。',side:'top',width:250},
- {id:'review',selector:'.kb-review-progress button',text:'查看同意人数与尚未合入的原因',side:'top'},
- {id:'quote',selector:'.kb-article .kb-body .kb-text',text:'选中文字，可添加批注',side:'bottom',members:true},
+ {id:'approve',selector:'.kb-review-bar > button, .kb-review-buttons > button',match:/^认可此版本$/,text:'认可这一版内容。七天内需要三名正式成员认可。',side:'top',width:250},
+ {id:'review',selector:'.kb-review-progress button',text:'查看认可人数与尚未入库的原因',side:'top'},
+ {id:'quote',selector:'.kb-article .kb-body .kb-text, .kb-proposed-version .kb-body .kb-text, .kb-review-reading .kb-body .kb-text',text:'选中文字，可添加批注',side:'bottom',members:true},
  {id:'annotation',selector:'.kb-annotation',text:'点击对照原文；右键或长按可回复、发起议题',side:'right',width:215,members:true},
- {id:'comment',selector:'.kb-article .kb-document-comments .kb-comment-form textarea, .kb-article .kb-document-comments .kb-comment-form .button.primary',text:'对整篇文档发表评论',side:'bottom'},
+ {id:'comment',selector:'.kb-document-activity textarea[aria-label="写下对这篇文档的评论…"]',text:'对这一版文档发表评论',side:'bottom'},
  {id:'category-edit',selector:'.kb-category-drawer button[aria-label="编辑标签"]',text:'编辑标签名称与解释',side:'left'},
  {id:'category-close',selector:'.kb-category-drawer button[aria-label="关闭标签侧栏"]',text:'收起标签解释与留言',side:'left'},
  {id:'category-quote',selector:'.kb-category-drawer .kb-body .kb-text',text:'选中标签解释中的文字，可添加批注',side:'left',members:true},
@@ -50,7 +50,7 @@ const actions:[string,RegExp,string][]=[
  ['share-branch',/^共享此分支$/,'把整个私人分支开放给正式成员'],
  ['delete-branch',/^删除分支$/,'删除自己的非主分支；确认后关闭其未完成审核'],
  ['propose',/^(提交|更新)合并请求$/,'把当前分支的修改提交给成员认可'],
- ['approve-merge',/^(同意这次修改|我已同意)$/,'对这次具体修改表达同意'],
+ ['approve-merge',/^(同意这次修改|我已同意)$/,'认可这次具体修改'],
  ['accept',/^合入主分支$/,'合入达标修改；多个候选须依据会议或议题结论选择'],
  ['conflict-main',/^保留主分支版本$/,'这篇冲突文档采用主分支的内容'],
  ['conflict-branch',/^保留分支版本$/,'这篇冲突文档采用当前分支的内容'],
@@ -175,10 +175,11 @@ export function KnowledgeHelp({root,writable,close}:{root:RefObject<HTMLElement|
   setPositions(placed);
  },[scene]);
  useLayoutEffect(()=>{if(document.activeElement===layer.current||!layer.current?.contains(document.activeElement))(dismiss.current??layer.current)?.focus({preventScroll:true});},[positions]);
+ const scopeCount=scene.targets.filter(item=>item.scopeIndex!==undefined).length;
  return createPortal(<div className="kb-help-overlay" ref={layer} tabIndex={-1} role="dialog" aria-modal="true" aria-label="知识库按钮说明">
   <svg className="kb-help-lines" aria-hidden="true">{scene.targets.map(target=>{const p=positions[target.id];return p?<g key={target.id} data-help-line={target.id}><path d={`M${p.ax} ${p.ay} L${p.ex} ${p.ey}`}/><circle cx={p.ax} cy={p.ay} r="3"/></g>:null;})}</svg>
   {scene.targets.map(target=>{
-   const p=positions[target.id],narrow=scene.bounds.width<700,maxWidth=Math.min(target.width??210,target.pane.width-24,narrow?180:250),width=target.scopeIndex===undefined?(target.width?maxWidth:'max-content'):Math.min(138,(target.pane.width-40)/3);
+   const p=positions[target.id],narrow=scene.bounds.width<700,maxWidth=Math.min(target.width??210,target.pane.width-24,narrow?180:250),width=target.scopeIndex===undefined?(target.width?maxWidth:'max-content'):Math.min(138,(target.pane.width-40)/scopeCount);
    const style={left:p?.x??scene.bounds.x,top:p?.y??scene.bounds.y,width,maxWidth,visibility:p?'visible' as const:'hidden' as const};
    return target.id==='help'?<button type="button" ref={el=>{dismiss.current=el;if(el)captions.current.set(target.id,el);else captions.current.delete(target.id);}} key={target.id} className="kb-help-caption kb-help-dismiss" data-help-id={target.id} style={style} aria-label="关闭按钮说明" onClick={close}><strong>按钮说明已开启</strong><small>点击空白处或按 Esc 退出</small></button>:<div key={target.id} ref={el=>{if(el)captions.current.set(target.id,el);else captions.current.delete(target.id);}} className="kb-help-caption" data-help-id={target.id} data-anchor-x={target.rect.x} data-anchor-y={target.rect.y} style={style}><span className="kb-help-control-name">{target.label}：</span>{target.text}</div>;
   })}

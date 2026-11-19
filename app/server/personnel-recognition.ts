@@ -48,10 +48,22 @@ export class PersonnelRecognition {
     const [member, round] = await Promise.all([this.identity(), this.round(a.archive_id)]),
       month = recognitionMonth(now());
     const used = member ? await this.stmt('SELECT count(*) n FROM personnel_recognitions WHERE member_archive_id=? AND month=?', member.id, month).first<number>('n') : 0;
-    const votes = round ? (await this.stmt(`SELECT v.id,v.member_archive_id,m.name,v.observation_id,v.content_version,v.created_at,v.withdrawn_at,o.deleted evidence_deleted FROM personnel_recognitions v JOIN archives m ON m.id=v.member_archive_id JOIN observations o ON o.id=v.observation_id WHERE v.round_id=? ORDER BY v.created_at,v.id`, round.id).all<{
+    const votes = round ? (await this.stmt(`
+      SELECT v.id,v.member_archive_id,m.name,m.version member_archive_version,
+        account.id avatar_account_id,account.version avatar_account_version,
+        v.observation_id,v.content_version,v.created_at,v.withdrawn_at,o.deleted evidence_deleted
+      FROM personnel_recognitions v
+      JOIN archives m ON m.id=v.member_archive_id
+      JOIN observations o ON o.id=v.observation_id
+      LEFT JOIN members account ON account.id=v.account_id AND account.id=m.linked_account_id
+        AND m.deleted=0 AND (account.avatar_id IS NOT NULL OR account.qq IS NOT NULL)
+      WHERE v.round_id=? ORDER BY v.created_at,v.id`, round.id).all<{
       id: string;
       member_archive_id: string;
       name: string;
+      member_archive_version: number;
+      avatar_account_id: string | null;
+      avatar_account_version: number | null;
       observation_id: string;
       content_version: number;
       created_at: string;

@@ -53,6 +53,9 @@ test('three distinct formal likes atomically publish a single review; author is 
  assert.equal((await newMembership.approve({id:m.id,head_id:m.head_id,request_id:request()})).approval_count,1);
  assert.equal(f.sqlite.prepare('SELECT COUNT(*) n FROM kw_approvals WHERE merge_id=?').get(m.id).n,1);
  await vote(f.w[1],m);assert.equal((await f.w[0].list({})).documents.length,0);assert.equal((await f.w[0].mergeRequest(m.id)).approval_count,2);
+ const voters=(await f.w[0].mergeRequest(m.id)).approvers;
+ assert.deepEqual(new Set(voters.map(v=>v.id)),new Set(f.actors.slice(0,2).map(actor=>actor.id)));
+ assert.ok(voters.every(v=>v.name&&v.created_at));
  await assert.rejects(vote(f.guest,m),e=>e.code==='FORMAL_MEMBER_REQUIRED');
  const input={id:m.id,head_id:m.head_id,request_id:request()},result=await f.w[2].approve(input);assert.equal(result.merged,true);assert.deepEqual(await f.w[2].approve(input),result);
  assert.equal((await f.w[0].mergeRequest(m.id)).state,'merged');assert.equal((await f.guest.get('main',d.id)).document.body,'需要具体依据。');assert.equal((await f.w[0].list({scope:'public'})).documents.length,0);

@@ -9,6 +9,18 @@ export async function getBranch(context: ServiceContext, id: string) {
   if (!b || b.state === 'closed' || context.guest && id !== 'main' || b.visibility === 'private' && b.owner_id !== context.actor.id) throw new KnowledgeError(404, 'NOT_FOUND', '分支不存在或不可见');
   return b;
 }
+export const commitAncestry = `ancestry(id) AS (
+  SELECT ?
+  UNION SELECT c.parent_id FROM kw_commits c JOIN ancestry a ON c.id=a.id WHERE c.parent_id IS NOT NULL
+  UNION SELECT c.merge_parent_id FROM kw_commits c JOIN ancestry a ON c.id=a.id WHERE c.merge_parent_id IS NOT NULL
+)`;
+
+// Published ancestry remains readable after a source branch is closed.
+export function commitVisibility(context: ServiceContext) {
+  return context.guest
+    ? {where: "c.branch_id='main'", args: []}
+    : {where: "(origin.visibility='members' OR origin.owner_id=?)", args: [context.actor.id]};
+}
 export function assertEditable(context: ServiceContext, b: KnowledgeBranch, version: number) {
   assertWriter(context);
   if (b.id === 'main') throw new KnowledgeError(403, 'MAIN_REQUIRES_MERGE', '请先在分支中修改，再提出合并请求');

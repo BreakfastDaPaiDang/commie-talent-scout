@@ -131,6 +131,8 @@ export const workspaceSchemas = {
     document_id: z.uuid().optional(),
     category_id: z.uuid().optional(),
     issue_id: z.uuid().optional(),
+    review_id: z.uuid().optional(),
+    head_id: key.optional(),
     parent_id: z.uuid().optional(),
     version_id: key.optional(),
     quote: z.string().min(1).max(4000).optional(),
@@ -138,5 +140,7 @@ export const workspaceSchemas = {
     end_offset: z.number().int().positive().optional(),
     body: z.string().trim().min(1).max(8000),
     request_id
-  }).strict().refine(v => Number(!!v.document_id) + Number(!!v.category_id) + Number(!!v.issue_id) === 1, '请选择一个评论对象')
+  }).strict()
+    .refine(v => Number(!!v.document_id) + Number(!!v.category_id) + Number(!!v.issue_id) === 1, '请选择一个评论对象')
+    .refine(v => (!v.review_id && !v.head_id) || !!(v.review_id && v.head_id && v.document_id && v.branch_id), '请选择具体候选版本')
 };

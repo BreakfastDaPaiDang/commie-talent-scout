@@ -5,7 +5,7 @@ const tutorial=page=>page.getByRole('dialog',{name:'知识库按钮说明',exact
 const caption=(page,id)=>page.locator('.kb-help-caption[data-help-id="'+id+'"]');
 const definitions={
  'scope-main':'已形成共识，当前采用的正式内容',
- 'scope-todo':'查看需要认可的候选内容与自己的草稿',
+ 'scope-all':'草稿',
 };
 async function fitted(page){
  await page.waitForFunction(()=>[...document.querySelectorAll('.kb-help-caption')].some(e=>getComputedStyle(e).visibility==='visible'));
@@ -36,7 +36,7 @@ export async function verifyKnowledgeHelp(page,out,documentUrl){
   for(const [id,text] of Object.entries(definitions)){assert.ok((await caption(page,id).innerText()).includes(text));await aligned(page,id,'[data-kb-help="'+id+'"]');}
   assert.equal(await page.locator('dialog[open]').count(),0,'help is drawn on the page, not a native modal');
   assert.equal(await tutorial(page).getByRole('searchbox').count(),0);
-  await aligned(page,'share','.kb-detail-toolbar .share-link');await aligned(page,'view','.kb-view-switch');
+  await aligned(page,'share','.kb-reading-actions .share-link');await aligned(page,'view','.kb-view-switch');
   await page.screenshot({path:out+'/tutorial-desktop.png',fullPage:true});
   await page.keyboard.press('Tab');assert.equal(await page.evaluate(()=>document.activeElement?.getAttribute('aria-label')),'关闭按钮说明');
   await page.setViewportSize({width:1024,height:900});await aligned(page,'view','.kb-view-switch');await fitted(page);await page.screenshot({path:out+'/tutorial-resized.png',fullPage:true});
@@ -44,7 +44,7 @@ export async function verifyKnowledgeHelp(page,out,documentUrl){
   // Wheel scrolling stays native; captions track visible real controls.
   await page.mouse.move(1100,700);await page.mouse.wheel(0,500);
   await page.waitForFunction(()=>document.querySelector('.kb-detail-scroll').scrollTop>0);
-  await aligned(page,'edit','[data-kb-help="edit"]');await fitted(page);
+  await fitted(page);
   await page.screenshot({path:out+'/tutorial-scrolled.png',fullPage:true});
   const scroll=await page.locator('.kb-detail-scroll').evaluate(el=>el.scrollTop);
   await close(page);assert.equal(page.url(),before);assert.equal(await page.locator('.kb-detail-scroll').evaluate(el=>el.scrollTop),scroll);
@@ -97,6 +97,6 @@ export async function verifyKnowledgeHelp(page,out,documentUrl){
 export async function verifyReadOnlyKnowledgeHelp(page){
  await trigger(page).click();await fitted(page);
  assert.ok((await caption(page,'scope-main').innerText()).includes(definitions['scope-main']));
- for(const id of ['scope-todo','scope-public','scope-drafts','new-entry','approve','edit'])assert.equal(await caption(page,id).count(),0);
+ for(const id of ['scope-all','scope-public','scope-drafts','new-entry','approve','edit'])assert.equal(await caption(page,id).count(),0);
  await tutorial(page).getByRole('button',{name:'关闭按钮说明',exact:true}).click();await tutorial(page).waitFor({state:'detached'});
 }

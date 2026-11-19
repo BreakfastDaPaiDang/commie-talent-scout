@@ -1,4 +1,4 @@
-import {ComposerRecognitionOption,RecognitionProgress} from '../../../app/ui/PersonnelRecognition';
+import {ComposerRecognitionOption,RecognitionSummary,RecognitionIdentity} from '../../../app/ui/PersonnelRecognition';
 import {archivePrimaryAction} from '../../../app/rules/archive-states';
 import {RelatedTasksFrame,DetailActions} from '../../../app/ui/TaskBook';
 import {prototypeReminder} from './model.js';
@@ -116,9 +116,14 @@ export function Detail({ w }) {
     owners = entity.owners[entity.state] ?? [];
   const recognitionPreview=entity.type==='person' && entity.state!=='已入伙' && new URLSearchParams(location.search).has('personnel-recognition');
   const recognized=w.recognitions[entity.id];
-  const demoEvidence=entity.id==='p2' ? 'r3' : null;
+  const demoEvidence=entity.id==='p2' ? entity.records.find(record=>record.id==='r3') : null;
+  const demoVoter=demoEvidence && w.members.find(member=>member.id===demoEvidence.author);
+  const recognitionVotes=[
+    demoVoter && {id:demoEvidence.id,name:demoVoter.name,avatarSrc:demoVoter.avatar},
+    recognized && {id:recognized.id,name:recognized.name,avatarSrc:recognized.avatar}
+  ].filter(Boolean);
   const visibleEvidence=id=>entity.records.some(record=>record.id===id && !record.deleted);
-  const recognitionCount=[demoEvidence,recognized?.id].filter(visibleEvidence).length;
+  const activeVoters=recognitionVotes.filter(vote=>visibleEvidence(vote.id));
   const canRecognize=recognitionPreview && !locked && !recognized && !['人事审核','已加入待对接'].includes(entity.state);
   const primaryAction=!recognitionPreview && archivePrimaryAction({type:entity.type,status:entity.state,closed:locked});
   useEffect(()=>{setMaterialPane(false);},[entity.id]);
@@ -183,10 +188,11 @@ export function Detail({ w }) {
 
 </>}/>
           <ArchiveLifecycleNotice deleted={false} closed={locked} onReopen={()=>w.setDialog({type:'state',mode:'reopen',nextState:entity.lastOpenState??'视奸观察'})}/>
-          {recognitionPreview&&(demoEvidence||recognized)&&<RecognitionProgress count={recognitionCount}><ul className="recognition-votes">
-            {demoEvidence&&<li><strong>示例社员甲</strong>{evidenceLink(demoEvidence)}</li>}
-            {recognized&&<li><strong>{recognized.name}</strong>{evidenceLink(recognized.id)}</li>}
-          </ul></RecognitionProgress>}
+          {recognitionPreview&&recognitionVotes.length>0&&<RecognitionSummary key={entity.id} count={activeVoters.length} voters={activeVoters}>
+            <ul className="recognition-votes">{recognitionVotes.map(vote=><li key={vote.id}>
+              <RecognitionIdentity name={vote.name} avatarSrc={vote.avatarSrc} />{evidenceLink(vote.id)}
+            </li>)}</ul>
+          </RecognitionSummary>}
           {primaryAction&&<div className="archive-primary-action"><DetailActions><button className="button primary" onClick={()=>w.setDialog({type:'state',nextState:primaryAction.status})}><Icon name="check"/>{primaryAction.label}</button></DetailActions></div>}
           <RelatedTasksFrame empty create={!locked ? {onClick:()=>w.notify('示例发布：正式站打开关联档案的任务表单')} : undefined} />
           <TimelineTabs id={entity.id} value={materialPane?'materials':w.recordView==='records'?'observations':w.recordView} onChange={value=>{setMaterialPane(value==='materials');if(value!=='materials')w.setRecordView(value==='observations'?'records':value);}} deletedCount={w.deletedCount} materialCount={materialCounts[entity.id]??0}/>

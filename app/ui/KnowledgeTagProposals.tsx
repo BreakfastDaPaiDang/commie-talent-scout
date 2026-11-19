@@ -4,7 +4,7 @@ import {remainingVoteTime} from '../shared/knowledge';
 import type {KnowledgeApi,KnowledgeTagProposal} from '../shared/knowledge';
 import './knowledge-tags.css';
 
-export function KnowledgeTagProposals({api,revision,onChanged,onCount,canWrite=true,search=''}:{api:KnowledgeApi;revision:number;onChanged:()=>void;onCount?:(count:number)=>void;canWrite?:boolean;search?:string}) {
+export function KnowledgeTagProposals({api,revision,onChanged,onCount,canWrite=true,search='',category=''}:{api:KnowledgeApi;revision:number;onChanged:()=>void;onCount?:(count:number)=>void;canWrite?:boolean;search?:string;category?:string}) {
   const [rows,setRows]=useState<KnowledgeTagProposal[]>([]),[selected,setSelected]=useState(''),[busy,setBusy]=useState(false);
   const [error,setError]=useState(''),[retry,setRetry]=useState(0),[now,setNow]=useState(Date.now);
   useEffect(()=>{
@@ -16,7 +16,7 @@ export function KnowledgeTagProposals({api,revision,onChanged,onCount,canWrite=t
   },[api,revision,retry]);
   useEffect(()=>{if(!rows.length)return;setNow(Date.now());const timer=window.setInterval(()=>setNow(Date.now()),30000);return ()=>window.clearInterval(timer);},[rows]);
   const term=search.trim().toLocaleLowerCase();
-  const active=rows.filter(p=>Date.parse(p.expires_at)>now&&(p.name+' '+p.definition).toLocaleLowerCase().includes(term)),p=rows.find(p=>p.id===selected);
+  const active=rows.filter(p=>Date.parse(p.expires_at)>now&&(!category||p.category_id===category)&&(p.name+' '+p.definition).toLocaleLowerCase().includes(term)),p=rows.find(p=>p.id===selected);
   useEffect(()=>{onCount?.(active.length);},[onCount,active.length]);
   async function approve(proposal:KnowledgeTagProposal) {
     setBusy(true);setError('');

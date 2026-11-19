@@ -1,151 +1,143 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { KnowledgeApi, KnowledgeBranch, KnowledgeCategory, KnowledgeVersion, KnowledgeMerge } from "../../shared/knowledge";
-import type { useKnowledgeNavigation } from './navigation';
-type Selection = Pick<ReturnType<typeof useKnowledgeNavigation>, 'scope' | 'branchId' | 'documentId' | 'setBranchId' | 'setDocumentId'>;
-export function useKnowledgeData(api: KnowledgeApi, canWrite: boolean, {
-  scope,
-  branchId,
-  documentId,
-  setBranchId,
-  setDocumentId
-}: Selection, simple: boolean) {
-  const [merges, setMerges] = useState<KnowledgeMerge[]>([]);
-  const [branches, setBranches] = useState<KnowledgeBranch[]>([]),
-    [items, setItems] = useState<KnowledgeVersion[]>([]),
-    [categories, setCategories] = useState<KnowledgeCategory[]>([]),
-    [category, setCategory] = useState(''),
-    [query, setQuery] = useState(''),
-    [search, setSearch] = useState(''),
-    [next, setNext] = useState<number | null>(null),
-    [revision, setRevision] = useState(0),
-    [doc, setDoc] = useState<KnowledgeVersion | null>(null),
-    [loading, setLoading] = useState(false),
-    [loadingMerges, setLoadingMerges] = useState(canWrite),
-    [error, setError] = useState('');
-  const listScope = scope === 'todo' ? 'drafts' : scope;
-  const listBranch = scope === 'branch' ? branchId : 'main';
-  const listKey = listScope + '|' + listBranch + '|' + category + '|' + search + '|' + revision,
-    listCurrent = useRef(listKey);
-  listCurrent.current = listKey;
-  const refresh = useCallback(() => setRevision(v => v + 1), []);
+import type { KnowledgeApi, KnowledgeBranch, KnowledgeCategory, KnowledgeMerge, KnowledgeVersion } from '../../shared/knowledge';
+import type { Scope, useKnowledgeNavigation } from './navigation';
+
+type ListScope = Exclude<Scope, 'all'>;
+type DocumentPage = {
+  documents: KnowledgeVersion[];
+  categories: KnowledgeCategory[];
+  next_offset: number | null;
+};
+
+function listFilter(scope: ListScope, branch: string, search: string, category: string) {
+  return new URLSearchParams({
+    branch_id: scope === 'branch' ? branch : 'main',
+    ...(scope !== 'branch' ? {scope} : {}),
+    search,
+    ...(category ? {category_id: category} : {}),
+  }).toString();
+}
+
+function useDocumentList(api: KnowledgeApi, filter: string | null, revision: number) {
+  type ListState = {filter: string; revision: number; page?: DocumentPage; error: string};
+  const [state, setState] = useState<ListState>();
+  const [loadingMore, setLoadingMore] = useState(false);
+  const pendingPage = useRef<symbol | null>(null);
+  const view = state?.filter === filter ? state : undefined;
+  const loading = filter !== null && view?.revision !== revision;
+  const next = loading ? null : view?.page?.next_offset ?? null;
+
   useEffect(() => {
+    setLoadingMore(false);
+    if (filter === null) return;
     let current = true;
-    if (canWrite) api.read('/merges').then(r => {
-      if (current) setMerges(r.merges);
-    }).catch(e => {
-      if (current) setError(e.message);
+    api.read<DocumentPage>('/documents?' + filter).then(page => {
+      if (current) setState({filter, revision, page, error: ''});
+    }).catch(error => {
+      if (current) setState(old => ({filter, revision, page: old?.filter === filter ? old.page : undefined, error: error.message}));
+    });
+    return () => {
+      current = false;
+      pendingPage.current = null;
+    };
+  }, [api, filter, revision]);
+
+  async function more() {
+    if (filter === null || next === null || pendingPage.current) return;
+    const request = Symbol();
+    pendingPage.current = request;
+    setLoadingMore(true);
+    try {
+      const page = await api.read<DocumentPage>('/documents?' + filter + '&offset=' + next);
+      if (pendingPage.current === request) setState(old => {
+        if (!old?.page || old.filter !== filter || old.revision !== revision) return old;
+        return {filter, revision, page: {...page, documents: [...old.page.documents, ...page.documents]}, error: ''};
+      });
+    } catch (error) {
+      if (pendingPage.current === request) setState(old => old && {...old, error: (error as Error).message});
+    } finally {
+      if (pendingPage.current === request) {
+        pendingPage.current = null;
+        setLoadingMore(false);
+      }
+    }
+  }
+
+  return {items: view?.page?.documents ?? [], categories: view?.page?.categories ?? [], loading, error: loading ? '' : view?.error ?? '', next, loadingMore, more};
+}
+
+type Selection = Pick<ReturnType<typeof useKnowledgeNavigation>, 'scope' | 'branchId' | 'documentId'>;
+
+export function useKnowledgeData(api: KnowledgeApi, canWrite: boolean, {scope, branchId, documentId}: Selection) {
+  const [branches, setBranches] = useState<KnowledgeBranch[]>([]);
+  const [reviewResult, setReviewResult] = useState<{search: string; merges: KnowledgeMerge[]}>();
+  const [category, setCategory] = useState('');
+  const [query, setQuery] = useState('');
+  const [search, setSearch] = useState('');
+  const [revision, setRevision] = useState(0);
+  const [docResult, setDocResult] = useState<{key: string; document: KnowledgeVersion | null; error: string}>();
+  const [loadingMerges, setLoadingMerges] = useState(canWrite);
+  const [reviewError, setReviewError] = useState('');
+  const [branchError, setBranchError] = useState('');
+  const all = canWrite && scope === 'all';
+  const list = useDocumentList(api, listFilter(scope === 'all' ? 'main' : scope, branchId, search, category), revision);
+  const drafts = useDocumentList(api, all ? listFilter('drafts', 'main', search, category) : null, revision);
+  const reviewSearch = all ? search : '';
+  const docKey = documentId ? branchId + '/' + documentId : '';
+  const selectedDocument = docResult?.key === docKey ? docResult : undefined;
+  const refresh = useCallback(() => setRevision(v => v + 1), []);
+
+  useEffect(() => {
+    if (!canWrite) return;
+    let current = true;
+    setLoadingMerges(true);
+    setReviewError('');
+    const filter = reviewSearch ? '?' + new URLSearchParams({search: reviewSearch}) : '';
+    api.read<{merges: KnowledgeMerge[]}>('/merges' + filter).then(result => {
+      if (current) setReviewResult({search: reviewSearch, merges: result.merges});
+    }).catch(error => {
+      if (current) setReviewError(error.message);
     }).finally(() => {
       if (current) setLoadingMerges(false);
     });
-    return () => {
-      current = false;
-    };
-  }, [api, canWrite, revision]);
+    return () => { current = false; };
+  }, [api, canWrite, revision, reviewSearch]);
+
   useEffect(() => {
-    const timer = setTimeout(() => setSearch(query), 180);
+    const timer = setTimeout(() => setSearch(query.trim()), 180);
     return () => clearTimeout(timer);
   }, [query]);
+
   useEffect(() => {
     let current = true;
-    api.read('/branches').then(r => {
-      if (current) setBranches(r.branches);
-    }).catch(e => {
-      if (current) setError(e.message);
+    setBranchError('');
+    api.read<{branches: KnowledgeBranch[]}>('/branches').then(result => {
+      if (current) setBranches(result.branches);
+    }).catch(error => {
+      if (current) setBranchError(error.message);
     });
-    return () => {
-      current = false;
-    };
+    return () => { current = false; };
   }, [api, revision]);
+
   useEffect(() => {
+    if (!documentId) return;
     let current = true;
-    setLoading(true);
-    setError('');
-    setItems([]);
-    setNext(null);
-    const filter = new URLSearchParams({
-      branch_id: listBranch,
-      ...(listScope !== 'branch' ? {
-        scope: listScope
-      } : {}),
-      search,
-      ...(category ? {
-        category_id: category
-      } : {})
+    api.read<{document: KnowledgeVersion}>('/documents/' + encodeURIComponent(documentId) + '?branch_id=' + encodeURIComponent(branchId)).then(result => {
+      if (current) setDocResult({key: docKey, document: result.document, error: ''});
+    }).catch(error => {
+      if (current) setDocResult({key: docKey, document: null, error: error.message});
     });
-    api.read('/documents?' + filter).then(r => {
-      if (current) {
-        setItems(r.documents);
-        setCategories(r.categories);
-        setNext(r.next_offset);
-        setBranches(old => old.map(b => b.id === r.branch.id ? r.branch : b));
-        if (!simple && !documentId && r.documents.length) {
-          setDocumentId(r.documents[0].document_id);
-          setBranchId(r.documents[0].branch_id ?? listBranch);
-        }
-      }
-    }).catch(e => {
-      if (current) setError(e.message);
-    }).finally(() => {
-      if (current) setLoading(false);
-    });
-    return () => {
-      current = false;
-    };
-  }, [api, listBranch, listScope, category, search, revision, simple]);
-  useEffect(() => {
-    let current = true;
-    setDoc(null);
-    if (documentId) api.read('/documents/' + documentId + '?branch_id=' + encodeURIComponent(branchId)).then(r => {
-      if (current) setDoc(r.document);
-    }).catch(e => {
-      if (current) setError(e.message);
-    });
-    return () => {
-      current = false;
-    };
-  }, [api, documentId, branchId, revision]);
-  async function more() {
-    if (next === null) return;
-    try {
-      const r = await api.read('/documents?' + new URLSearchParams({
-        branch_id: listBranch,
-        ...(listScope !== 'branch' ? {
-          scope: listScope
-        } : {}),
-        search,
-        offset: String(next),
-        ...(category ? {
-          category_id: category
-        } : {})
-      }));
-      if (listCurrent.current === listKey) {
-        setItems(old => [...old, ...r.documents]);
-        setNext(r.next_offset);
-      }
-    } catch (e) {
-      setError((e as Error).message);
-    }
-  }
+    return () => { current = false; };
+  }, [api, documentId, branchId, docKey, revision]);
+
   return {
-    search,
-    revision,
-    merges,
-    branches,
-    items,
-    setItems,
-    categories,
-    category,
-    setCategory,
-    query,
-    setQuery,
-    doc,
-    setDoc,
-    loading,
+    search, revision, branches, list, drafts, category, setCategory, query, setQuery, refresh,
+    merges: reviewResult?.merges ?? [],
+    reviewMatches: reviewResult?.search === reviewSearch,
     loadingMerges,
-    error,
-    setError,
-    refresh,
-    more,
-    next
+    reviewError,
+    doc: selectedDocument?.document ?? null,
+    loadingDoc: !!documentId && !selectedDocument,
+    error: selectedDocument?.error || branchError,
   };
 }

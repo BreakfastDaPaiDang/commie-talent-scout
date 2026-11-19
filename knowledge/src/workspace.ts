@@ -1,6 +1,6 @@
 import { now } from './types.ts';
 import type { CatalogActor } from './catalog.ts';
-import type { KnowledgeBranch, KnowledgeMerge, KnowledgeDiff } from '../../app/shared/knowledge.ts';
+import type { KnowledgeBranch, KnowledgeMerge, KnowledgeDiff, KnowledgeDocumentTarget } from '../../app/shared/knowledge.ts';
 import * as records from './workspace/records.ts';
 import * as command from './workspace/command.ts';
 import * as branches from './workspace/branches.ts';
@@ -11,6 +11,7 @@ import * as review_queries from './workspace/review-queries.ts';
 import * as reviews from './workspace/reviews.ts';
 import * as issue_queries from './workspace/issue-queries.ts';
 import * as discussions from './workspace/discussions.ts';
+import { listDocumentActivity } from './workspace/document-activity.ts';
 import { createWorkspaceContext, type ServiceContext } from './workspace/context.ts';
 // Stable HTTP/MCP adapter. Commands keep their original atomic batch boundary.
 export { workspaceSchemas } from './workspace/inputs.ts';
@@ -109,8 +110,8 @@ export class KnowledgeWorkspace {
   diff(branchId: string) {
     return documents.branchDiff(this.context, branchId);
   }
-  mergeRequests() {
-    return review_queries.listMergeRequests(this.context);
+  mergeRequests(search = '') {
+    return review_queries.listMergeRequests(this.context, {search});
   }
   qualified() {
     return review_queries.qualifiedMerges(this.context);
@@ -163,6 +164,9 @@ export class KnowledgeWorkspace {
     document_id?: string;
     category_id?: string;
     issue_id?: string;
+    review_id?: string;
+    head_id?: string;
+    annotations?: boolean;
     offset?: number;
   }) {
     return discussions.listComments(this.context, query);
@@ -173,7 +177,10 @@ export class KnowledgeWorkspace {
   history(branchId: string, offset = 0) {
     return branches.branchHistory(this.context, branchId, offset);
   }
-  commitDetail(branchId: string, id: string) {
-    return branches.commitDetail(this.context, branchId, id);
+  commitDetail(branchId: string, id: string, documentId?: string) {
+    return branches.commitDetail(this.context, branchId, id, documentId);
+  }
+  documentActivity(target: KnowledgeDocumentTarget, cursor?: string) {
+    return listDocumentActivity(this.context, target, cursor);
   }
 }

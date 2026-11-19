@@ -44,7 +44,7 @@ export async function verifyKnowledgeCategories(page,out,services,documentUrl) {
   await fillTag(form,'协作经验','协调合作的经验。明确参与者的需求。');
   await page.screenshot({path:out+'/category-editor-desktop.png',fullPage:true});
   await form.getByRole('button',{name:'提议新标签'}).click();
-  await editor.locator('.kb-selected-tags .tag-pending').waitFor();
+  await editor.locator('.kb-editor-tag-control .tag-pending').waitFor();
   await editor.getByRole('button',{name:'保存草稿',exact:true}).click();
   await editor.waitFor({state:'detached'});
   const draft=(await writer.list({scope:'drafts'})).documents.find(d=>d.title==='协作验收草稿');
@@ -127,8 +127,8 @@ export async function verifyKnowledgeDemo(page,out,previewUrl='http://127.0.0.1:
   await page.getByRole('button',{name:'提交到审核',exact:true}).click();
   const review=page.getByRole('dialog',{name:'提交到审核',exact:true});
   await review.getByRole('button',{name:'公开并提交审核'}).click();
-  await page.getByRole('button',{name:'同意此版本',exact:true}).click();
-  await page.getByText('我已同意',{exact:false}).first().waitFor();
+  await page.getByRole('button',{name:'认可此版本',exact:true}).click();
+  await page.getByText('我已认可',{exact:false}).first().waitFor();
   await page.screenshot({path:out+'/standalone-prototype-review.png',fullPage:true});
   await page.getByRole('button',{name:'版本协作',exact:true}).click();
   await page.getByRole('button',{name:'删除分支',exact:true}).click();

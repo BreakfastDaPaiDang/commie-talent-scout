@@ -70,8 +70,9 @@ try{await server.listen();await sharedServer.listen();browser=await chromium.lau
  await shared.getByText('示例发布：正式站打开关联档案的任务表单',{exact:true}).waitFor();
  assert.equal(await related.getByRole('button',{name:'查看已关闭任务'}).count(),0);
  const recognition=shared.locator('.personnel-recognition');
- await recognition.getByText('1/3',{exact:true}).waitFor();
- await recognition.locator('summary').click();
+ await recognition.getByText('1/3 人',{exact:true}).waitFor();
+ await recognition.getByRole('list',{name:'认可成员',exact:true}).getByText('沈舟',{exact:true}).waitFor();
+ await recognition.getByRole('button',{name:'查看认可依据',exact:true}).click();
  await shared.getByRole('tab',{name:'已删除',exact:true}).click();
  await recognition.getByRole('link',{name:'查看依据 · 版本 1',exact:true}).click();
  await shared.locator('.entry-target').waitFor();
@@ -89,7 +90,7 @@ try{await server.listen();await sharedServer.listen();browser=await chromium.lau
  await shared.screenshot({path:resolve(out,'personnel-recognition-prototype-320.png'),fullPage:true});
  assert.ok(await shared.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
  await shared.getByRole('button',{name:'发布记录',exact:false}).click();
- await recognition.getByText('2/3',{exact:true}).waitFor();
+ await recognition.getByText('2/3 人',{exact:true}).waitFor();
  writeFileSync(resolve(out,'report.json'),JSON.stringify({revision,reports,errors,apiRequests},null,2));console.log(JSON.stringify({reports,errors},null,2));assert.deepEqual(errors,[]);assert.ok(reports.every(r=>!r.overflow&&r.differences.length===0&&r.prototypeDifferences.length===0),'live workspace matches approved geometry/type at every breakpoint');
  await live.setViewportSize({width:1440,height:1080});await live.getByRole('button',{name:'展开阅读视图',exact:true}).click();assert.equal(await live.locator('.main-panel').isVisible(),false);await live.getByRole('button',{name:'收起阅读视图',exact:true}).click();assert.equal(await live.locator('.main-panel').isVisible(),true);
  await live.getByRole('tab',{name:'全部动态',exact:true}).focus();await live.keyboard.press('ArrowRight');assert.equal(await live.getByRole('tab',{name:'观察记录',exact:true}).getAttribute('aria-selected'),'true');await live.keyboard.press('Home');

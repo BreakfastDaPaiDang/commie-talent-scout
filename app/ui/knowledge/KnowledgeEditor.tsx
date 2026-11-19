@@ -126,14 +126,35 @@ export function KnowledgeEditor({
   function changeTags(names: string[]) {
     setFields((old: typeof defaults) => ({...old, category: names[0] ?? '', additional_tags: names.slice(1)}));
   }
-  return <Modal title={doc ? '修改文档' : '新文档'} onClose={close} busy={busy} wide><form className="kb-form kb-editor" onSubmit={save}><div className="kb-editor-meta kb-editor-tags">
-    <div className="kb-category-field"><span id="kb-editor-category-label">标签</span>
-      <div className="kb-selected-tags">{chosen.map(name => <button type="button" key={name} className="text-button" aria-label={'移除标签 ' + name} onClick={() => changeTags(chosen.filter(tag => tag !== name))}><TagChip tag={knownTags.find(tag=>tag.name===name)??{name}}/> ×</button>)}</div>
-      <button type="button" className="button kb-category-choice" aria-labelledby="kb-editor-category-label" disabled={busy || chosen.length >= 20} onClick={() => setPickingCategory(true)}>选择标签</button></div></div><label>标题<input required maxLength={200} {...field('title')} /></label><label>正文<textarea rows={13} required maxLength={60000} placeholder="写下内容。可用 ## 表示小标题。" {...field('body')} /></label><label>修改说明（可选）<textarea rows={2} maxLength={300} placeholder="这次新增或修改了什么，为什么？" {...field('message')} /></label><details><summary>来源（可选）</summary><label>来源<input maxLength={2000} {...field('source')} /></label></details>{error && <p className="form-error" role="alert">{error}</p>}<ModalActions><button className="button primary" disabled={busy}>{busy ? '正在保存…' : simple ? '保存草稿' : '保存到分支'}</button></ModalActions></form>{pickingCategory && <KnowledgeCategoryEditor api={api} branchId={branch.id} close={() => setPickingCategory(false)} done={c => {
-      setPickedTags(previous=>[c,...previous.filter(tag=>tag.id!==c.id)]);
+  return <Modal title={doc ? '修改文档' : '新文档'} onClose={close} busy={busy} wide>
+    <form className="kb-form kb-editor" onSubmit={save}>
+      <label>标题<input required maxLength={200} {...field('title')} /></label>
+      <div className="kb-editor-meta kb-editor-tags">
+        <div className="kb-category-field"><span id="kb-editor-category-label">标签</span>
+          <div className="kb-editor-tag-control">
+            {chosen.map(name => <button type="button" key={name} className="kb-tag-remove"
+              aria-label={'移除标签 ' + name} onClick={() => changeTags(chosen.filter(tag => tag !== name))}>
+              <TagChip tag={knownTags.find(tag => tag.name === name) ?? {name}}/> <span aria-hidden="true">×</span>
+            </button>)}
+            <button type="button" className="kb-category-choice" aria-labelledby="kb-editor-category-label"
+              disabled={busy || chosen.length >= 20} onClick={() => setPickingCategory(true)}>
+              {chosen.length ? '＋ 添加标签' : '选择标签'}
+            </button>
+          </div>
+        </div>
+      </div>
+      <label>正文<textarea rows={10} required maxLength={60000} placeholder="写下内容。可用 ## 表示小标题。" {...field('body')} /></label>
+      <label>修改说明（可选）<textarea rows={2} maxLength={300} placeholder="这次修改了什么？" {...field('message')} /></label>
+      <details><summary>来源（可选）</summary><label>来源<input maxLength={2000} {...field('source')} /></label></details>
+      {error && <p className="form-error" role="alert">{error}</p>}
+      <ModalActions><button className="button primary" disabled={busy}>{busy ? '正在保存…' : simple ? '保存草稿' : '保存到分支'}</button></ModalActions>
+    </form>
+    {pickingCategory && <KnowledgeCategoryEditor api={api} branchId={branch.id} close={() => setPickingCategory(false)} done={c => {
+      setPickedTags(previous => [c, ...previous.filter(tag => tag.id !== c.id)]);
       changeTags([...new Set([...chosen, c.name])]);
       setPickingCategory(false);
-    }} />}</Modal>;
+    }} />}
+  </Modal>;
 }
 export function RemoveDocument({
   api,
