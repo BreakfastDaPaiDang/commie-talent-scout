@@ -72,9 +72,12 @@ export async function verifyKnowledgeCategories(page,out,services,documentUrl) {
   await issue.getByLabel('议题标题').fill('澄清协作经验的边界');
   await issue.getByLabel('讨论内容').fill('请结合实际协作补充约束。');
   await issue.getByRole('button',{name:'发起议题',exact:true}).click();
-  await page.locator('.kb-issue-source').waitFor();
+  await issue.waitFor({state:'detached'});
+  await page.waitForURL(url=>url.searchParams.get('tab')==='issues' && !!url.searchParams.get('issue'));
+  const issueSource=page.locator('.kb-issues .kb-issue-source');
+  await issueSource.getByText(/这个定义应补充协作中的约束/).waitFor();
   await page.reload();
-  assert.match(await page.locator('.kb-issue-source').innerText(),/这个定义应补充协作中的约束/);
+  assert.match(await issueSource.innerText(),/这个定义应补充协作中的约束/);
   await page.goto(documentUrl);
   drawer=await inspectTag(page,'协作经验');
   await drawer.getByRole('button',{name:'编辑标签'}).click();
