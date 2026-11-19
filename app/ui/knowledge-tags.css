@@ -1,11 +1,7 @@
-.kb-tag-ballots {margin:0 0 12px;border-bottom:1px solid var(--line);padding:4px 0 8px}
-.kb-tag-ballots summary {cursor:pointer;font-size:.85rem;color:var(--muted);padding:8px}
-.kb-tag-ballots summary span {font-variant-numeric:tabular-nums;margin-left:4px}
-.kb-tag-ballots>button {display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;padding:7px 10px;text-align:left;background:transparent;border:0;color:inherit;cursor:pointer}
-.kb-tag-ballots>button:hover {background:var(--wash)}
-.kb-tag-ballots>button>span:last-child,.kb-ballot-meta {color:var(--muted);font-size:.82rem}
 .kb-proposed-tag {display:inline-block;max-width:100%;overflow-wrap:anywhere;border:1px dashed currentColor;border-radius:4px;padding:2px 8px}
-.kb-ballot-detail h3 {margin:0;font-size:1.05rem}
-.kb-ballot-detail p {margin:8px 0;white-space:pre-wrap;overflow-wrap:anywhere}
-.kb-ballot-meta {display:flex;flex-wrap:wrap;gap:6px 16px}
-.kb-pending-definition {white-space:pre-wrap;overflow-wrap:anywhere}
+
+.kb-pending-definition,
+.kb-review-tag-definition {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

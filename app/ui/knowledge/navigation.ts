@@ -11,6 +11,7 @@ type Navigation = {
   documentId: string | null;
   issueId: string | null;
   reviewId: string | null;
+  tagProposalId: string | null;
   reviewHead: string | null;
   mobileDetail: boolean;
 };
@@ -24,18 +25,19 @@ function readNavigation(canWrite: boolean): Navigation {
   const branchId = params.get('branch') || 'main';
   const reviewId = canWrite && mode === 'simple' ? params.get('review') : null;
   const reviewHead = reviewId ? params.get('head') : null;
+  const tagProposalId = canWrite && mode === 'simple' && !reviewId ? params.get('tagProposal') : null;
   const issueId = tab === 'issues' ? params.get('issue') : null;
-  const documentId = reviewId ? null : params.get('document');
+  const documentId = reviewId || tagProposalId ? null : params.get('document');
   let scope: Scope = 'main';
   if (canWrite && mode === 'simple') {
     // Old todo links include the same private drafts and candidates in the combined view.
-    scope = requestedScope === 'main' && !reviewId && branchId === 'main' ? 'main' : 'all';
+    scope = requestedScope === 'main' && !reviewId && !tagProposalId && branchId === 'main' ? 'main' : 'all';
   } else if (canWrite) {
     if (requestedScope === 'public' || requestedScope === 'drafts' || requestedScope === 'main') scope = requestedScope;
     else if (params.has('branch')) scope = 'branch';
   }
-  const mobileDetail = history.state?.knowledgeMobileDetail ?? !!(documentId || reviewId || tab !== 'content');
-  return {mode, scope, tab, branchId, documentId, issueId, reviewId, reviewHead, mobileDetail};
+  const mobileDetail = history.state?.knowledgeMobileDetail ?? !!(documentId || reviewId || tagProposalId || tab !== 'content');
+  return {mode, scope, tab, branchId: tagProposalId ? 'main' : branchId, documentId, issueId, reviewId, reviewHead, tagProposalId, mobileDetail};
 }
 
 function writeNavigation(state: Navigation, method: 'push' | 'replace') {
@@ -49,6 +51,7 @@ function writeNavigation(state: Navigation, method: 'push' | 'replace') {
     document: state.documentId,
     review: state.reviewId,
     head: state.reviewId ? state.reviewHead : null,
+    tagProposal: state.tagProposalId,
   };
   for (const [key, value] of Object.entries(entries)) {
     if (value) url.searchParams.set(key, value);

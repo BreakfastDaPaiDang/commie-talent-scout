@@ -1,11 +1,9 @@
 import { useEffect, useState } from 'react';
 import type { KnowledgeApi, KnowledgeBranch, KnowledgeDiff, KnowledgeIdentity, KnowledgeMerge, KnowledgeVersion } from '../shared/knowledge';
 import { remainingVoteTime } from '../shared/knowledge';
-import { KnowledgeAvatar } from './KnowledgeDocumentActivity';
-import { Icon } from './icons';
 import { KnowledgeDocumentBody } from './KnowledgeComments';
+import { KnowledgeReviewBallot, KnowledgeReviewComparison, KnowledgeReviewHeader } from './KnowledgeReviewLayout';
 import { Modal, ModalActions } from './Modal';
-import { ShareLink } from './ShareLink';
 import { TagChip } from './TagCatalog';
 
 export function votingClosed(merge: KnowledgeMerge, now: number) {
@@ -116,33 +114,17 @@ export function KnowledgeReviewDetail({
   const bundle = (changes?.length ?? merge.changes?.length ?? 0) > 1;
   const canVote = changes?.length === 1 && status.state === 'open' && !status.expired && !votingClosed(status, now) && !status.approved_by_me;
   const canResubmit = bundle && diff?.branch.state === 'open' && diff.branch.owner_id === identity.id;
-  const deadline = reviewDeadline(status, now);
-  const ballot = <section className="kb-review-ballot" aria-label="版本认可">
-    <div className="kb-ballot-numbers" aria-label={status.approval_count + ' / 3 人认可'}>
-      <span>版本认可</span><strong>{status.approval_count}</strong><span> / 3 人</span>
-    </div>
-    {!!status.approvers?.length && <ul className="kb-ballot-members" aria-label="认可成员">
-      {status.approvers.map(person => <li key={person.id}><KnowledgeAvatar size="tiny" name={person.name} id={person.id} identity={identity} />{person.name}</li>)}
-    </ul>}
-    {deadline && <time dateTime={status.expires_at!}>{deadline}</time>}
-    <div className="kb-review-buttons">
-      {canVote && <button className="button primary" onClick={approve} disabled={busy}>{busy ? '正在提交…' : '认可此版本'}</button>}
-      {!canVote && !!status.approved_by_me && status.state === 'open' && <span className="kb-mine-vote"><Icon name="check" size={16}/>我已认可</span>}
-      {status.state === 'merged' && changes?.length === 1 && !changes[0].proposed.deleted &&
-        <button className="button quiet" onClick={() => onReadDocument(changes[0].document_id)}>查看已入库文档</button>}
-    </div>
-  </section>;
+  const sharePath = !outdated && current ? '/knowledge?' + new URLSearchParams({review: merge.id, head: merge.head_id}) : undefined;
+  const ballot = <KnowledgeReviewBallot approval={status} identity={identity} deadline={reviewDeadline(status, now)}
+    busy={busy} onApprove={canVote ? approve : undefined}
+    showMyApproval={!canVote && !!status.approved_by_me && status.state === 'open'}>
+    {status.state === 'merged' && changes?.length === 1 && !changes[0].proposed.deleted &&
+      <button className="button quiet" onClick={() => onReadDocument(changes[0].document_id)}>查看已入库文档</button>}
+  </KnowledgeReviewBallot>;
 
   return <article className="kb-review-detail">
-    <header className="kb-review-title">
-      <h1>{merge.title}</h1>
-      <span className={'kb-review-state' + (status.state === 'merged' ? ' is-adopted' : '')}>{outdated ? '旧版链接' : reviewStatus(status, now)}</span>
-      {!outdated && current && <ShareLink path={'/knowledge?' + new URLSearchParams({review: merge.id, head: merge.head_id})} label="分享审核" />}
-    </header>
-    <div className="kb-review-byline">
-      <KnowledgeAvatar size="tiny" name={merge.author_name} id={merge.author_id} identity={identity} />
-      <span>{merge.author_name}</span><time dateTime={merge.created_at}>{new Date(merge.created_at).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})}</time>
-    </div>
+    <KnowledgeReviewHeader title={merge.title} status={outdated ? '旧版链接' : reviewStatus(status, now)}
+      adopted={status.state === 'merged'} author={merge} identity={identity} sharePath={sharePath} />
     <div className="kb-review-notices">
       {outdated && <p role="status">此链接所指的版本已经更新。</p>}
       {!outdated && !current && <p role="status">内容已修改，提交新版本后可以继续审核。</p>}
@@ -168,14 +150,14 @@ export function KnowledgeReviewDetail({
         <KnowledgeDocumentBody document={change.proposed} branchId={merge.branch_id} api={api} writable={identity.can_write}
           identity={identity} onIssue={onIssue} review={{id: merge.id, head_id: merge.head_id}} revision={revision}
           lineClassName={originalLines ? line => originalLines.has(line) ? undefined : 'kb-line-added' : undefined}
-          renderBody={body => currentVersion ? <div className="kb-diff-columns">
-            <section className="kb-review-version"><h3>已入库版本</h3>{renamed && <h4>{currentVersion.title}</h4>}
+          renderBody={body => currentVersion ? <KnowledgeReviewComparison
+            current={<>{renamed && <h4>{currentVersion.title}</h4>}
               <ReviewTags version={currentVersion}/><StaticVersionBody body={currentVersion.body} proposedBody={change.proposed.body}/>
-            </section>
-            <section className="kb-review-version kb-proposed-version"><h3>修订版本</h3>{renamed && <h4>{change.proposed.title}</h4>}
+            </>}
+            proposed={<>{renamed && <h4>{change.proposed.title}</h4>}
               <ReviewTags version={change.proposed}/>{body}
-            </section>
-          </div> : <div className="kb-review-reading"><ReviewTags version={change.proposed}/>{body}</div>}
+            </>}
+          /> : <div className="kb-review-reading"><ReviewTags version={change.proposed}/>{body}</div>}
           footer={bundle ? canResubmit && <button className="button" disabled={busy} onClick={() => resubmit(change)}>单独提交这篇文档</button> : ballot} />
       </section>;
     })}

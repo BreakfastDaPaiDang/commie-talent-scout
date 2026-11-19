@@ -38,6 +38,20 @@ test('workspace crosses the fixed main-site cookie bridge and stores comments on
  assert.deepEqual(activity.data.entries.map(e=>[e.kind,e.body]).sort(),[['comment','这是文末评论'],['commit','创建']]);
  const version=await call('/history/'+doc.data.commit_id+'?'+query);assert.equal(version.status,200,JSON.stringify(version));
  assert.deepEqual(version.data.changes.map(c=>c.document_id),[doc.data.id]);
+ const tag=await call('/categories',{name:'网页提议'});assert.equal(tag.status,200,JSON.stringify(tag));
+ const tagPath='/tag-proposals/'+tag.data.proposal_id;
+ const pending=await call(tagPath);assert.equal(pending.status,200,JSON.stringify(pending));
+ assert.deepEqual(pending.data.proposal,(await call('/tag-proposals')).data.proposals.find(p=>p.id===tag.data.proposal_id));
+ assert.equal(pending.data.proposal.author_id,f.p.actor.id);
+ assert.equal(pending.data.proposal.state,'pending');
+ assert.equal((await call('/tag-proposals/'+request())).status,404);
+ assert.equal((await f.call('/api/knowledge-workspace'+tagPath)).status,404);
+ assert.equal((await f.call('/api/knowledge-workspace'+tagPath,undefined,{Cookie:'cts_session='+f.session,'X-Knowledge-MCP':'1'})).status,404);
+ await approveTag(f,tag.data);
+ const adopted=await call(tagPath);assert.equal(adopted.status,200,JSON.stringify(adopted));
+ assert.equal(adopted.data.proposal.state,'approved');
+ assert.equal(adopted.data.proposal.approval_count,3);
+ assert.equal((await f.call('/api/knowledge-workspace'+tagPath)).status,404);
  const cross=await personnel.fetch(new Request(origin+'/api/knowledge-workspace/comments',{method:'POST',headers:{...headers,Origin:'https://other.example'},body:JSON.stringify({branch_id:b.data.id,document_id:doc.data.id,body:'越权来源',request_id:request()})}),f.p.env,f.ctx);assert.equal(cross.status,403);
  const deleted=await call('/branches/delete',{branch_id:b.data.id,expected_version:doc.data.version});assert.equal(deleted.status,200,JSON.stringify(deleted));assert.equal(deleted.data.deleted,true);assert.equal((await call('/branches')).data.branches.some(x=>x.id===b.data.id),false);assert.equal((await call('/documents/'+doc.data.id+'?branch_id='+b.data.id)).status,404);assert.equal((await call('/branches/delete',{branch_id:'main',expected_version:1})).status,403);
  f.p.sqlite.prepare('UPDATE archives SET closed=1 WHERE id=?').run(f.membership);assert.equal((await call('/branches')).status,403);
@@ -136,7 +150,9 @@ test('main MCP, independent MCP and guests omit unapproved tag metadata across w
  }
  assert.equal((await f.call(prefix+'/documents?category_id='+primary.id,undefined,guestHeaders)).body.documents.length,0);
  assert.equal((await f.call(prefix+'/comments?category_id='+primary.id,undefined,guestHeaders)).status,404);
+ assert.equal((await f.call(prefix+'/tag-proposals/'+primary.proposal_id,undefined,guestHeaders)).status,404);
  await approveTag(f,primary);
+ assert.equal((await f.call(prefix+'/tag-proposals/'+primary.proposal_id,undefined,guestHeaders)).status,404);
  const next=await f.call(prefix+'/documents?category_id='+primary.id);
  assert.equal(next.body.branch.head_id,head);
  assert.equal(next.body.tag_revision,revision+1);

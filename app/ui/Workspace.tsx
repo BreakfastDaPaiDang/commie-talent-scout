@@ -10,8 +10,8 @@ import {Icon,Mark} from './icons';
 // Promoted from the approved prototype (531ab51). Both applications render these
 // components; persistence, permissions and data loading belong to their adapters.
 
-export function AgentNav({active=false,onClick,label='Agent 接入'}:{active?:boolean;onClick:()=>void;label?:string}){
- return <button type="button" className={'tool-link agent-nav '+(active?'active':'')} aria-current={active?'page':undefined} onClick={onClick}><Icon name="agent"/><span>{label}</span></button>;
+export function AgentNav({active=false,onClick}:{active?:boolean;onClick:()=>void}){
+ return <button type="button" className={'tool-link agent-nav '+(active?'active':'')} aria-current={active?'page':undefined} onClick={onClick}><Icon name="agent"/><span>Agent 接入</span></button>;
 }
 export function AuxiliaryToolsNav({active,onClick}:{active:boolean;onClick:()=>void}){
  return <button type="button" className={'tool-link '+(active?'active':'')} aria-label="辅助工具" title="辅助工具" aria-current={active?'page':undefined} onClick={onClick}><Icon name="folder"/><span>辅助工具</span></button>;

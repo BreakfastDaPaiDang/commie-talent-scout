@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { KnowledgeApi, KnowledgeBranch, KnowledgeCategory, KnowledgeMerge, KnowledgeVersion } from '../../shared/knowledge';
+import type { KnowledgeApi, KnowledgeBranch, KnowledgeCategory, KnowledgeMerge, KnowledgeTagProposal, KnowledgeVersion } from '../../shared/knowledge';
 import type { Scope, useKnowledgeNavigation } from './navigation';
 
 type ListScope = Exclude<Scope, 'all'>;
@@ -66,16 +66,31 @@ function useDocumentList(api: KnowledgeApi, filter: string | null, revision: num
   return {items: view?.page?.documents ?? [], categories: view?.page?.categories ?? [], loading, error: loading ? '' : view?.error ?? '', next, loadingMore, more};
 }
 
-type Selection = Pick<ReturnType<typeof useKnowledgeNavigation>, 'scope' | 'branchId' | 'documentId'>;
+function useKnowledgeRead<T>(api: KnowledgeApi, path: string | null, revision: number) {
+  const [result, setResult] = useState<{path: string; revision: number; data?: T; error?: string}>();
+  useEffect(() => {
+    if (!path) return;
+    let current = true;
+    api.read<T>(path).then(data => {
+      if (current) setResult({path, revision, data});
+    }).catch(error => {
+      if (current) setResult({path, revision, error: error.message});
+    });
+    return () => { current = false; };
+  }, [api, path, revision]);
+  const view = result?.path === path ? result : undefined;
+  return {data: view?.data, error: view?.error, loading: !!path && view?.revision !== revision};
+}
 
-export function useKnowledgeData(api: KnowledgeApi, canWrite: boolean, {scope, branchId, documentId}: Selection) {
+type Selection = Pick<ReturnType<typeof useKnowledgeNavigation>, 'scope' | 'branchId' | 'documentId' | 'tagProposalId'>;
+
+export function useKnowledgeData(api: KnowledgeApi, canWrite: boolean, {scope, branchId, documentId, tagProposalId}: Selection) {
   const [branches, setBranches] = useState<KnowledgeBranch[]>([]);
   const [reviewResult, setReviewResult] = useState<{search: string; merges: KnowledgeMerge[]}>();
   const [category, setCategory] = useState('');
   const [query, setQuery] = useState('');
   const [search, setSearch] = useState('');
   const [revision, setRevision] = useState(0);
-  const [docResult, setDocResult] = useState<{key: string; document: KnowledgeVersion | null; error: string}>();
   const [loadingMerges, setLoadingMerges] = useState(canWrite);
   const [reviewError, setReviewError] = useState('');
   const [branchError, setBranchError] = useState('');
@@ -83,8 +98,11 @@ export function useKnowledgeData(api: KnowledgeApi, canWrite: boolean, {scope, b
   const list = useDocumentList(api, listFilter(scope === 'all' ? 'main' : scope, branchId, search, category), revision);
   const drafts = useDocumentList(api, all ? listFilter('drafts', 'main', search, category) : null, revision);
   const reviewSearch = all ? search : '';
-  const docKey = documentId ? branchId + '/' + documentId : '';
-  const selectedDocument = docResult?.key === docKey ? docResult : undefined;
+  const document = useKnowledgeRead<{document: KnowledgeVersion}>(api, documentId ?
+    '/documents/' + encodeURIComponent(documentId) + '?branch_id=' + encodeURIComponent(branchId) : null, revision);
+  const tagQueue = useKnowledgeRead<{proposals: KnowledgeTagProposal[]}>(api, all ? '/tag-proposals' : null, revision);
+  const tagDetail = useKnowledgeRead<{proposal: KnowledgeTagProposal}>(api, all && tagProposalId ?
+    '/tag-proposals/' + encodeURIComponent(tagProposalId) : null, revision);
   const refresh = useCallback(() => setRevision(v => v + 1), []);
 
   useEffect(() => {
@@ -119,25 +137,15 @@ export function useKnowledgeData(api: KnowledgeApi, canWrite: boolean, {scope, b
     return () => { current = false; };
   }, [api, revision]);
 
-  useEffect(() => {
-    if (!documentId) return;
-    let current = true;
-    api.read<{document: KnowledgeVersion}>('/documents/' + encodeURIComponent(documentId) + '?branch_id=' + encodeURIComponent(branchId)).then(result => {
-      if (current) setDocResult({key: docKey, document: result.document, error: ''});
-    }).catch(error => {
-      if (current) setDocResult({key: docKey, document: null, error: error.message});
-    });
-    return () => { current = false; };
-  }, [api, documentId, branchId, docKey, revision]);
-
   return {
     search, revision, branches, list, drafts, category, setCategory, query, setQuery, refresh,
     merges: reviewResult?.merges ?? [],
     reviewMatches: reviewResult?.search === reviewSearch,
     loadingMerges,
     reviewError,
-    doc: selectedDocument?.document ?? null,
-    loadingDoc: !!documentId && !selectedDocument,
-    error: selectedDocument?.error || branchError,
+    tagQueue, tagDetail,
+    doc: document.data?.document ?? null,
+    loadingDoc: document.loading,
+    error: document.error || branchError,
   };
 }

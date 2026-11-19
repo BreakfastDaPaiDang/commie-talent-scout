@@ -26,7 +26,7 @@
 | `/branches`、`/branches/share` | 分支与私人草稿共享 |
 | `/documents`、`/documents/:id`、`/documents/remove` | 搜索、分页、不可变版本写入与移除 |
 | `/categories`、`/categories/definition` | 当前分支标签及定义 |
-| `/tag-proposals`、`/tag-proposals/approve` | 网页查看和认可标签提议 |
+| `/tag-proposals`、`/tag-proposals/:id`、`/tag-proposals/approve` | 正式成员在网页查看待认可列表、读取提议详情和认可标签 |
 | `/diff`、`/branches/resolve` | 与主分支比较、明确解决冲突 |
 | `/reviews` | 单篇文档审核，含旧批量候选中的单篇文档 |
 | `/merges`、`/merges/approve`、`/merges/accept` | 合并请求、同意与执行合入 |
