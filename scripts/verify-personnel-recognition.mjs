@@ -89,10 +89,17 @@ try{
  await emptyCount.waitFor();
  assert.equal(await newTask.getAttribute('href'),'/tasks?create_for='+a.id+'&work=specific');
  await page.evaluate(()=>document.fonts.ready);
- const rowBox=await emptyTasks.boundingBox(), countBox=await emptyCount.boundingBox(), createBox=await newTask.boundingBox();
- assert.ok(rowBox&&countBox&&createBox);
- assert.ok(Math.abs(countBox.y+countBox.height/2-createBox.y-createBox.height/2)<=1);
- assert.ok(Math.abs(countBox.x-rowBox.x)<=1&&Math.abs(createBox.x+createBox.width-rowBox.x-rowBox.width)<=1);
+ // Returning from the evidence view can reflow the archive as the timeline loads.
+ // Compare all three edges in the same frame.
+ await page.waitForFunction(()=>{
+  const row=document.querySelector('.related-tasks-empty');
+  const count=row?.querySelector(':scope > span');
+  const create=row?.querySelector('a');
+  if(!row||!count||!create)return false;
+  const r=row.getBoundingClientRect(), c=count.getBoundingClientRect(), a=create.getBoundingClientRect();
+  return r.width>0 && a.width>0 && Math.abs(c.top+c.height/2-a.top-a.height/2)<=1
+   && Math.abs(c.left-r.left)<=1 && Math.abs(a.right-r.right)<=1;
+ });
  assert.equal(await page.getByRole('dialog').count(),0);
  await page.locator('.record-byline > .avatar svg').first().waitFor();
  await toggle.evaluate(el=>el.blur());
