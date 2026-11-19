@@ -122,7 +122,12 @@ export function ArchiveDetail({
     {copy && <p className="form-notice" role="status">{copy}</p>}{notice && <p className="form-notice" role="status">{notice}</p>}
    </EntityHeader>
    <ArchiveLifecycleNotice deleted={archive.deleted} closed={archive.closed} onReopen={onState} onRestore={actor.role === 'admin' ? onDelete : undefined} onDelete={actor.role === 'admin' ? onDelete : undefined} />
-   <PersonnelRecognitionScope archive={archive} onChanged={onChanged}><TagsSection archive={archive} onChanged={onChanged} /><ArchiveQuickAction archive={archive} openTaskCount={archive.open_task_count ?? 0} onChanged={onChanged} /><ArchiveTasks canCreate={!archive.closed && !archive.deleted} key={archive.id} archiveId={archive.id} archiveVersion={archive.version} openCount={archive.open_task_count ?? 0} actor={actor} onChanged={onChanged} onOpenArchive={onOpenTaskArchive} /><ObservationSection focus={focus} actor={actor} archive={archive} onChanged={onChanged} /></PersonnelRecognitionScope>
+   <TagsSection archive={archive} onChanged={onChanged} />
+   <PersonnelRecognitionScope archive={archive} onChanged={onChanged}>
+    <ArchiveQuickAction archive={archive} openTaskCount={archive.open_task_count ?? 0} onChanged={onChanged} />
+    <ArchiveTasks canCreate={!archive.closed && !archive.deleted} key={archive.id} archiveId={archive.id} archiveVersion={archive.version} hasHistory={archive.has_closed_tasks} actor={actor} onChanged={onChanged} onOpenArchive={onOpenTaskArchive} />
+    <ObservationSection focus={focus} actor={actor} archive={archive} onChanged={onChanged} />
+   </PersonnelRecognitionScope>
 
   </ArchiveReadingScope.Provider>}
  </DetailFrame>;

@@ -1,6 +1,6 @@
 # 独立知识库与资源服务
 
-知识库正式入口为主站 `/knowledge`；简化与 Git（繁）共用 `app/ui/KnowledgeWorkspace.tsx`。原型入口 `prototypes/frontend/?knowledge` 使用同一组件；加 `&connected` 可连接真实接口。当前需求以 [知识库工作台](../docs/knowledge-workspace.md) 和 [ADR 0021](../docs/adr/0021-knowledge-branches-and-consensus.md) 为准，关联 [Issue #145](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/145)。
+知识库正式入口为主站 `/knowledge`。普通页与版本协作共用 `app/ui/KnowledgeWorkspace.tsx`，原型入口 `prototypes/frontend/?knowledge` 使用同一组件，加 `&connected` 可连接真实接口。详见 [知识库工作台](../docs/knowledge-workspace.md)、[ADR 0021](../docs/adr/0021-knowledge-branches-and-consensus.md) 和 [Issue #145](https://github.com/BreakfastDaPaiDang/commie-talent-scout/issues/145)。
 
 ## 服务边界
 
@@ -10,11 +10,11 @@
 
 ## 共识规则
 
-- 主分支 `main` 是当前共识，不能直接写入。新增或修改先进入分支。
-- 至少三名不同正式成员明确同意同一提交，才具备合入资格。作者没有自动票，管理员没有绕过门槛的权限。无七天到期；修改后需对新提交重新同意，旧票保留为历史。
-- 达标不自动合并。明确执行合并时，若多个候选达标，必须记录会议结论或引用已结论的议题选择；未选中的候选继续保留。候选集合变化后，旧议题选择不能直接复用。
-- 合并使用共同基础检查冲突；冲突先在分支解决，再重新征求同意，不静默覆盖主分支。
-- 分类可以自建，随当前分支中的实际文档显示。最后一篇文档移除后分类消失，历史引用保留。分类定义与留言通过临时侧栏打开。
+- 主分支 `main` 提供只读的当前共识。文档新增、修改或移除逐篇进入审核。
+- 同一版本在七天内取得三名不同正式成员明确同意才具备合入资格。截止后已达标的候选可继续处理。修改或未达标过期后重提开启新一轮并保留旧票历史。
+- 通过 `/reviews` 提交的单篇候选在第三票时检查冲突和同篇的其他有效候选。没有这两项时随本票合入。版本协作的合并请求保留显式合入。同一篇文档的多个达标候选需要记录会议或议题选择。
+- 合入前用与主分支的共同基础检查冲突。处理冲突后重新征求同意。
+- 知识标签的新增和改写独立提议，七天内取得三票后生效。网页成员可以给文档附加待认可的标签。MCP、连接令牌和糖果接收者的读取仅返回已认可标签。
 - 普通评论显示在文末；批注保存版本、原句和字符范围，显示在句下。正文变化后仅在唯一定位成功时重新附着，否则保留为旧版本批注。
 
 ## 接口
@@ -25,8 +25,10 @@
 |---|---|
 | `/branches`、`/branches/share` | 分支与私人草稿共享 |
 | `/documents`、`/documents/:id`、`/documents/remove` | 搜索、分页、不可变版本写入与移除 |
-| `/categories`、`/categories/definition` | 当前分支分类及定义 |
+| `/categories`、`/categories/definition` | 当前分支标签及定义 |
+| `/tag-proposals`、`/tag-proposals/approve` | 网页查看和认可标签提议 |
 | `/diff`、`/branches/resolve` | 与主分支比较、明确解决冲突 |
+| `/reviews` | 单篇文档审核，含旧批量候选中的单篇文档 |
 | `/merges`、`/merges/approve`、`/merges/accept` | 合并请求、同意与执行合入 |
 | `/issues`、`/issues/:id`、`/issues/state` | 独立议题、结论及候选选择 |
 | `/comments` | 文末评论、句下批注、类别和议题讨论 |
@@ -35,7 +37,9 @@
 
 所有写操作提供 UUID `request_id`，失败重试保持参数与 ID。分支和主分支版本检查与全库修订守卫在同一 D1 事务提交，防止并发静默覆盖；响应丢失可通过回执恢复。网页与主站／独立服务 MCP 共用业务服务，不提供快捷采纳接口。
 
-资源目录保留 `/api/catalog` 及相应 MCP 工具，权威切换详见 [ADR 0020](../docs/adr/0020-production-resource-authority.md)。旧 `/api/entries` 等仅供历史兼容读取，旧写接口返回 410；旧七天投票和首个达标淘汰其他候选的规则已停止对外使用。Agent 读取当前共识应通过知识库工具逐页读取主分支全文，不能用旧条目快照代替当前知识库。
+Agent 先读 `knowledge_workspace_guide`，再用 `knowledge_documents` 读取 `main`，按 `next_offset` 逐页读取。每页核对 `branch.head_id` 和 `tag_revision`，继续业务前再次核对。任一值变化或收到 `KNOWLEDGE_SNAPSHOT_CHANGED` 时从第一页开始。标签认可可能单独改变 `tag_revision`。通过 MCP 保存文档可以省略 `category`，已有标签关联继续保留。MCP 标签提议返回提交确认，正式成员在网页查看并认可。
+
+资源目录保留 `/api/catalog` 及相应 MCP 工具。旧 `/api/entries` 提供历史兼容读取，旧写接口返回 410。权威切换见 [ADR 0020](../docs/adr/0020-production-resource-authority.md)。
 
 ## 本地与发布
 

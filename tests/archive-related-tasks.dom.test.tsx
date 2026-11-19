@@ -23,7 +23,7 @@ test('related tasks page through all owners and ignore a late open-list response
  const f=environment(),requests:string[]=[];let resolveOpen:(value:Response)=>void=()=>{};
  globalThis.fetch=async url=>{const path=String(url);requests.push(path);if(path.includes('state=open'))return new Promise<Response>(resolve=>resolveOpen=resolve);return Response.json({tasks:[{...task,id:'closed',title:'关闭的任务',status:'cancelled'}],next_offset:null});};
  try{
-  const {ArchiveTasks}=await import('../app/client/ArchiveTasks');await act(async()=>f.root.render(<ArchiveTasks archiveId={id} archiveVersion={1} actor={actor} onChanged={()=>{}} onOpenArchive={()=>{}}/>));
+  const {ArchiveTasks}=await import('../app/client/ArchiveTasks');await act(async()=>f.root.render(<ArchiveTasks hasHistory archiveId={id} archiveVersion={1} actor={actor} onChanged={()=>{}} onOpenArchive={()=>{}}/>));
   assert.ok(requests[0].includes('scope=all'));assert.ok(requests[0].includes('archive_id='+id));
   await act(async()=>[...f.w.document.querySelectorAll('button')].find(b=>b.textContent==='查看已关闭任务')!.click());
   await act(async()=>resolveOpen(Response.json({tasks:[task],next_offset:null})));

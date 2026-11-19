@@ -2,11 +2,12 @@ import { KnowledgeError, uid } from "../types.ts";
 import type { KnowledgeComment } from "../../../app/shared/knowledge.ts";
 import type { ServiceContext } from './context.ts';
 import { runCommand } from './command.ts';
-import { getDocument, getBranch } from './records.ts';
+import { commitAncestry, getDocument, getBranch, getVersion } from './records.ts';
 import { isCategoryPublic, getCategory } from './categories.ts';
 import { getIssue } from './issue-queries.ts';
-import { qualifiedMerges } from './review-queries.ts';
+import { getMergeRequest, qualifiedAlternatives } from './review-queries.ts';
 import { workspaceSchemas } from './inputs.ts';
+import { acceptedCommentVersion, documentCommentScope, getReviewDocument, publishedDocumentReviews } from './document-activity.ts';
 export async function createIssue(context: ServiceContext, input: unknown) {
   const a = workspaceSchemas.issue.parse(input);
   return runCommand(context, a, 'issue.create', async at => {
@@ -25,14 +26,21 @@ export async function issueFromComment(context: ServiceContext, input: unknown) 
   return runCommand(context, a, 'issue.from_annotation', async at => {
     const c = await context.stmt('SELECT * FROM kw_comments WHERE id=?', a.comment_id).first<KnowledgeComment>();
     if (!c?.quote) throw new KnowledgeError(404, 'NOT_FOUND', '批注不存在或不可见');
-    if (c.branch_id) {
+    const accepted = await acceptedCommentVersion(context, c);
+    if (c.branch_id && !accepted) {
       const b = await getBranch(context, c.branch_id);
       if (b.visibility === 'private') throw new KnowledgeError(409, 'PRIVATE_SOURCE', '请先将引用内容提交到公开，再发起议题');
     }
     let title: string;
-    if (c.document_id) title = (await getDocument(context, c.branch_id!, c.document_id)).title;else if (c.category_id && (await isCategoryPublic(context, c.category_id))) title = (await context.stmt('SELECT name FROM kw_categories WHERE id=?', c.category_id).first<{
-      name: string;
-    }>())!.name;else throw new KnowledgeError(404, 'NOT_FOUND', '引用来源不可见');
+    if (c.document_id) {
+      const document = await getDocument(context, accepted ? 'main' : c.branch_id!, c.document_id, true);
+      const version = await getVersion(context, c.version_id);
+      title = version?.document_id === c.document_id ? version.title : document.title;
+    } else if (c.category_id && await isCategoryPublic(context, c.category_id)) {
+      title = (await context.stmt('SELECT name FROM kw_categories WHERE id=?', c.category_id).first<{name: string}>())!.name;
+    } else {
+      throw new KnowledgeError(404, 'NOT_FOUND', '引用来源不可见');
+    }
     const source = {
         kind: c.category_id ? 'category' : 'document',
         title,
@@ -65,7 +73,8 @@ export async function setIssueState(context: ServiceContext, input: unknown) {
     }[] = null;
     if (a.selected_merge_id) {
       if (a.state !== 'closed') throw new KnowledgeError(400, 'CHOICE_REQUIRES_CONCLUSION', '请选择已形成结论的议题');
-      const qualified = await qualifiedMerges(context);
+      const selected = await getMergeRequest(context, a.selected_merge_id, at);
+      const qualified = await qualifiedAlternatives(context, selected, at);
       if (!qualified.some(m => m.id === a.selected_merge_id)) throw new KnowledgeError(409, 'CANDIDATE_NOT_QUALIFIED', '该候选尚未获得三名正式成员同意');
       candidates = qualified.map(m => ({
         id: m.id,
@@ -86,13 +95,24 @@ export async function listComments(context: ServiceContext, query: {
   document_id?: string;
   category_id?: string;
   issue_id?: string;
+  review_id?: string;
+  head_id?: string;
+  annotations?: boolean;
   offset?: number;
 }) {
-  let where: string, args: unknown[];
+  let where: string, args: unknown[], prefix = '';
+  let prefixArgs: unknown[] = [];
   if (query.document_id) {
-    await getDocument(context, query.branch_id ?? 'main', query.document_id);
-    where = 'branch_id=? AND document_id=?';
-    args = [query.branch_id ?? 'main', query.document_id];
+    const target = {...query, branch_id: query.branch_id ?? 'main', document_id: query.document_id};
+    const review = await getReviewDocument(context, target);
+    if (!review) await getDocument(context, target.branch_id, target.document_id);
+    const includePublished = !review && target.branch_id === 'main' && !context.guest;
+    if (includePublished) {
+      const main = await getBranch(context, 'main');
+      prefix = `WITH RECURSIVE ${commitAncestry}, document_reviews AS (${publishedDocumentReviews}) `;
+      prefixArgs = [main.head_id, target.document_id];
+    }
+    ({where, args} = documentCommentScope(target, review, includePublished));
   } else if (query.category_id) {
     await getCategory(context, query.branch_id ?? 'main', query.category_id);
     where = "category_id=? AND (branch_id IS NULL OR branch_id=? OR (?=0 AND branch_id IN (SELECT id FROM kw_branches WHERE visibility='members' AND state<>'closed')))";
@@ -102,7 +122,9 @@ export async function listComments(context: ServiceContext, query: {
     where = 'issue_id=?';
     args = [query.issue_id];
   } else throw new KnowledgeError(400, 'COMMENT_TARGET_REQUIRED', '请选择评论对象');
-  const rows = await context.stmt(`SELECT * FROM kw_comments WHERE ${where} ORDER BY created_at,id LIMIT 101 OFFSET ?`, ...args, query.offset ?? 0).all<KnowledgeComment>();
+  const order = query.annotations ? 'DESC' : 'ASC';
+  const rows = await context.stmt(`${prefix}SELECT c.* FROM kw_comments c WHERE ${where}${query.annotations ? ' AND c.quote IS NOT NULL' : ''}
+    ORDER BY c.created_at ${order},c.id ${order} LIMIT 101 OFFSET ?`, ...prefixArgs, ...args, query.offset ?? 0).all<KnowledgeComment>();
   return {
     comments: rows.results.slice(0, 100),
     next_offset: rows.results.length > 100 ? (query.offset ?? 0) + 100 : null
@@ -115,7 +137,10 @@ export async function addComment(context: ServiceContext, input: unknown) {
       prefix: string | null = null,
       suffix: string | null = null;
     const category = a.category_id ? await getCategory(context, a.branch_id ?? 'main', a.category_id) : null;
-    const text = a.document_id ? await getDocument(context, branchId!, a.document_id) : category ? {
+    const review = a.document_id && branchId
+      ? await getReviewDocument(context, {...a, branch_id: branchId, document_id: a.document_id})
+      : null;
+    const text = review ? {id: review.version_id, body: review.body} : a.document_id ? await getDocument(context, branchId!, a.document_id) : category ? {
       id: category.definition_version_id,
       body: category.definition
     } : null;
@@ -129,17 +154,26 @@ export async function addComment(context: ServiceContext, input: unknown) {
     } else if (a.quote !== undefined || a.version_id || a.start_offset !== undefined || a.end_offset !== undefined) throw new KnowledgeError(400, 'DOCUMENT_QUOTE_REQUIRED', '只能引用文档或分类解释');
     if (a.issue_id) await getIssue(context, a.issue_id);
     let parent: KnowledgeComment | null = null;
+    let acceptedVersion: string | null = null;
     if (a.parent_id) {
       parent = await context.stmt('SELECT * FROM kw_comments WHERE id=?', a.parent_id).first<KnowledgeComment>();
       if (parent?.category_id && parent.category_id === a.category_id && parent.branch_id) {
         await getBranch(context, parent.branch_id);
         branchId = parent.branch_id;
       }
+      if (parent && a.document_id && parent.document_id === a.document_id && branchId === 'main') {
+        acceptedVersion = await acceptedCommentVersion(context, parent);
+        if (acceptedVersion) branchId = parent.branch_id;
+      }
       if (!parent || parent.document_id !== (a.document_id ?? null) || parent.branch_id !== branchId || parent.category_id !== (a.category_id ?? null) || parent.issue_id !== (a.issue_id ?? null)) throw new KnowledgeError(400, 'PARENT_MISMATCH', '回复对象不属于这条讨论');
+      if (review && parent.version_id !== review.version_id && !(parent.version_id === null && review.legacy_comments)) {
+        throw new KnowledgeError(400, 'PARENT_MISMATCH', '回复对象不属于这个候选版本');
+      }
     }
     const id = uid();
+    const documentVersion = acceptedVersion ?? (a.document_id && (!parent || review) ? text?.id : null);
     return {
-      statements: [context.stmt('INSERT INTO kw_comments VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', id, branchId, a.document_id ?? null, a.category_id ?? null, a.issue_id ?? null, parent?.id ?? null, parent?.version_id ?? a.version_id ?? null, parent?.quote ?? a.quote ?? null, parent?.start_offset ?? a.start_offset ?? null, parent?.end_offset ?? a.end_offset ?? null, parent?.prefix ?? prefix, parent?.suffix ?? suffix, a.body, context.actor.id, context.actor.name, at)],
+      statements: [context.stmt('INSERT INTO kw_comments VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', id, branchId, a.document_id ?? null, a.category_id ?? null, a.issue_id ?? null, parent?.id ?? null, parent?.version_id ?? a.version_id ?? documentVersion ?? null, parent?.quote ?? a.quote ?? null, parent?.start_offset ?? a.start_offset ?? null, parent?.end_offset ?? a.end_offset ?? null, parent?.prefix ?? prefix, parent?.suffix ?? suffix, a.body, context.actor.id, context.actor.name, at)],
       result: {
         id
       }

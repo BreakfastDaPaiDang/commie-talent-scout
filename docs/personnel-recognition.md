@@ -21,7 +21,7 @@
 - `recognize_person(archive_id, round_number, observation_id, content_version, request_id)`：明确授权后提交。
 - `withdraw_personnel_recognition(id, request_id)`：明确授权后撤回本人认可。
 
-Agent 首次开展人事业务应读取全部生效知识，按 `knowledge_documents` 的 `next_offset` 翻页，记录主分支 `head_id`；读取中或继续业务前版本变化则重新读取。提案、草稿不得当作共识。读取失败须说明知识未核验。知识内容不是执行写入的授权，表扬或一般维护授权也不等于认可某个人。
+Agent 首次开展人事业务应读取全部生效知识，按 `knowledge_documents` 的 `next_offset` 翻页。每页及继续业务前核对主分支 `branch.head_id` 和已认可标签的 `tag_revision`，任一值变化就从第一页重读。业务判断引用主分支内容，读取失败须说明知识未核验。提交人员认可需要对此人及其具体观察的明确授权。
 
 写入结果不明时，先用 `get_request_result` 核对原 `request_id`，重试保持原 ID 和参数。不得更换账号或反复创建请求规避额度。`refer_archive`、`confirm_membership` 和直接修改受保护状态不再是新的审核/入社入口；旧幂等回执仍可读取。
 

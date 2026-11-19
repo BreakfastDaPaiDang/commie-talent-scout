@@ -4,17 +4,29 @@ import type { ServiceContext } from './context.ts';
 import { runCommand } from './command.ts';
 import { getBranch, assertEditable, getDocument, prepareCommit } from './records.ts';
 import { branchDiff } from './documents.ts';
-import { getMergeRequest, qualifiedMerges } from './review-queries.ts';
+import { getMergeRequest, hasReviewAlternative, qualifiedAlternatives, reviewExpiresAt, reviewSourceMatches, reviewVisible, singleDocumentBranch } from './review-queries.ts';
 import { getIssue } from './issue-queries.ts';
 import { workspaceSchemas } from './inputs.ts';
+function singleDocumentRequired() {
+  return new KnowledgeError(409, 'SINGLE_DOCUMENT_REVIEW_REQUIRED', '审核须按文档分别提交，请打开候选并逐篇重新提交');
+}
+
+function reviewDeadline(at: string) {
+  return new Date(Date.parse(at) + 7 * 24 * 60 * 60 * 1000).toISOString();
+}
+
 export async function submitReview(context: ServiceContext, input: unknown) {
   const a = workspaceSchemas.review.parse(input);
   return runCommand(context, a, 'review.submit', async at => {
     const source = await getBranch(context, a.branch_id);
     assertEditable(context, source, a.expected_version);
-    const document = await getDocument(context, source.id, a.document_id);
+    const document = await getDocument(context, source.id, a.document_id, true);
     if (document.id !== a.version_id) throw new KnowledgeError(409, 'CONFLICT', '草稿内容已变化，请重新核对');
-    const existing = await context.stmt('SELECT m.id,m.branch_id,m.head_id,m.state FROM kw_review_sources s JOIN kw_merges m ON m.id=s.merge_id WHERE s.source_branch_id=? AND s.document_id=? AND s.source_version_id=? AND m.state<>\'closed\'', source.id, document.document_id, document.id).first<Record<string, unknown>>();
+    const existing = await context.stmt(`SELECT m.id,m.branch_id,m.head_id,m.state,${reviewExpiresAt} AS expires_at
+      FROM kw_review_sources s JOIN kw_merges m ON m.id=s.merge_id JOIN kw_branches b ON b.id=m.branch_id
+      WHERE s.source_branch_id=? AND s.document_id=? AND s.source_version_id=? AND ${reviewSourceMatches}
+        AND (m.state='merged' OR (m.state='open' AND m.head_id=b.head_id AND ${singleDocumentBranch} AND ${reviewVisible}))`,
+      source.id, document.document_id, document.id, at).first<Record<string, unknown>>();
     if (existing) return {
       statements: [],
       result: {
@@ -26,19 +38,23 @@ export async function submitReview(context: ServiceContext, input: unknown) {
       base = await context.stmt('SELECT base_version_id FROM kw_items WHERE branch_id=? AND document_id=?', source.id, document.document_id).first<{
         base_version_id: string | null;
       }>();
-    if (base?.base_version_id === document.id) throw new KnowledgeError(400, 'NO_CHANGES', '这篇文档没有待审核的修改');
+    if (base?.base_version_id === document.id || (!base?.base_version_id && document.deleted)) {
+      throw new KnowledgeError(400, 'NO_CHANGES', '这篇文档没有待审核的修改');
+    }
     const branchId = uid(),
       commitId = uid(),
       mergeId = uid(),
-      reason = a.reason || '提交审核';
+      reason = a.reason || '提交审核',
+      expiresAt = reviewDeadline(at);
     return {
-      statements: [context.stmt('INSERT INTO kw_branches(id,name,owner_id,owner_name,visibility,head_id,base_head_id,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)', branchId, document.title.slice(0, 55) + ' · ' + branchId.slice(0, 8), context.actor.id, context.actor.name, 'members', commitId, main.head_id, at, at), context.stmt("INSERT INTO kw_items SELECT ?,document_id,version_id,version_id FROM kw_items WHERE branch_id='main'", branchId), context.stmt('INSERT INTO kw_items VALUES(?,?,?,?) ON CONFLICT(branch_id,document_id) DO UPDATE SET version_id=excluded.version_id,base_version_id=excluded.base_version_id', branchId, document.document_id, document.id, base?.base_version_id ?? null), context.stmt('INSERT INTO kw_commits VALUES(?,?,?,?,?,?,?,?)', commitId, branchId, main.head_id, null, reason, context.actor.id, context.actor.name, at), context.stmt('INSERT INTO kw_changes VALUES(?,?,?,?)', commitId, document.document_id, base?.base_version_id ?? null, document.id), context.stmt('INSERT INTO kw_merges(id,branch_id,head_id,title,reason,author_id,author_name,created_at,updated_at,auto_promote) VALUES(?,?,?,?,?,?,?,?,?,1)', mergeId, branchId, commitId, document.title, reason, context.actor.id, context.actor.name, at, at), context.stmt('INSERT INTO kw_review_sources VALUES(?,?,?,?) ON CONFLICT(source_branch_id,document_id,source_version_id) DO UPDATE SET merge_id=excluded.merge_id', source.id, document.document_id, document.id, mergeId)],
+      statements: [context.stmt('INSERT INTO kw_branches(id,name,owner_id,owner_name,visibility,head_id,base_head_id,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)', branchId, document.title.slice(0, 55) + ' · ' + branchId.slice(0, 8), context.actor.id, context.actor.name, 'members', commitId, main.head_id, at, at), context.stmt("INSERT INTO kw_items SELECT ?,document_id,version_id,version_id FROM kw_items WHERE branch_id='main'", branchId), context.stmt('INSERT INTO kw_items VALUES(?,?,?,?) ON CONFLICT(branch_id,document_id) DO UPDATE SET version_id=excluded.version_id,base_version_id=excluded.base_version_id', branchId, document.document_id, document.id, base?.base_version_id ?? null), context.stmt('INSERT INTO kw_commits VALUES(?,?,?,?,?,?,?,?)', commitId, branchId, main.head_id, null, reason, context.actor.id, context.actor.name, at), context.stmt('INSERT INTO kw_changes VALUES(?,?,?,?)', commitId, document.document_id, base?.base_version_id ?? null, document.id), context.stmt('INSERT INTO kw_merges(id,branch_id,head_id,title,reason,author_id,author_name,created_at,updated_at,auto_promote,expires_at) VALUES(?,?,?,?,?,?,?,?,?,1,?)', mergeId, branchId, commitId, document.title, reason, context.actor.id, context.actor.name, at, at, expiresAt), context.stmt('INSERT INTO kw_review_sources VALUES(?,?,?,?) ON CONFLICT(source_branch_id,document_id,source_version_id) DO UPDATE SET merge_id=excluded.merge_id', source.id, document.document_id, document.id, mergeId)],
       result: {
         id: mergeId,
         branch_id: branchId,
         head_id: commitId,
         document_id: document.document_id,
-        state: 'open'
+        state: 'open',
+        expires_at: expiresAt
       }
     };
   });
@@ -51,34 +67,40 @@ export async function proposeMerge(context: ServiceContext, input: unknown) {
     assertEditable(context, b, a.expected_version);
     if (b.visibility !== 'members') throw new KnowledgeError(409, 'PRIVATE_BRANCH', '请先明确共享该分支，再征求成员同意');
     if (!b.head_id || !diff.changes.length) throw new KnowledgeError(400, 'NO_CHANGES', '此分支没有需要合入的修改');
-    const old = await context.stmt("SELECT * FROM kw_merges WHERE branch_id=? AND state='open'", b.id).first<KnowledgeMerge>(),
-      id = old?.id ?? uid();
-    return {
-      statements: [old ? context.stmt('UPDATE kw_merges SET head_id=?,title=?,reason=?,version=version+1,updated_at=? WHERE id=?', b.head_id, a.title, a.reason, at, id) : context.stmt('INSERT INTO kw_merges(id,branch_id,head_id,title,reason,author_id,author_name,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)', id, b.id, b.head_id, a.title, a.reason, context.actor.id, context.actor.name, at, at)],
-      result: {
-        id,
-        head_id: b.head_id
-      }
-    };
+    if (diff.changes.length > 1) throw singleDocumentRequired();
+    const old = await context.stmt("SELECT id FROM kw_merges WHERE branch_id=? AND state='open'", b.id).first<{id: string}>();
+    const previous = old ? await getMergeRequest(context, old.id, at) : null;
+    const renew = previous?.expired && previous.head_id === b.head_id;
+    const id = renew ? uid() : previous?.id ?? uid();
+    const expiresAt = !renew && previous?.head_id === b.head_id ? previous.expires_at ?? null : reviewDeadline(at);
+    const statements = [];
+    if (renew) statements.push(context.stmt("UPDATE kw_merges SET state='closed',version=version+1,updated_at=? WHERE id=?", at, previous.id));
+    if (previous && !renew) {
+      statements.push(context.stmt('UPDATE kw_merges SET head_id=?,title=?,reason=?,version=version+1,updated_at=?,expires_at=? WHERE id=?', b.head_id, a.title, a.reason, at, expiresAt, id));
+    } else {
+      statements.push(context.stmt('INSERT INTO kw_merges(id,branch_id,head_id,title,reason,author_id,author_name,created_at,updated_at,expires_at,auto_promote) VALUES(?,?,?,?,?,?,?,?,?,?,?)', id, b.id, b.head_id, a.title, a.reason, context.actor.id, context.actor.name, at, at, expiresAt, previous?.auto_promote ?? 0));
+    }
+    return { statements, result: { id, head_id: b.head_id, expires_at: expiresAt } };
   });
 }
 export async function approveMerge(context: ServiceContext, input: unknown) {
   const a = workspaceSchemas.approve.parse(input);
   return runCommand(context, a, 'merge.approve', async at => {
-    const m = await getMergeRequest(context, a.id);
+    const m = await getMergeRequest(context, a.id, at);
     if (m.state !== 'open' || m.head_id !== m.current_head_id || a.head_id !== m.head_id) throw new KnowledgeError(409, 'STALE_PROPOSAL', '修改版本已变化，请先阅读最新合并请求');
+    if (m.changes.length > 1) throw singleDocumentRequired();
+    if (!m.changes.length) throw new KnowledgeError(409, 'NO_CHANGES', '没有需要审核的内容');
+    if (m.voting_closed) throw new KnowledgeError(409, 'REVIEW_DEADLINE_PASSED', '提交审核已满七天，本轮投票已截止');
     const actor = context.actor;
     if ('kind' in actor || !actor.membership_id) throw new KnowledgeError(403, 'FORMAL_MEMBER_REQUIRED', '需要当前正式成员身份');
-    const statements = [context.stmt('INSERT OR IGNORE INTO kw_approvals VALUES(?,?,?,?,?,?,?)', m.id, m.head_id, actor.id, actor.name, actor.membership_id, actor.verified_at, at)],
+    const statements = m.approved_by_me ? [] : [context.stmt('INSERT INTO kw_approvals VALUES(?,?,?,?,?,?,?)', m.id, m.head_id, actor.id, actor.name, actor.membership_id, actor.verified_at, at)],
       count = m.approval_count + (m.approved_by_me ? 0 : 1);
     let pending: string | null = null;
     if (m.auto_promote && count >= 3) {
-      const diff = await branchDiff(context, m.branch_id),
-        others = (await qualifiedMerges(context)).filter(x => x.id !== m.id),
-        ids = JSON.stringify(diff.changes.map(c => c.document_id));
+      const diff = await branchDiff(context, m.branch_id);
       // Keep concurrent alternatives open even while their voting is still in progress.
-      const competing = await context.stmt("SELECT 1 FROM kw_merges x JOIN kw_branches b ON b.id=x.branch_id JOIN kw_items i ON i.branch_id=b.id WHERE x.id<>? AND x.state='open' AND x.head_id=b.head_id AND i.version_id IS NOT i.base_version_id AND i.document_id IN (SELECT value FROM json_each(?)) LIMIT 1", m.id, ids).first();
-      if (others.length || competing) pending = 'choice';else if (diff.changes.some(c => c.conflict)) pending = 'conflict';else if (!diff.changes.length) pending = 'no_changes';else {
+      const competing = await hasReviewAlternative(context, m.id, m.changes[0].document_id, at);
+      if (competing) pending = 'choice';else if (diff.changes.some(c => c.conflict)) pending = 'conflict';else if (!diff.changes.length) pending = 'no_changes';else {
         const merged = mergeChanges(context, m, at, null, diff);
         return {
           statements: [...statements, ...merged.statements],
@@ -108,10 +130,13 @@ export async function approveMerge(context: ServiceContext, input: unknown) {
 export async function acceptMerge(context: ServiceContext, input: unknown) {
   const a = workspaceSchemas.accept.parse(input);
   return runCommand(context, a, 'merge.accept', async at => {
-    const m = await getMergeRequest(context, a.id),
-      qualified = await qualifiedMerges(context);
+    const m = await getMergeRequest(context, a.id, at);
     if (m.state !== 'open' || m.head_id !== m.current_head_id || a.head_id !== m.head_id) throw new KnowledgeError(409, 'STALE_PROPOSAL', '修改版本已变化，请重新确认');
-    if (!qualified.some(x => x.id === m.id)) throw new KnowledgeError(403, 'THREE_APPROVALS_REQUIRED', '需要至少三名不同正式成员同意当前修改版本');
+    if (m.changes.length > 1) throw singleDocumentRequired();
+    if (!m.changes.length) throw new KnowledgeError(409, 'NO_CHANGES', '没有需要合入的内容');
+    if (m.expired) throw new KnowledgeError(409, 'REVIEW_DEADLINE_PASSED', '本轮未在七天内达到三名正式成员同意，请重新提交');
+    if (m.approval_count < 3) throw new KnowledgeError(403, 'THREE_APPROVALS_REQUIRED', '需要至少三名不同正式成员同意当前修改版本');
+    const qualified = await qualifiedAlternatives(context, m, at);
     const candidates = qualified.map(x => ({
       id: x.id,
       head_id: x.head_id

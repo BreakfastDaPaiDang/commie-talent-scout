@@ -25,7 +25,7 @@ export function useWorkspace() {
         ? "agent"
         : "person",
     ),
-    [selected, setSelected] = useState("p1");
+    [selected, setSelected] = useState(() => new URLSearchParams(location.search).has('personnel-recognition') ? 'p2' : 'p1');
   const [listState, setListState] = useState({});
   const listKey = `${actorId}:${page}`;
   const {
@@ -52,6 +52,7 @@ export function useWorkspace() {
   const [recordView, setRecordView] = useState("all"),
     [dialog, setDialog] = useState(null),
     [toast, setToast] = useState("");
+  const [recognitions, setRecognitions] = useState({});
   const [drafts, setDrafts] = useState({});
   const draftKey = `${actorId}:${selected}`;
   const {
@@ -313,14 +314,14 @@ export function useWorkspace() {
     }
     closeDialog();
   }
-  function publish() {
+  function publish(recognize) {
     if (!entity || locked || (!text.trim() && !images.length)) return;
-    const time = stamp();
+    const time = stamp(), id = uuid();
     patchEntity(
       entity.id,
       (d) => {
         d.records.unshift({
-          id: uuid(),
+          id,
           author: actorId,
           time,
           order: Date.now(),
@@ -342,6 +343,7 @@ export function useWorkspace() {
       },
       "观察记录已发布",
     );
+    if (recognize) setRecognitions(previous => ({...previous, [entity.id]: {id, name: actor.name, avatar: actor.avatar}}));
     clearDraft();
   }
   function changeRecord(
@@ -458,6 +460,7 @@ export function useWorkspace() {
     setOwnerFilter,
     recordView,
     setRecordView,
+    recognitions,
     dialog,
     setDialog,
     toast,

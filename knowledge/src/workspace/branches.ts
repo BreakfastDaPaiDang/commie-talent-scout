@@ -1,8 +1,8 @@
 import { KnowledgeError, uid } from "../types.ts";
-import type { KnowledgeBranch } from "../../../app/shared/knowledge.ts";
+import type { KnowledgeBranch, KnowledgeCommit, KnowledgeCommitDetail } from "../../../app/shared/knowledge.ts";
 import type { ServiceContext } from './context.ts';
 import { runCommand } from './command.ts';
-import { getBranch, assertEditable, getVersion, prepareCommit } from './records.ts';
+import { getBranch, assertEditable, getVersion, prepareCommit, commitAncestry, commitVisibility } from './records.ts';
 import { branchDiff } from './documents.ts';
 import { workspaceSchemas } from './inputs.ts';
 export async function listBranches(context: ServiceContext) {
@@ -60,23 +60,31 @@ export async function deleteBranch(context: ServiceContext, input: unknown) {
   });
 }
 export async function branchHistory(context: ServiceContext, branchId: string, offset = 0) {
-  await getBranch(context, branchId);
-  const rows = await context.stmt('WITH RECURSIVE ancestry(id) AS (SELECT head_id FROM kw_branches WHERE id=? UNION SELECT c.parent_id FROM kw_commits c JOIN ancestry a ON c.id=a.id WHERE c.parent_id IS NOT NULL UNION SELECT c.merge_parent_id FROM kw_commits c JOIN ancestry a ON c.id=a.id WHERE c.merge_parent_id IS NOT NULL) SELECT c.* FROM kw_commits c JOIN ancestry a ON a.id=c.id WHERE (?=0 OR c.branch_id=\'main\') ORDER BY c.created_at DESC,c.id DESC LIMIT 51 OFFSET ?', branchId, context.guest ? 1 : 0, offset).all();
+  const branch = await getBranch(context, branchId);
+  const visible = commitVisibility(context);
+  const rows = await context.stmt(`WITH RECURSIVE ${commitAncestry}
+    SELECT c.* FROM kw_commits c JOIN ancestry a ON a.id=c.id JOIN kw_branches origin ON origin.id=c.branch_id
+    WHERE ${visible.where} ORDER BY c.created_at DESC,c.id DESC LIMIT 51 OFFSET ?`,
+    branch.head_id, ...visible.args, offset).all<KnowledgeCommit>();
   return {
     commits: rows.results.slice(0, 50),
     next_offset: rows.results.length > 50 ? offset + 50 : null
   };
 }
-export async function commitDetail(context: ServiceContext, branchId: string, id: string) {
-  await getBranch(context, branchId);
-  const reachable = await context.stmt('WITH RECURSIVE ancestry(id) AS (SELECT head_id FROM kw_branches WHERE id=? UNION SELECT c.parent_id FROM kw_commits c JOIN ancestry a ON a.id=c.id WHERE c.parent_id IS NOT NULL UNION SELECT c.merge_parent_id FROM kw_commits c JOIN ancestry a ON a.id=c.id WHERE c.merge_parent_id IS NOT NULL) SELECT id FROM ancestry WHERE id=?', branchId, id).first();
-  if (!reachable || context.guest && !(await context.stmt("SELECT id FROM kw_commits WHERE id=? AND branch_id='main'", id).first())) throw new KnowledgeError(404, 'NOT_FOUND', '版本不存在或不可见');
-  const commit = await context.stmt('SELECT * FROM kw_commits WHERE id=?', id).first();
-  const rows = (await context.stmt('SELECT * FROM kw_changes WHERE commit_id=?', id).all<{
+export async function commitDetail(context: ServiceContext, branchId: string, id: string, documentId?: string): Promise<KnowledgeCommitDetail> {
+  const branch = await getBranch(context, branchId);
+  const visible = commitVisibility(context);
+  const commit = await context.stmt(`WITH RECURSIVE ${commitAncestry}
+    SELECT c.* FROM kw_commits c JOIN ancestry a ON a.id=c.id JOIN kw_branches origin ON origin.id=c.branch_id
+    WHERE c.id=? AND ${visible.where}`, branch.head_id, id, ...visible.args).first<KnowledgeCommit>();
+  if (!commit) throw new KnowledgeError(404, 'NOT_FOUND', '版本不存在或不可见');
+  const rows = (await context.stmt('SELECT * FROM kw_changes WHERE commit_id=? AND (? IS NULL OR document_id=?)',
+    id, documentId ?? null, documentId ?? null).all<{
     document_id: string;
     before_id: string | null;
     after_id: string;
   }>()).results;
+  if (documentId && !rows.length) throw new KnowledgeError(404, 'NOT_FOUND', '这次提交未修改这篇文档');
   const changes = [];
   for (const row of rows) changes.push({
     document_id: row.document_id,

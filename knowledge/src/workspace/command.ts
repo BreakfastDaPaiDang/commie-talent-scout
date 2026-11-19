@@ -9,6 +9,16 @@ export async function findReceipt(context: ServiceContext, id: string, fingerpri
   if (row && fingerprint && row.fingerprint !== fingerprint) throw new KnowledgeError(409, 'REQUEST_REUSED', '请求编号已用于其他内容');
   return row ? JSON.parse(row.result_json) : null;
 }
+export async function readReceipt(context: ServiceContext, id: string) {
+  const result = await findReceipt(context, id);
+  if (context.showPendingTags || !result) return result;
+  const resultId = typeof result.id === 'string' ? result.id : null;
+  const proposalId = typeof result.proposal_id === 'string' ? result.proposal_id : null;
+  if ((resultId || proposalId) && await context.stmt(`SELECT 1 FROM kw_tag_proposals WHERE id IN (?,?)
+    UNION ALL SELECT 1 FROM kw_categories WHERE id=? AND pending=1 LIMIT 1`,
+    resultId, proposalId, resultId).first()) return {submitted:true};
+  return result;
+}
 export async function runCommand(context: ServiceContext, input: {
   request_id: string;
 }, operation: string, build: (at: string) => Promise<{

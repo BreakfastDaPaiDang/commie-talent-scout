@@ -1,4 +1,5 @@
-import {ObservationRecognition} from './PersonnelRecognition';
+import {ObservationRecognition,useRecognitionRound} from './PersonnelRecognition';
+import {ComposerRecognitionOption} from '../ui/PersonnelRecognition';
 import {archivePath,archiveStateLabel} from '../rules/archive-states';
 import {ComposerFrame,ObservationFrame,RecordBody,TimelineTabs} from '../ui/Workspace';
 import {ActivityStream} from './ActivityStream';
@@ -76,17 +77,67 @@ function ObservationComposer({actor,archive,onPublished}:{actor:Member;archive:A
  const{store,draft}=useObservationDraft(actor.id,archive.id),[open,setOpen]=useState(false),[pending,setPending]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState('');
  useEffect(()=>{void store.load().catch(()=>{});return()=>{void store.flush().catch(()=>{});};},[store]);
  useEffect(()=>{if(draft.body||draft.attachments.length)setOpen(true);},[draft.body,draft.attachments.length]);
- async function publish(e:FormEvent){e.preventDefault();setBusy(true);setError('');let published=false;try{await store.flush();const current=store.snapshot();if(!current.publishId)throw new Error('草稿尚未保存，请稍后重试');await api('/observations/create',{archive_id:archive.id,body:current.body,attachment_ids:current.attachments.map(i=>i.id),request_id:current.publishId});published=true;onPublished();await store.clearPublished();setOpen(false);}catch(e){setError(published?'观察已发布，草稿清理尚未完成；重新读取后可核对。':(e as Error).message);}finally{setBusy(false);}}
+ const roundNumber=useRecognitionRound();
+ const [recognitionRound,setRecognitionRound]=useState<number|null>(null);
+ const [failedRecognition,setFailedRecognition]=useState<{input:RecognitionInput;error:string}|null>(null);
+ type RecognitionInput={archive_id:string;round_number:number;observation_id:string;content_version:number;request_id:string};
+
+ async function submitRecognition(input:RecognitionInput){
+  try{
+   await api('/personnel-recognition/recognize',input);
+   setFailedRecognition(null);
+  }catch(e){
+   setFailedRecognition({input,error:(e as Error).message});
+  }
+ }
+ async function retryRecognition(){
+  if(!failedRecognition||busy)return;
+  setBusy(true);
+  try{await submitRecognition(failedRecognition.input);onPublished();}
+  finally{setBusy(false);}
+ }
+ async function publish(e:FormEvent){
+  e.preventDefault();
+  if(busy)return;
+  setBusy(true);
+  setError('');
+  let published=false;
+  try{
+   await store.flush();
+   const current=store.snapshot();
+   if(!current.publishId)throw new Error('草稿尚未保存，请稍后重试');
+   const observation=await api<{id:string;content_version:number}>('/observations/create',{
+    archive_id:archive.id,body:current.body,attachment_ids:current.attachments.map(i=>i.id),request_id:current.publishId
+   });
+   published=true;
+   if(recognitionRound!==null&&recognitionRound===roundNumber&&!failedRecognition){
+    await submitRecognition({archive_id:archive.id,round_number:roundNumber,observation_id:observation.id,
+     content_version:observation.content_version,request_id:crypto.randomUUID()});
+   }
+   setRecognitionRound(null);
+   setOpen(false);
+   await store.clearPublished();
+  }catch(e){
+   setError(published?'观察已发布，草稿清理尚未完成。':(e as Error).message);
+  }finally{
+   if(published)onPublished();
+   setBusy(false);
+  }
+ }
  async function clearAlreadyPublished(){setBusy(true);setError('');try{await store.clearPublished();setOpen(false);onPublished();}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
  if(archive.closed)return draft.body||draft.attachments.length?<div className="closed-draft-note">你有一份尚未发布的草稿，已保留。档案重新开启后可继续发布。</div>:null;
- return <form className="live-composer-form" onSubmit={publish} onPaste={e=>{if(!busy&&draft.loaded)setError(pasteImages(e,actor.id+':draft:'+archive.id,{purpose:'observation',archive_id:archive.id},draft.attachments.length));}}><ComposerFrame open={open} onOpen={()=>setOpen(true)} textarea={{value:draft.body,onChange:e=>store.edit({body:e.target.value}),maxLength:100000,disabled:busy||!draft.loaded}}>
+ return <>{failedRecognition&&<div className="recognition-publish-error" role="status">
+  <p>观察已发布，认可未确认。{failedRecognition.error}</p>
+  <button className="text-button" type="button" disabled={busy} onClick={()=>void retryRecognition()}>重试认可</button>
+  <button className="text-button" type="button" disabled={busy} onClick={()=>setFailedRecognition(null)}>关闭提示</button>
+ </div>}<form className="live-composer-form" onSubmit={publish} onPaste={e=>{if(!busy&&draft.loaded)setError(pasteImages(e,actor.id+':draft:'+archive.id,{purpose:'observation',archive_id:archive.id},draft.attachments.length));}}><ComposerFrame open={open} onOpen={()=>setOpen(true)} textarea={{value:draft.body,onChange:e=>store.edit({body:e.target.value}),maxLength:100000,disabled:busy||!draft.loaded}}>
+  {roundNumber!==null&&!failedRecognition&&<ComposerRecognitionOption checked={recognitionRound===roundNumber} disabled={busy||!draft.loaded} onChange={checked=>setRecognitionRound(checked?roundNumber:null)}/>}
   <div className="composer-foot"><ImagePicker queueKey={actor.id+':draft:'+archive.id} target={{purpose:'observation',archive_id:archive.id}} value={draft.attachments} onChange={attachments=>store.edit({attachments})} onPending={setPending} disabled={busy||!draft.loaded}/>
-  <span className="composer-hint">可粘贴</span><button className="button quiet" type="button" onClick={()=>setOpen(false)}>收起</button><button className="button primary" disabled={busy||pending||!draft.loaded||(!draft.body.trim()&&!draft.attachments.length)||!!draft.publishedId}>{busy?'正在发布…':'发布记录'}</button></div>
+  <span className="composer-hint">可粘贴</span><button className="button quiet" type="button" disabled={busy} onClick={()=>{setOpen(false);setRecognitionRound(null);}}>收起</button><button className="button primary" disabled={busy||pending||!draft.loaded||(!draft.body.trim()&&!draft.attachments.length)||!!draft.publishedId}>{busy?'正在发布…':'发布记录'}</button></div>
    <p className={'draft-status '+(draft.phase==='error'?'error':'')} role="status">{draft.phase==='loading'?'正在读取草稿…':draft.phase==='saving'?'正在保存草稿…':draft.phase==='unsaved'?'草稿尚未保存':draft.phase==='error'?'草稿未保存：'+draft.error:draft.body||draft.attachments.length?'草稿已保存':''}</p>
    {draft.phase==='error'&&<div className="inline-actions"><button className="button" type="button" onClick={()=>void store.flush().catch(()=>{})}>重试保存草稿</button><button className="button quiet" type="button" onClick={()=>void store.discardLocal().catch(()=>{})}>重新读取云端草稿并替换输入</button></div>}
    {draft.publishedId&&<p className="form-notice">这份草稿已经发布，未重复创建。<button className="button quiet" type="button" onClick={()=>void clearAlreadyPublished()} disabled={busy}>清除已发布草稿</button></p>}
-   <PageError error={error}/>
- </ComposerFrame></form>;
+ </ComposerFrame></form><PageError error={error}/></>;
 }
 
 function ObservationEdit({actorId,record,busy,setBusy,onSaved,onReload}:{actorId:string;record:Observation;busy:boolean;setBusy:(b:boolean)=>void;onSaved:()=>Promise<void>;onReload:()=>Promise<void>}){

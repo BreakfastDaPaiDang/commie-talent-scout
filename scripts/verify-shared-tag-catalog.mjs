@@ -44,10 +44,13 @@ export async function verifySharedTagCatalog(page,out,writer,documentUrl){
  assert.equal((await writer.categories()).categories.some(c=>c.name===name),false,'personnel tags stay in the personnel library');
  await page.goto(documentUrl);
  for(const width of [390,320]){
-  await page.setViewportSize({width,height:844});await page.getByRole('button',{name:'← 文档',exact:true}).click();await page.getByRole('button',{name:'添加标签',exact:true}).click();
-  await chooser.getByLabel('查找已有词义').fill('窄屏标签验收');await chooser.getByRole('button',{name:'没有适用词义？新建标签',exact:true}).click();await chooser.getByLabel('标签解释').fill('完整显示可编辑字段和提交按钮，保留原库边界。');
-  await chooser.getByRole('button',{name:'创建标签',exact:true}).scrollIntoViewIfNeeded();assert.equal(await chooser.evaluate(el=>el.scrollWidth>el.clientWidth+1),false);
-  const button=await chooser.getByRole('button',{name:'创建标签',exact:true}).boundingBox();assert.ok(button.x>=0&&button.x+button.width<=width&&button.y+button.height<=844);
+  await page.setViewportSize({width,height:844});await page.getByRole('button',{name:'← 文档',exact:true}).click();await page.getByRole('button',{name:'标签筛选',exact:true}).click();
+  const filter=page.getByRole('dialog',{name:'标签筛选',exact:true});
+  await filter.getByLabel('查找已有词义').fill('窄屏标签验收');
+  await filter.getByRole('button',{name:'＋ 新建标签',exact:true}).click();
+  assert.equal(await chooser.getByLabel('标签名称').inputValue(),'窄屏标签验收');await chooser.getByLabel('标签解释').fill('完整显示可编辑字段和提交按钮，保留原库边界。');
+  await chooser.getByRole('button',{name:'提议新标签',exact:true}).scrollIntoViewIfNeeded();assert.equal(await chooser.evaluate(el=>el.scrollWidth>el.clientWidth+1),false);
+  const button=await chooser.getByRole('button',{name:'提议新标签',exact:true}).boundingBox();assert.ok(button.x>=0&&button.x+button.width<=width&&button.y+button.height<=844);
   await page.screenshot({path:out+'/shared-tags-category-'+width+'.png',fullPage:true});
   await chooser.getByRole('button',{name:'返回查找',exact:true}).click();assert.equal(await chooser.getByLabel('查找已有词义').inputValue(),'窄屏标签验收');
   await page.keyboard.press('Escape');await page.goto(documentUrl);

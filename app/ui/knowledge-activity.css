@@ -1,0 +1,91 @@
+.kb-document-activity {
+  margin-top: 28px;
+  min-width: 0;
+}
+
+.kb-document-activity .task-history-title {
+  margin: 0 0 16px;
+}
+
+.kb-document-activity .task-comment-compose .form-error,
+.kb-activity-composer-actions {
+  grid-column: 2;
+  min-width: 0;
+}
+
+.kb-document-activity .task-comment-compose > .kb-activity-compose-launch {
+  grid-column: 1;
+  grid-row: 1;
+  align-self: start;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  margin-top: 4px;
+  border-radius: 50%;
+  background: var(--red, #c5292d);
+  color: #fff;
+}
+
+.kb-document-activity .kb-activity-composer-collapsed {
+  margin-bottom: 16px;
+}
+
+.kb-document-activity .kb-activity-composer-collapsed textarea {
+  min-height: 38px;
+  height: 38px;
+  padding: 7px 10px;
+  resize: none;
+  overflow: hidden;
+}
+
+.kb-activity-composer-actions,
+.kb-activity-byline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.kb-activity-composer-actions {
+  justify-content: flex-end;
+}
+
+.kb-activity-byline time,
+.kb-activity-reply-to {
+  color: var(--theme-muted,#687375);
+}
+
+.kb-activity-reply-to {
+  display: block;
+  margin-top: 8px;
+}
+
+.kb-document-activity .work-task-comment > .task-comment-compose {
+  margin: 8px 0 0;
+}
+
+.kb-document-activity .task-activity-entry > header,
+.kb-activity-message {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.kb-document-activity .kb-activity-byline .avatar {
+  flex: none;
+}
+
+.kb-document-activity .task-event-entry > .text-button {
+  min-height: 29px;
+  color: var(--red);
+}
+
+@media (max-width: 700px) {
+  .kb-document-activity .task-comment-compose:has(.kb-activity-compose-launch) { grid-template-columns: 44px minmax(0,1fr); }
+  .kb-document-activity .task-comment-compose > .kb-activity-compose-launch { width: 44px; height: 44px; margin: 0; }
+  .kb-document-activity .kb-activity-composer-collapsed textarea { height: 44px; }
+  .kb-document-activity textarea { font-size: 16px; }
+  .kb-document-activity .text-button,
+  .kb-document-activity .button,
+  .kb-document-activity .task-event-entry > .text-button { min-height: 44px; }
+}

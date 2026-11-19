@@ -21,13 +21,17 @@ test('three distinct eligible members are required; votes do not auto-merge; mai
 }finally{f.close();}});
 
 test('multiple qualified candidates coexist until an explicit issue choice; unselected requests and approvals survive',async()=>{const f=setup();try{
- const a=await change(f.w[0],'方案甲'),b=await change(f.w[0],'方案乙'),ma=await propose(f,a.b),mb=await propose(f,b.b);await agree(f,ma);await agree(f,mb);
- await assert.rejects(accept(f,ma),e=>e.code==='CONSENSUS_CHOICE_REQUIRED');assert.equal((await f.w[0].branch('main')).head_id,null);
+ const initial=await change(f.w[0],'已生效文档'),first=await propose(f,initial.b);await agree(f,first);const published=await accept(f,first);
+ const a=await change(f.w[0],'方案甲',{document_id:initial.d.id,body:'方案甲正文'}),b=await change(f.w[0],'方案乙',{document_id:initial.d.id,body:'方案乙正文'}),ma=await propose(f,a.b),mb=await propose(f,b.b);await agree(f,ma);await agree(f,mb);
+ await assert.rejects(accept(f,ma),e=>e.code==='CONSENSUS_CHOICE_REQUIRED');assert.equal((await f.w[0].branch('main')).head_id,published.commit_id);
+ const unrelated=await change(f.w[0],'独立文档'),otherReview=await propose(f,unrelated.b);await agree(f,otherReview);
  const issue=await f.w[0].createIssue({title:'选择本次共识方案',body:'讨论两项方案',request_id:request()});
  await f.w[1].setIssueState({id:issue.id,expected_version:1,state:'closed',resolution:'会议讨论后选择方案甲，乙保留。',selected_merge_id:ma.id,request_id:request()});
+ assert.deepEqual(new Set(JSON.parse((await f.w[0].issue(issue.id)).candidates_json).map(candidate=>candidate.id)),new Set([ma.id,mb.id]));
+ await accept(f,otherReview);
  await accept(f,ma,{selection:{kind:'issue',issue_id:issue.id}});
  const other=await f.w[0].mergeRequest(mb.id);assert.equal(other.state,'open');assert.equal(other.approval_count,3);assert.equal((await f.w[0].branch(b.b.id)).state,'open');
- assert.equal((await f.w[0].list({})).documents.length,1);
+ assert.equal((await f.w[0].list({})).documents.length,2);
 }finally{f.close();}});
 
 test('editing or resolving a conflict invalidates old approvals; historical votes remain',async()=>{const f=setup();try{

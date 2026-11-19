@@ -1,9 +1,10 @@
 import type { CatalogActor } from '../catalog.ts';
-export function createWorkspaceContext(db: D1Database, actor: CatalogActor, clock: () => string) {
+export function createWorkspaceContext(db: D1Database, actor: CatalogActor, clock: () => string, showPendingTags = true) {
   return {
     db,
     actor,
     clock,
+    showPendingTags: showPendingTags && !('kind' in actor),
     get guest() { return 'kind' in actor; },
     stmt: (sql: string, ...args: unknown[]) => db.prepare(sql).bind(...args),
     get identity() {
