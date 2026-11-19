@@ -1,4 +1,4 @@
-import {RecognitionProgress} from '../../../app/ui/PersonnelRecognition';
+import {ComposerRecognitionOption,RecognitionProgress} from '../../../app/ui/PersonnelRecognition';
 import {archivePrimaryAction} from '../../../app/rules/archive-states';
 import {RelatedTasksFrame,DetailActions} from '../../../app/ui/TaskBook';
 import {prototypeReminder} from './model.js';
@@ -107,13 +107,22 @@ export function ArchiveList({w}) {
 export function Updates({w}){return <section className="updates-list"><p className="section-description">从变化的地方读起。</p>{w.unreadEntities.length?w.sessionUpdates.map(e=>{const pending=w.unreadItems(e),latest=[...(pending.length?pending:[...e.records.filter(r=>!r.deleted),...e.events])].sort((a,b)=>timelineOrder(b)-timelineOrder(a))[0];return <UpdateRow key={e.id} selected={w.selected===e.id} read={!pending.length} onClick={()=>w.openUnread(e)} avatar={<Avatar type={e.type} name={e.name} contacts={e.contacts} src={e.avatar}/>} label={<>{e.type==='person'?'人物':'组织'} · {pending.length?`${pending.length} 项更新`:'已阅'}</>} name={e.name} excerpt={latest?.kind==='system'?latest.text:latest?.body} time={latest?.time}/>;}):<CaughtUp action={<Button variant="outline" onClick={()=>w.navigate('person')}>回到人物档案</Button>}/>}</section>;}
 
 export function Detail({ w }) {
-  const [taskHistory,setTaskHistory]=useState(false),[materialPane,setMaterialPane]=useState(false),[materialCounts,setMaterialCounts]=useState({});
-  useEffect(()=>{setMaterialPane(false);setTaskHistory(false);},[w.entity.id]);
+  const [materialPane,setMaterialPane]=useState(false),[materialCounts,setMaterialCounts]=useState({});
+  const [recognitionOption,setRecognitionOption]=useState(false);
   const { entity, locked, actor, memberName } = w,
     textarea = useRef(null),
     scroll = useRef(null),
     work = isWorkState(entity.type, entity.state),
     owners = entity.owners[entity.state] ?? [];
+  const recognitionPreview=entity.type==='person' && entity.state!=='已入伙' && new URLSearchParams(location.search).has('personnel-recognition');
+  const recognized=w.recognitions[entity.id];
+  const demoEvidence=entity.id==='p2' ? 'r3' : null;
+  const visibleEvidence=id=>entity.records.some(record=>record.id===id && !record.deleted);
+  const recognitionCount=[demoEvidence,recognized?.id].filter(visibleEvidence).length;
+  const canRecognize=recognitionPreview && !locked && !recognized && !['人事审核','已加入待对接'].includes(entity.state);
+  const primaryAction=!recognitionPreview && archivePrimaryAction({type:entity.type,status:entity.state,closed:locked});
+  useEffect(()=>{setMaterialPane(false);},[entity.id]);
+  useEffect(()=>{setRecognitionOption(false);},[entity.id,w.actorId]);
   useEffect(()=>{
     const tokens=w.unreadItems(entity).map(item=>itemKey(entity.id,item));let done=false;
     const opened=()=>{if(done||document.visibilityState!=='visible'||document.querySelector('dialog[open],[role="dialog"]')||!scroll.current?.getClientRects().length)return;done=true;w.markArchiveSeen(tokens);};
@@ -141,6 +150,14 @@ export function Detail({ w }) {
     });
     w.setComposeOpen(true);
   }
+  function evidenceLink(id) {
+    if (!visibleEvidence(id)) return <span>依据已删除</span>;
+    return <a href={'#entry-'+id} onClick={event=>{
+      event.preventDefault();
+      setMaterialPane(false);
+      w.pick(entity.id,id);
+    }}>查看依据 <span>· 版本 1</span></a>;
+  }
   return (
     <DetailFrame sharePath={(entity.type==='org'?'/organizations':'/')+'?archive='+encodeURIComponent(entity.id)} label={entity.type==='person'?'人物档案':'组织档案'} code={entity.id.toUpperCase().slice(0,6)} expanded={w.detailWide} onExpand={()=>w.setDetailWide(!w.detailWide)} onClose={w.closeDetail} onNextUnread={w.unreadEntities.some(e=>e.id!==entity.id)?w.nextUnread:undefined} scrollRef={scroll} onScroll={event=>{w.readingPositions.current[`${w.actorId}:${entity.id}`]=event.currentTarget.scrollTop;}}>
           <EntityHeader key={entity.id} name={entity.name} state={<StateBadge entity={entity} onClick={locked?undefined:()=>w.setDialog({type:'state',nextState:entity.state})}/>} avatar={<Avatar type={entity.type} name={entity.name} contacts={entity.contacts} src={entity.avatar} size="hero"/>} actions={!locked&&<ArchiveEditButton label="编辑资料" onClick={()=>w.setDialog({type:"entity-edit"})}/>} assignment={owners.length>0&&<div className="assignment-row"><div className="assigned-members">{owners.map(id=>{const m=w.members.find(m=>m.id===id);return <span className="member-chip" key={id}><Avatar name={m?.name} src={m?.avatar} qq={m?.qq} size="micro"/>{memberName(id)}{m?.frozen&&<small>已冻结</small>}</span>})}</div></div>} contacts={<>
@@ -166,8 +183,12 @@ export function Detail({ w }) {
 
 </>}/>
           <ArchiveLifecycleNotice deleted={false} closed={locked} onReopen={()=>w.setDialog({type:'state',mode:'reopen',nextState:entity.lastOpenState??'视奸观察'})}/>
-          {new URLSearchParams(location.search).has('personnel-recognition')&&<RecognitionProgress count={2}><ul className="recognition-votes"><li>示例社员甲</li><li>示例社员乙</li></ul></RecognitionProgress>}{!new URLSearchParams(location.search).has('personnel-recognition')&&archivePrimaryAction({type:entity.type,status:entity.state,closed:locked})&&<div className="archive-primary-action"><DetailActions><button className="button primary" onClick={()=>w.setDialog({type:'state',nextState:archivePrimaryAction({type:entity.type,status:entity.state}).status})}><Icon name="check"/>{archivePrimaryAction({type:entity.type,status:entity.state}).label}</button></DetailActions></div>}
-          <RelatedTasksFrame history={taskHistory} onHistory={setTaskHistory} count={0}><p className="stream-status">{taskHistory?'暂无已关闭的关联任务':'暂无开启中的关联任务'}</p></RelatedTasksFrame>
+          {recognitionPreview&&(demoEvidence||recognized)&&<RecognitionProgress count={recognitionCount}><ul className="recognition-votes">
+            {demoEvidence&&<li><strong>示例社员甲</strong>{evidenceLink(demoEvidence)}</li>}
+            {recognized&&<li><strong>{recognized.name}</strong>{evidenceLink(recognized.id)}</li>}
+          </ul></RecognitionProgress>}
+          {primaryAction&&<div className="archive-primary-action"><DetailActions><button className="button primary" onClick={()=>w.setDialog({type:'state',nextState:primaryAction.status})}><Icon name="check"/>{primaryAction.label}</button></DetailActions></div>}
+          <RelatedTasksFrame empty create={!locked ? {onClick:()=>w.notify('示例发布：正式站打开关联档案的任务表单')} : undefined} />
           <TimelineTabs id={entity.id} value={materialPane?'materials':w.recordView==='records'?'observations':w.recordView} onChange={value=>{setMaterialPane(value==='materials');if(value!=='materials')w.setRecordView(value==='observations'?'records':value);}} deletedCount={w.deletedCount} materialCount={materialCounts[entity.id]??0}/>
           <div hidden={!materialPane} role="tabpanel" id={entity.id+'-materials'} aria-labelledby={entity.id+'-tab-materials'}><MaterialsPreview key={entity.id} entity={entity} actor={actor} locked={locked} onCount={count=>setMaterialCounts(c=>({...c,[entity.id]:count}))}/></div>
           <div hidden={materialPane}>
@@ -187,12 +208,17 @@ export function Detail({ w }) {
                       ? "草稿随此档案保留，本次预览刷新后清空。"
                       : "写下具体的交流、行动或变化。"}
                   </p>
+                  {canRecognize&&<ComposerRecognitionOption checked={recognitionOption} onChange={setRecognitionOption} />}
                   <div className="composer-foot">
                     <ImageInput onFiles={addImages} />
+                    {recognitionPreview&&<Button variant="quiet" onClick={()=>{w.setComposeOpen(false);setRecognitionOption(false);}}>收起</Button>}
                     <Button
                       variant="primary"
                       disabled={!w.text.trim() && !w.images.length}
-                      onClick={w.publish}
+                      onClick={()=>{
+                        w.publish(canRecognize&&recognitionOption);
+                        setRecognitionOption(false);
+                      }}
                     >
                       发布记录
                       <Icon name="arrow" size={17} />

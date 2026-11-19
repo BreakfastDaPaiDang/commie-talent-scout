@@ -5,12 +5,17 @@ import {KnowledgeWorkspace} from './workspace.ts';
 import type {Env} from './types.ts';
 
 export const workspaceApp=new Hono<{Bindings:Env;Variables:{workspace:KnowledgeWorkspace}}>();
-workspaceApp.use('*',async(c,next)=>{c.set('workspace',new KnowledgeWorkspace(c.env.KNOWLEDGE_DB,await catalogIdentity(c.req.raw,c.env)));await next();});
+workspaceApp.use('*',async(c,next)=>{
+ const actor=await catalogIdentity(c.req.raw,c.env);
+ const showPendingTags=!c.req.header('Authorization')&&c.req.header('X-Knowledge-MCP')!=='1';
+ c.set('workspace',new KnowledgeWorkspace(c.env.KNOWLEDGE_DB,actor,undefined,showPendingTags));await next();
+});
 const branch=(value:string|undefined)=>z.string().min(1).max(180).default('main').parse(value);
 const offset=(value:string|undefined)=>z.coerce.number().int().min(0).default(0).parse(value);
 workspaceApp.get('/branches',async c=>c.json(await c.get('workspace').branches()));
 workspaceApp.get('/documents',async c=>c.json(await c.get('workspace').list(c.req.query())));
 workspaceApp.get('/documents/:id',async c=>c.json(await c.get('workspace').get(branch(c.req.query('branch_id')),c.req.param('id'))));
+workspaceApp.get('/tag-proposals',async c=>c.json(await c.get('workspace').tagProposals()));
 workspaceApp.get('/categories',async c=>c.json(await c.get('workspace').categories(branch(c.req.query('branch_id')))));
 workspaceApp.get('/diff',async c=>c.json(await c.get('workspace').diff(branch(c.req.query('branch_id')))));
 workspaceApp.get('/merges',async c=>c.json(await c.get('workspace').mergeRequests()));
@@ -22,7 +27,7 @@ workspaceApp.get('/history/:id',async c=>c.json(await c.get('workspace').commitD
 workspaceApp.get('/requests/:id',async c=>c.json({result:await c.get('workspace').receipt(c.req.param('id'))}));
 const commands={
  '/branches':'createBranch','/branches/share':'shareBranch','/branches/delete':'deleteBranch','/documents':'save','/documents/remove':'remove',
- '/categories/definition':'defineCategory','/categories':'editCategory','/reviews':'submitReview','/issues/from-comment':'issueFromComment','/merges':'propose','/merges/approve':'approve','/merges/accept':'accept',
+ '/tag-proposals/approve':'approveTag','/categories/definition':'defineCategory','/categories':'editCategory','/reviews':'submitReview','/issues/from-comment':'issueFromComment','/merges':'propose','/merges/approve':'approve','/merges/accept':'accept',
  '/branches/resolve':'resolveConflict','/issues':'createIssue','/issues/state':'setIssueState','/comments':'comment',
 } as const;
 for(const [path,method] of Object.entries(commands))workspaceApp.post(path,async c=>c.json(await c.get('workspace')[method](await c.req.json())));

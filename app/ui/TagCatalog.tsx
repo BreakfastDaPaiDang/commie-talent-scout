@@ -1,11 +1,11 @@
 import React,{type ReactNode} from 'react';
 import './tags.css';
 
-export type TagCatalogEntry={id:string;name:string;category_name?:string;color?:string;description:string;meta?:ReactNode;state?:string};
+export type TagCatalogEntry={id:string;name:string;category_name?:string;color?:string;description:string;pending?:number;meta?:ReactNode;state?:string};
 
-export function TagChip({tag}:{tag:{name:string;category_name?:string;color?:string;focus?:number}}){
+export function TagChip({tag}:{tag:{name:string;category_name?:string;color?:string;focus?:number;pending?:number}}){
  const title=tag.category_name?`${tag.category_name}：${tag.name}`:tag.name;
- return <span className={'tag-chip tag-'+(tag.color??'slate')} title={title}>{tag.category_name&&<span className="tag-category">{tag.category_name}：</span>}<span className="tag-name">{tag.name}</span></span>;
+ return <span className={'tag-chip tag-'+(tag.color??'slate')+(tag.pending?' tag-pending':'')} title={tag.pending?`${title}（待认可）`:title}>{tag.category_name&&<span className="tag-category">{tag.category_name}：</span>}<span className="tag-name">{tag.name}</span>{!!tag.pending&&<span className="tag-pending-label">待认可</span>}</span>;
 }
 
 // Shared catalogue presentation; each library supplies its own authorized data and commands.

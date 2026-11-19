@@ -11,16 +11,16 @@ type Placement=Box&{ax:number;ay:number;ex:number;ey:number};
 const definitions:Definition[]=[
  {id:'help',selector:'.kb-help-button',text:'按钮说明已开启',side:'bottom',width:190},
  {id:'scope-main',selector:'[data-kb-help="scope-main"]',text:'已形成共识，当前采用的正式内容',side:'bottom',width:138},
- {id:'scope-public',selector:'[data-kb-help="scope-public"]',text:'已经提交，供成员讨论和审核的候选内容',side:'bottom',width:138},
+ {id:'scope-todo',selector:'[data-kb-help="scope-todo"]',text:'查看需要认可的候选内容与自己的草稿',side:'bottom',width:138},
+ {id:'scope-public',selector:'[data-kb-help="scope-public"]',text:'查看提交给成员审核的文档版本',side:'bottom',width:138},
  {id:'scope-drafts',selector:'[data-kb-help="scope-drafts"]',text:'尚未提交，仅自己可见的个人内容',side:'bottom',width:138},
- {id:'search',selector:'.kb-search',text:'按关键词查找文档',side:'top'},
+ {id:'search',selector:'.kb-search',text:'在当前范围内查找',side:'top'},
  {id:'new-entry',selector:'[data-kb-help="new-entry"]',text:'写一篇新草稿',side:'top'},
- {id:'view',selector:'.kb-view-switch',text:'切换简洁与完整操作',side:'bottom'},
+ {id:'view',selector:'.kb-view-switch, .kb-list-collaboration',text:'在普通视图和版本协作之间切换',side:'bottom'},
  {id:'share',selector:'.kb-detail-toolbar .share-link',text:'复制当前文档链接',side:'bottom'},
  {id:'branch',selector:'.kb-branch-box select',text:'切换当前查看的分支',side:'bottom'},
  {id:'back',selector:'.kb-mobile-back',text:'返回文档列表',side:'bottom'},
- {id:'category-add',selector:'.kb-category-add',text:'查找已有标签，或新建标签',side:'right'},
- {id:'category',selector:'.kb-categories button[aria-label^="标签："]',text:'点击筛选；右键或长按查看标签解释与留言',side:'bottom',width:190},
+ {id:'category',selector:'[data-kb-help="tags"]',text:'搜索标签，筛选文档或查看标签解释',side:'bottom',width:190},
  {id:'content',selector:'[data-kb-help="tab-content"]',text:'阅读当前文档正文',side:'bottom'},
  {id:'issues',selector:'[data-kb-help="tab-issues"], [data-kb-help="issues"]',text:'提出问题与修改建议',side:'bottom'},
  {id:'branches',selector:'[data-kb-help="tab-branches"]',text:'查看分支图、修改对比与合并情况',side:'bottom'},
@@ -28,7 +28,7 @@ const definitions:Definition[]=[
  {id:'edit',selector:'[data-kb-help="edit"]',text:'在分支中修改正文',side:'bottom'},
  {id:'remove',selector:'[data-kb-help="remove"]',text:'从当前分支移除这篇文档',side:'top'},
  {id:'submit',selector:'.kb-review-bar > button',match:/^提交到审核$/,text:'核对这篇草稿，再公开提交审核',side:'top'},
- {id:'approve',selector:'.kb-review-bar > button',match:/点赞/,text:'同意当前版本；三名正式成员同意且无冲突或并行候选时合入主分支',side:'top',width:250},
+ {id:'approve',selector:'.kb-review-bar > button, .kb-review-buttons > button',match:/^同意此版本$/,text:'认可这一版内容。七天内需要三名正式成员同意。',side:'top',width:250},
  {id:'review',selector:'.kb-review-progress button',text:'查看同意人数与尚未合入的原因',side:'top'},
  {id:'quote',selector:'.kb-article .kb-body .kb-text',text:'选中文字，可添加批注',side:'bottom',members:true},
  {id:'annotation',selector:'.kb-annotation',text:'点击对照原文；右键或长按可回复、发起议题',side:'right',width:215,members:true},
@@ -128,6 +128,7 @@ export function KnowledgeHelp({root,writable,close}:{root:RefObject<HTMLElement|
    const viewport=window.visualViewport,left=viewport?.offsetLeft??0,top=Math.max(workspace.getBoundingClientRect().top,viewport?.offsetTop??0);
    const bounds={x:left+8,y:top+8,width:(viewport?.width??innerWidth)-16,height:Math.max(1,(viewport?.offsetTop??0)+(viewport?.height??innerHeight)-top-16)};
    const targets:Target[]=[],used=new Set<HTMLElement>();
+   const scopeButtons=Array.from(workspace.querySelectorAll('.kb-library-views button'));
    for(const definition of definitions){
     if(definition.members&&!writable)continue;
     for(const element of workspace.querySelectorAll<HTMLElement>(definition.selector)){
@@ -135,8 +136,8 @@ export function KnowledgeHelp({root,writable,close}:{root:RefObject<HTMLElement|
      if(used.has(element)||definition.match&&!definition.match.test(element.textContent?.trim()??''))continue;
      const rect=visibleBox(element,bounds);if(!rect)continue;
      const pane=box((element.closest('.kb-category-drawer,.kb-list-pane,.kb-detail-pane')??workspace).getBoundingClientRect());
-     const text=definition.id==='category'?(writable?'点击筛选；右键或长按编辑标签与解释':'点击筛选；右键或长按查看标签解释'):definition.text;
-     const scopeIndex=['scope-main','scope-public','scope-drafts'].indexOf(definition.id);
+     const text=definition.text;
+     const scopeIndex=scopeButtons.indexOf(element);
      targets.push({...definition,text,element,rect,pane,label:element.getAttribute('aria-label')??element.textContent?.trim()??'',...(scopeIndex>=0?{scopeIndex}:{})});used.add(element);break;
     }
    }
@@ -165,7 +166,8 @@ export function KnowledgeHelp({root,writable,close}:{root:RefObject<HTMLElement|
  },[root,writable]);
  useLayoutEffect(()=>{
   const placed:Record<string,Placement>={},occupied:Box[]=[];
-  for(const target of scene.targets){
+  const ordered=[...scene.targets].sort((a,b)=>Number(b.scopeIndex!==undefined)-Number(a.scopeIndex!==undefined));
+  for(const target of ordered){
    const element=captions.current.get(target.id);if(!element)continue;
    const rect=element.getBoundingClientRect(),position=place(target,rect.width,rect.height,scene.bounds,occupied,scene.controls);
    placed[target.id]=position;occupied.push(position);

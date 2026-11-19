@@ -24,6 +24,16 @@
                                                                "sha256":  "068fc146eb26e26fc09eb8a96e9cf02f99d614db58c201eeefa34614b1563054",
                                                                "backwards_compatible":  true,
                                                                "reason":  "Adds single-document review provenance, automatic three-member promotion for new reviews, independent category definitions and annotation issue sources; preserves existing branches, comments and legacy merge behavior."
-                                                           }
+                                                           },
+                       "0007_tag_proposals.sql": {
+                           "sha256": "8c95d644a47414816723aa1db17de194de1271ceee56271dd5bcb860908d9b8f",
+                           "backwards_compatible": true,
+                           "reason": "Adds independent tag proposal ballots and retains existing tag IDs and document associations."
+                       },
+                       "0006_review_deadlines.sql": {
+                           "sha256": "9d627244974032b5e0894947847cadab41714f4ea0817bea352f18ce6ffcc9fa",
+                           "backwards_compatible": true,
+                           "reason": "Adds seven-day deadlines and gives existing open reviews a full voting period while preserving approvals and history."
+                       }
                    }
 }

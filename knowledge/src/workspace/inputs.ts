@@ -36,7 +36,7 @@ export const workspaceSchemas = {
     document_id: z.uuid().optional(),
     title: z.string().trim().min(1).max(200),
     body: z.string().min(1).max(60000),
-    category: z.string().trim().min(1).max(40),
+    category: z.string().trim().min(1).max(40).optional(),
     additional_tags: z.array(z.string().trim().min(1).max(40)).max(19).optional(),
     kind: z.string().trim().min(1).max(30).default('知识'),
     source: z.string().max(2000).default(''),

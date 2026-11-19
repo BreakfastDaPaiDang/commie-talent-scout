@@ -13,7 +13,7 @@ export const knowledgeToolNames=toolsFor(async()=>null).map(t=>t.name),knowledge
 export function registerKnowledgeTools(server:McpServer,env:Env,actor:Actor,reply:McpReply){
  const tools=toolsFor(async(method,args)=>{
   if(!env.CATALOG)throw new Failure(503,'KNOWLEDGE_UNAVAILABLE','知识服务暂不可用');const origin=catalogOrigin(env),path=reads[method]?.(args)??writes[method];if(!path)throw new Failure(400,'UNKNOWN_OPERATION','未知知识操作');
-  const write=!!writes[method],headers=new Headers(actor.catalog_headers);headers.set('Origin',origin);if(write)headers.set('Content-Type','application/json');
+  const write=!!writes[method],headers=new Headers(actor.catalog_headers);headers.set('Origin',origin);headers.set('X-Knowledge-MCP','1');if(write)headers.set('Content-Type','application/json');
   let response:Response;try{response=await env.CATALOG.fetch(new Request(origin+'/api/knowledge-workspace'+path,{method:write?'POST':'GET',headers,body:write?JSON.stringify(args[0]):undefined,redirect:'manual',signal:AbortSignal.timeout(30000)}));}catch{throw new Failure(503,'KNOWLEDGE_UNAVAILABLE','知识服务暂不可用，请先查询原请求结果');}
   const data=await response.json() as Record<string,any>;if(!response.ok)throw new Failure(response.status,String(data.error?.code??'KNOWLEDGE_UNAVAILABLE'),String(data.error?.message??'知识操作未完成'));return method==='receipt'?data.result:data;
  });

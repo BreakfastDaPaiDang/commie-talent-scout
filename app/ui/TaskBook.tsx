@@ -6,8 +6,18 @@ import './task-book.css';
 
 export type TaskStage = TaskProcessingState;
 export const taskStageLabels: Record<TaskStage,string> = {failed:'未完成关闭',cancelled:'已取消',ready:'待提交',active:'进行中',waiting:'待接取',closed:'已完成'};
-export function RelatedTasksFrame({history,onHistory,count,children}:{history:boolean;onHistory:(value:boolean)=>void;count?:number;children:ReactNode}){
- return <section className="related-tasks" aria-label={history?'已关闭关联任务':'关联任务'}><header><button className="text-button" onClick={()=>onHistory(!history)}>{history?'返回开启任务':'查看已关闭任务'}</button></header><div className="related-task-list">{children}</div></section>;
+export function RelatedTasksFrame({history=false,onHistory,hasHistory,empty,create,children}:{
+ history?:boolean;onHistory?:(value:boolean)=>void;hasHistory?:boolean;empty?:boolean;create?:{href:string}|{onClick:()=>void};children?:ReactNode;
+}){
+ const createLabel=empty?<><span className="related-task-create-mark" aria-hidden="true">＋</span>新建任务</>:'＋ 新建关联任务';
+ const createAction=create && ('href' in create
+  ? <a className="text-button" href={create.href}>{createLabel}</a>
+  : <button className="text-button" type="button" onClick={create.onClick}>{createLabel}</button>);
+ return <section className={empty ? 'related-tasks is-empty' : 'related-tasks'} aria-label={history?'已关闭关联任务':'关联任务'}>
+  {empty && <div className="related-tasks-empty"><span>关联任务 0</span>{createAction}</div>}
+  {onHistory && (history || hasHistory) && <header><button className="text-button" type="button" onClick={()=>onHistory(!history)}>{history?'返回开启任务':'查看已关闭任务'}</button></header>}
+  <div className="related-task-list">{!empty && createAction}{children}</div>
+ </section>;
 }
 export function DetailActions({children,className=''}:{children:ReactNode;className?:string}){return <div className={'task-scene-actions '+className}>{children}</div>;}
 export function ObservationReferenceOption({id,author,time,preview,checked,onChange}:{id:string;author:string;time:string;preview:string;checked:boolean;onChange:()=>void}){

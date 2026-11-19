@@ -6,6 +6,7 @@ import type { Archive } from "../../shared/archives";
 export type Kind = 'person' | 'org';
 export type ArchiveWithTasks = Archive & {
   open_task_count?: number;
+  has_closed_tasks?: boolean;
 };
 export type Preference = {
   query: string;

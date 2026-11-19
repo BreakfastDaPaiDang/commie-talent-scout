@@ -43,7 +43,7 @@ export async function verifyKnowledgeAnnotations(page,out){
  await page.locator('.kb-quote').first().click();await activeSource(page,quote);
  await page.locator('.kb-article-title').click();await activeSource(page,'');
  await item().focus();await page.keyboard.press('Enter');await activeSource(page,quote);
- await page.getByRole('button',{name:'繁',exact:true}).focus();await activeSource(page,'');
+ await page.getByRole('button',{name:'版本协作',exact:true}).focus();await activeSource(page,'');
  await selectKnowledgeText(page,quote);await activeSource(page,quote);
  await page.locator('.kb-detail-scroll').evaluate(el=>el.scrollTop+=5);await activeSource(page,quote);
  await page.keyboard.press('Escape');await activeSource(page,'');
@@ -59,8 +59,8 @@ export async function verifyKnowledgeAnnotations(page,out){
  await page.locator('.kb-article-title').click();await activeSource(page,'');
  await page.reload();await item().waitFor();await activeSource(page,'');
  await item().click();await activeSource(page,quote);
- await page.getByRole('button',{name:'繁',exact:true}).click();await item().click();await activeSource(page,quote);
- await page.getByRole('button',{name:'简',exact:true}).click();
+ await page.getByRole('button',{name:'版本协作',exact:true}).click();await item().click();await activeSource(page,quote);
+ await page.getByRole('button',{name:'返回普通视图',exact:true}).click();
 
  // The same compact editor and selected-source behavior at phone width and at night.
  await page.setViewportSize({width:390,height:844});

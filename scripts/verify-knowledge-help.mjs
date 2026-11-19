@@ -5,8 +5,7 @@ const tutorial=page=>page.getByRole('dialog',{name:'知识库按钮说明',exact
 const caption=(page,id)=>page.locator('.kb-help-caption[data-help-id="'+id+'"]');
 const definitions={
  'scope-main':'已形成共识，当前采用的正式内容',
- 'scope-public':'已经提交，供成员讨论和审核的候选内容',
- 'scope-drafts':'尚未提交，仅自己可见的个人内容',
+ 'scope-todo':'查看需要认可的候选内容与自己的草稿',
 };
 async function fitted(page){
  await page.waitForFunction(()=>[...document.querySelectorAll('.kb-help-caption')].some(e=>getComputedStyle(e).visibility==='visible'));
@@ -31,7 +30,7 @@ export async function verifyKnowledgeHelp(page,out,documentUrl){
  try{
   await page.goto(documentUrl);await page.locator('.kb-article-title').waitFor();const before=page.url();
   assert.equal(await tutorial(page).count(),0);assert.equal(await trigger(page).count(),1);
-  const original=await page.locator('.kb-categories').boundingBox();
+  const original=await page.locator('.kb-list-filters').boundingBox();
   await trigger(page).click();await tutorial(page).waitFor();await fitted(page);
   assert.equal(await page.evaluate(()=>document.activeElement?.getAttribute('aria-label')),'关闭按钮说明');
   for(const [id,text] of Object.entries(definitions)){assert.ok((await caption(page,id).innerText()).includes(text));await aligned(page,id,'[data-kb-help="'+id+'"]');}
@@ -50,18 +49,21 @@ export async function verifyKnowledgeHelp(page,out,documentUrl){
   const scroll=await page.locator('.kb-detail-scroll').evaluate(el=>el.scrollTop);
   await close(page);assert.equal(page.url(),before);assert.equal(await page.locator('.kb-detail-scroll').evaluate(el=>el.scrollTop),scroll);
   assert.equal(await page.evaluate(()=>document.activeElement?.getAttribute('aria-label')),'知识库教程');
-  assert.deepEqual(await page.locator('.kb-categories').boundingBox(),original,'closing restores the original layout');
+  assert.deepEqual(await page.locator('.kb-list-filters').boundingBox(),original,'closing restores the original layout');
   await page.setViewportSize({width:1440,height:1080});await page.goto(documentUrl);await page.locator('.kb-article-title').waitFor();await trigger(page).click();
   await page.getByRole('button',{name:'＋ 新文档',exact:true}).click();await tutorial(page).waitFor({state:'detached'});
   assert.equal(await page.getByRole('dialog',{name:'新文档',exact:true}).count(),0,'dismissal click must not trigger the underlying action');
   await page.getByRole('button',{name:'＋ 新文档',exact:true}).click();await page.getByRole('dialog',{name:'新文档',exact:true}).waitFor();await page.keyboard.press('Escape');
   await trigger(page).click();await page.mouse.click(900,1040);await tutorial(page).waitFor({state:'detached'});
-  await page.getByRole('button',{name:'标签：知性',exact:true}).click({button:'right'});
+  await page.getByRole('button',{name:'标签筛选',exact:true}).click();
+  const tags=page.getByRole('dialog',{name:'标签筛选',exact:true});
+  await tags.getByLabel('查找已有词义').fill('知性');
+  await tags.locator('.tag-choice-list article').filter({hasText:'知性'}).getByRole('button',{name:'查看与维护'}).click();
   const category=page.getByRole('dialog',{name:'知性标签定义与留言',exact:true});await category.waitFor();
   await trigger(page).click();await caption(page,'category-edit').waitFor();await caption(page,'category-comment').waitFor();await fitted(page);
   await aligned(page,'category-close','.kb-category-drawer [aria-label="关闭标签侧栏"]');await page.screenshot({path:out+'/tutorial-category.png',fullPage:true});
   await close(page);assert.equal(await category.isVisible(),true,'help preserves the open category sidebar');await page.keyboard.press('Escape');await category.waitFor({state:'detached'});
-  await page.getByRole('button',{name:'繁',exact:true}).click();
+  await page.getByRole('button',{name:'版本协作',exact:true}).click();
   for(const [tab,id] of [['分支','new-branch'],['议题','new-issue'],['历史','history-row']]){
    await page.locator('.kb-content-tabs').getByRole('button',{name:tab,exact:true}).click();
    if(tab==='历史')await page.locator('.kb-history-row').first().waitFor();
@@ -81,7 +83,7 @@ export async function verifyKnowledgeHelp(page,out,documentUrl){
    if(width===390)await page.screenshot({path:out+'/tutorial-mobile-entry.png',fullPage:true});
    await trigger(page).click();await fitted(page);
    for(const [id,text] of Object.entries(definitions)){assert.ok((await caption(page,id).innerText()).includes(text));await aligned(page,id,'[data-kb-help="'+id+'"]');}
-   assert.equal(await caption(page,'view').count(),0);assert.equal(await caption(page,'quote').count(),0);
+   await aligned(page,'view','.kb-list-collaboration');assert.equal(await caption(page,'quote').count(),0);
    await page.screenshot({path:out+'/tutorial-mobile-'+width+'.png',fullPage:true});
    await tutorial(page).getByRole('button',{name:'关闭按钮说明',exact:true}).click();await tutorial(page).waitFor({state:'detached'});
    assert.equal(await page.evaluate(()=>document.activeElement?.getAttribute('aria-label')),'知识库教程');
@@ -95,6 +97,6 @@ export async function verifyKnowledgeHelp(page,out,documentUrl){
 export async function verifyReadOnlyKnowledgeHelp(page){
  await trigger(page).click();await fitted(page);
  assert.ok((await caption(page,'scope-main').innerText()).includes(definitions['scope-main']));
- for(const id of ['scope-public','scope-drafts','new-entry','category-add','approve','edit'])assert.equal(await caption(page,id).count(),0);
+ for(const id of ['scope-todo','scope-public','scope-drafts','new-entry','approve','edit'])assert.equal(await caption(page,id).count(),0);
  await tutorial(page).getByRole('button',{name:'关闭按钮说明',exact:true}).click();await tutorial(page).waitFor({state:'detached'});
 }

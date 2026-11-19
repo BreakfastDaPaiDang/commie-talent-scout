@@ -10,7 +10,7 @@ import {KnowledgeWorkspace} from './workspace.ts';
 import {workspaceGuide,workspaceTools} from './workspace-tools.ts';
 export const guide=[...workspaceGuide,...catalogGuide];
 export async function handleMcp(request:Request,env:Env,ctx:ExecutionContext,actor:CatalogActor){
- const server=new McpServer({name:'commie-knowledge',version:'0.3.0'},{instructions:guide.join('\n')});
+ const server=new McpServer({name:'commie-knowledge',version:'0.4.0'},{instructions:guide.join('\n')});
  function register(name:string,description:string,schema:z.ZodType,run:(args:any)=>Promise<unknown>,write=false){
   server.registerTool(name,{description,inputSchema:schema,annotations:{readOnlyHint:!write,destructiveHint:name==='knowledge_delete_branch',idempotentHint:true,openWorldHint:false}},async(args:unknown)=>{
    try{const data=await run(args);return {content:[{type:'text' as const,text:JSON.stringify(data)}],structuredContent:data as Record<string,unknown>};}
@@ -18,7 +18,7 @@ export async function handleMcp(request:Request,env:Env,ctx:ExecutionContext,act
   });
  }
  register('catalog_guide','读取生产资源库范围、权限与操作指南',z.object({}).strict(),async()=>({rules:guide}));
- for(const tool of workspaceTools(new KnowledgeWorkspace(env.KNOWLEDGE_DB,actor)))register(tool.name,tool.description,tool.schema,tool.run,tool.write);
+ for(const tool of workspaceTools(new KnowledgeWorkspace(env.KNOWLEDGE_DB,actor,undefined,false)))register(tool.name,tool.description,tool.schema,tool.run,tool.write);
  for(const t of catalogTools)register(t.name,t.description,t.schema,async args=>{
   const headers=new Headers(request.headers);headers.set('Origin',env.APP_ORIGIN);headers.delete('Content-Length');headers.set('Content-Type','application/json');
   const response=await catalogApp.fetch(new Request(env.APP_ORIGIN+t.path(args),{method:t.write?'POST':'GET',headers,body:t.write?JSON.stringify(args):undefined}),env,ctx),data=await response.json() as Record<string,any>;

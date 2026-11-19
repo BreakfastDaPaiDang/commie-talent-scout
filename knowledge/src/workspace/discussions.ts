@@ -5,7 +5,7 @@ import { runCommand } from './command.ts';
 import { getDocument, getBranch } from './records.ts';
 import { isCategoryPublic, getCategory } from './categories.ts';
 import { getIssue } from './issue-queries.ts';
-import { qualifiedMerges } from './review-queries.ts';
+import { getMergeRequest, qualifiedAlternatives } from './review-queries.ts';
 import { workspaceSchemas } from './inputs.ts';
 export async function createIssue(context: ServiceContext, input: unknown) {
   const a = workspaceSchemas.issue.parse(input);
@@ -65,7 +65,8 @@ export async function setIssueState(context: ServiceContext, input: unknown) {
     }[] = null;
     if (a.selected_merge_id) {
       if (a.state !== 'closed') throw new KnowledgeError(400, 'CHOICE_REQUIRES_CONCLUSION', '请选择已形成结论的议题');
-      const qualified = await qualifiedMerges(context);
+      const selected = await getMergeRequest(context, a.selected_merge_id, at);
+      const qualified = await qualifiedAlternatives(context, selected, at);
       if (!qualified.some(m => m.id === a.selected_merge_id)) throw new KnowledgeError(409, 'CANDIDATE_NOT_QUALIFIED', '该候选尚未获得三名正式成员同意');
       candidates = qualified.map(m => ({
         id: m.id,

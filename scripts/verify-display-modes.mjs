@@ -58,7 +58,7 @@ export async function verifyDisplayModes({browser,page,context,base,taskId,archi
   assert.ok((await edit.boundingBox()).width>=44);assert.equal(await edit.locator('svg').evaluate(el=>el.getBoundingClientRect().width),30);
   const task=page.locator('.related-tasks .compact').filter({hasText:'安排首次项目交流'});await task.waitFor();
   assert.equal(await task.getByRole('img',{name:'进行中',exact:true}).count(),1);assert.equal(await task.getByText('进行中',{exact:true}).count(),0);
-  assert.equal(await page.locator('.related-tasks header').innerText(),'查看已关闭任务');
+  assert.equal(await page.locator('.related-tasks').getByRole('button',{name:'查看已关闭任务'}).count(),0);
   await task.click();await page.getByRole('dialog').waitFor();assert.equal(await page.getByRole('dialog').evaluate(el=>el.scrollWidth>el.clientWidth+1),false);await page.keyboard.press('Escape');
   await page.locator('.entity-heading h1').click();await page.locator('.detail-scroll').evaluate(el=>el.scrollTop=0);
   geometry[width+'-'+mode]=await page.locator('.detail-top,.entity-heading h1,.archive-edit-entry,.detail-panel').evaluateAll(els=>els.map(el=>{const r=el.getBoundingClientRect();return [r.x,r.y,r.width,r.height];}));

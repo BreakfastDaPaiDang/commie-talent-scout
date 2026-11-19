@@ -6,35 +6,105 @@ export function knowledgeDemo():KnowledgeApi{
  for(const c of categories)c.definition_version_id=crypto.randomUUID();
  const titles=['审核应该了解什么','验证目标的理论能力','从实际作品展开追问','已知信息不必重复询问','资料整理需要校对协作'],kinds=['共识','方法','方法','共识','需求'];
  const initial=titles.map((title,i)=>({id:crypto.randomUUID(),document_id:crypto.randomUUID(),title,body:i===0?'从参与意愿、能力与投入、协作与支持三个方面，梳理审核需要重点了解的内容。\n\n## 参与意愿\n了解对方加入的动机与期望，确认其对组织定位与现状有基本认识。\n\n## 能力与投入\n结合过往经历或作品判断实际水平。了解可以投入的时间与精力。\n\n## 协作与支持\n了解沟通方式与协作习惯，以及所需的资源、工具和指导。':['','通过提问、举例与小任务，了解理解深度。','围绕作品、经历与具体情境展开交流。','先整理已有材料，明确仍需了解的问题。','参与条件与联系入口见正文。'][i],category_id:categories[i===4?1:0].id,category_name:categories[i===4?1:0].name,kind:kinds[i],source:'',deleted:0,author_id:actor.id,author_name:actor.name,created_at:at}));
- const documents=new Map<string,any[]>([['main',initial]]),bases=new Map<string,any[]>(),comments:any[]=[],merges:any[]=[],issues:any[]=[],commits:any[]=[{id:main.head_id,branch_id:'main',parent_id:null,merge_parent_id:null,message:'示例共识',author_id:actor.id,author_name:actor.name,created_at:at}],changes=new Map<string,any[]>(),sources=new Set<string>();
+ const documents=new Map<string,any[]>([['main',initial]]),bases=new Map<string,any[]>(),comments:any[]=[],merges:any[]=[],issues:any[]=[],commits:any[]=[{id:main.head_id,branch_id:'main',parent_id:null,merge_parent_id:null,message:'示例共识',author_id:actor.id,author_name:actor.name,created_at:at}],changes=new Map<string,any[]>();
+ const tagProposals:any[]=[];
  const hasTag=(doc:KnowledgeVersion,id:string|null)=>doc.category_id===id || !!doc.tags?.some(tag=>tag.id===id);
  const version=()=>crypto.randomUUID(),date=()=>new Date().toISOString(),visible=(branch:string)=>documents.get(branch)??[],cats=(branch:string)=>categories.map(c=>({...c,count:visible(branch).filter(d=>!d.deleted&&hasTag(d,c.id)).length})).filter(c=>c.independent||c.count>0);
  function commit(branch:any,message:string,before:any,after:any){const id=version();commits.unshift({id,branch_id:branch.id,parent_id:branch.head_id,merge_parent_id:null,message,author_id:actor.id,author_name:actor.name,created_at:date()});changes.set(id,[{document_id:after.document_id,before,after}]);branch.head_id=id;branch.version++;return id;}
+ const expires=()=>new Date(Date.now()+7*86400000).toISOString();
+ const diff=(branch:string)=>branch==='main'?[]:visible(branch).filter(doc=>{
+  const base=bases.get(branch)?.find(v=>v.document_id===doc.document_id);
+  return base?.id!==doc.id&&(!doc.deleted||!!base&&!base.deleted);
+ }).map(proposed=>({document_id:proposed.document_id,base:bases.get(branch)?.find(v=>v.document_id===proposed.document_id)??null,current:visible('main').find(v=>v.document_id===proposed.document_id)??null,proposed,conflict:false}));
+ function reviewState(merge:any) {
+  const current_head_id=branches.find(branch=>branch.id===merge.branch_id)?.head_id;
+  const voting_closed=merge.state==='open'&&merge.expires_at<=date();
+  const changes=merge.state==='open'&&merge.head_id===current_head_id?diff(merge.branch_id).map(({proposed})=>({
+   document_id:proposed.document_id,title:proposed.title,deleted:!!proposed.deleted,
+   tags:(proposed.tags??[]).map((tag:{id:string;name:string})=>({id:tag.id,name:tag.name,pending:categories.find(c=>c.id===tag.id)?.pending??0})),
+  })):[];
+  return {...merge,current_head_id,voting_closed,expired:voting_closed&&merge.approval_count<3,changes};
+ }
+ const active=(merge:any)=>merge.state==='open'&&merge.head_id===merge.current_head_id&&!merge.expired;
+ const reviewed=(source:string)=>merges.some(row=>row.source_key===source&&(row.state==='merged'||active(reviewState(row))));
+ function makeReview(branch:any,title:string,reason:string) {
+  const at=date();
+  return {id:version(),branch_id:branch.id,branch_name:branch.name,head_id:branch.head_id,title,reason,state:'open',
+   approval_count:0,approved_by_me:0,author_id:actor.id,author_name:actor.name,version:1,created_at:at,updated_at:at,expires_at:expires()};
+ }
  return {async read<T=any>(path:string):Promise<T>{const url=new URL(path,'https://preview.invalid'),q=url.searchParams,b=q.get('branch_id')??'main';let result:any;
   if(url.pathname==='/branches')result={branches:branches.filter(b=>b.state!=='closed'),identity:actor};
-  else if(url.pathname==='/documents'){const scope=q.get('scope'),selected=scope==='drafts'?branches.filter(x=>x.visibility==='private'&&x.state==='open'):scope==='public'?branches.filter(x=>merges.some(m=>m.branch_id===x.id&&m.state==='open'&&m.head_id===x.head_id)):branches.filter(x=>x.id===(scope==='main'?'main':b));const all=selected.flatMap(x=>visible(x.id).filter(d=>!d.deleted&&(!['drafts','public'].includes(scope??'')||!bases.get(x.id)?.some(v=>v.id===d.id))&&(scope!=='drafts'||!sources.has(x.id+':'+d.id))).map(d=>({...d,branch_id:x.id}))),rows=all.filter(d=>(!q.get('category_id')||hasTag(d,q.get('category_id')))&&(d.title+d.body).includes(q.get('search')??''));result={branch:branches.find(x=>x.id===b),documents:rows,categories:categories.map(c=>({...c,count:all.filter(d=>hasTag(d,c.id)).length})).filter(c=>c.independent||c.count),next_offset:null};}
+  else if(url.pathname==='/documents'){const scope=q.get('scope'),selected=scope==='drafts'?branches.filter(x=>x.visibility==='private'&&x.state==='open'):scope==='public'?branches.filter(x=>merges.some(row=>{const review=reviewState(row);return review.branch_id===x.id&&active(review)&&review.changes.length===1;})):branches.filter(x=>x.id===(scope==='main'?'main':b));const all=selected.flatMap(x=>visible(x.id).filter(d=>!d.deleted&&(!['drafts','public'].includes(scope??'')||!bases.get(x.id)?.some(v=>v.id===d.id))&&(scope!=='drafts'||!reviewed(x.id+':'+d.id))).map(d=>({...d,branch_id:x.id}))),rows=all.filter(d=>(!q.get('category_id')||hasTag(d,q.get('category_id')))&&(d.title+d.body).includes(q.get('search')??''));result={branch:branches.find(x=>x.id===b),documents:rows,categories:categories.map(c=>({...c,count:all.filter(d=>hasTag(d,c.id)).length})).filter(c=>c.independent||c.count),next_offset:null};}
   else if(url.pathname.startsWith('/documents/'))result={document:visible(b).find(d=>d.document_id===url.pathname.split('/').pop())};
+  else if(url.pathname==='/tag-proposals')result={proposals:tagProposals.filter(p=>!p.adopted&&p.expires_at>date())};
   else if(url.pathname==='/categories')result={categories:cats(b)};
   else if(url.pathname==='/comments')result={comments:comments.filter(c=>['document_id','category_id','issue_id'].every(k=>!q.get(k)||c[k]===q.get(k))&&(!q.get('branch_id')||c.branch_id===b)),next_offset:null};
-  else if(url.pathname==='/merges')result={merges:merges.filter(m=>branches.find(b=>b.id===m.branch_id)?.state!=='closed').map(m=>({...m,current_head_id:branches.find(b=>b.id===m.branch_id)?.head_id}))};
+  else if(url.pathname==='/merges')result={merges:merges.filter(m=>branches.find(b=>b.id===m.branch_id)?.state!=='closed').map(reviewState).sort((a,b)=>b.updated_at.localeCompare(a.updated_at))};
   else if(url.pathname==='/issues')result={issues,next_offset:null};
   else if(url.pathname.startsWith('/issues/'))result={issue:issues.find(i=>i.id===url.pathname.split('/').pop())};
   else if(url.pathname.startsWith('/history/'))result={commit:commits.find(c=>c.id===url.pathname.split('/').pop()),changes:changes.get(url.pathname.split('/').pop()!)??[]};
   else if(url.pathname==='/history')result={commits:commits.filter(c=>c.branch_id===b||c.branch_id==='main'),next_offset:null};
-  else if(url.pathname==='/diff')result={branch:branches.find(x=>x.id===b),main,changes:b==='main'?[]:visible(b).filter(d=>!bases.get(b)?.some(v=>v.id===d.id)).map(d=>({document_id:d.document_id,base:bases.get(b)?.find(v=>v.document_id===d.document_id)??null,current:visible('main').find(v=>v.document_id===d.document_id)??null,proposed:d,conflict:false}))};
+  else if(url.pathname==='/diff')result={branch:branches.find(x=>x.id===b),main,changes:diff(b)};
   else result={result:null};return structuredClone(result) as T;
  },async write<T=any>(path:string,input:Record<string,unknown>):Promise<T>{const a:any=input,b=branches.find(b=>b.id===a.branch_id);let result:any={};
   if(path==='/branches'){const created={...main,id:version(),name:a.name,visibility:a.visibility??'members',base_head_id:main.head_id,version:1,updated_at:date()};branches.push(created);documents.set(created.id,structuredClone(visible('main')));bases.set(created.id,structuredClone(visible('main')));result={id:created.id,version:1};}
-  else if(path==='/branches/delete'){if(!b||b.id==='main'||b.owner_id!==actor.id)throw new Error('不能删除这个分支');if(b.version!==a.expected_version)throw new Error('分支已变化，请刷新后核对');b.state='closed';b.version++;for(const m of merges)if(m.branch_id===b.id&&m.state==='open'){m.state='closed';if(m.source_key)sources.delete(m.source_key);}result={id:b.id,version:b.version,deleted:true};}
-  else if(path==='/documents'){if(a.branch_id==='main')throw new Error('请在分支中修改');let category=categories.find(c=>c.name===a.category);if(!category){category={id:version(),name:a.category,definition:'',version:1,updated_at:date()};categories.push(category);}const rows=visible(a.branch_id),old=rows.find(d=>d.document_id===a.document_id),doc={...a,id:version(),document_id:a.document_id??version(),category_id:category.id,category_name:category.name,tags:[category,...(a.additional_tags??[]).map((name:string)=>categories.find(c=>c.name===name)).filter(Boolean)].map(c=>({id:c.id,name:c.name})),deleted:0,author_id:actor.id,author_name:actor.name,created_at:date()};documents.set(a.branch_id,[...rows.filter(d=>d.document_id!==doc.document_id),doc]);const id=commit(b,a.message,old,doc);result={id:doc.document_id,version:b.version,commit_id:id};}
+  else if(path==='/branches/delete'){if(!b||b.id==='main'||b.owner_id!==actor.id)throw new Error('不能删除这个分支');if(b.version!==a.expected_version)throw new Error('分支已变化，请刷新后核对');b.state='closed';b.version++;for(const m of merges)if(m.branch_id===b.id&&m.state==='open'){m.state='closed';}result={id:b.id,version:b.version,deleted:true};}
+  else if(path==='/documents'){if(a.branch_id==='main')throw new Error('请在分支中修改');let category=categories.find(c=>c.name===a.category);if(!category){category={id:version(),name:a.category,definition:'',version:1,updated_at:date()};categories.push(category);}const rows=visible(a.branch_id),old=rows.find(d=>d.document_id===a.document_id),doc={...a,id:version(),document_id:a.document_id??version(),category_id:category.id,category_name:category.name,tags:[category,...(a.additional_tags??[]).map((name:string)=>categories.find(c=>c.name===name)).filter(Boolean)].map(c=>({id:c.id,name:c.name,pending:c.pending})),deleted:0,author_id:actor.id,author_name:actor.name,created_at:date()};documents.set(a.branch_id,[...rows.filter(d=>d.document_id!==doc.document_id),doc]);const id=commit(b,a.message,old,doc);result={id:doc.document_id,version:b.version,commit_id:id};}
   else if(path==='/comments'){const parent=comments.find(c=>c.id===a.parent_id),doc=a.category_id?{body:categories.find(c=>c.id===a.category_id)?.definition}:visible(a.branch_id).find(d=>d.document_id===a.document_id),row={id:version(),branch_id:a.branch_id??null,document_id:null,category_id:null,issue_id:null,parent_id:null,quote:null,start_offset:null,end_offset:null,version_id:null,prefix:null,suffix:null,...(parent?{quote:parent.quote,version_id:parent.version_id,start_offset:parent.start_offset,end_offset:parent.end_offset,prefix:parent.prefix,suffix:parent.suffix}:{}),...a,author_id:actor.id,author_name:actor.name,created_at:date()};if(a.quote){row.prefix=doc.body.slice(Math.max(0,a.start_offset-40),a.start_offset);row.suffix=doc.body.slice(a.end_offset,a.end_offset+40);}comments.push(row);result={id:row.id};}
-  else if(path==='/categories'||path==='/categories/definition'){let c=categories.find(c=>c.id===a.id);if(!c){c={id:version(),name:a.name,version:0,independent:1};categories.push(c);}Object.assign(c,{name:a.name??c.name,definition:a.definition,definition_version_id:version(),version:c.version+1,updated_at:date()});for(const rows of documents.values())for(const d of rows){if(d.category_id===c.id)d.category_name=c.name;for(const tag of d.tags??[])if(tag.id===c.id)tag.name=c.name;};result={id:c.id,version:c.version,definition_version_id:c.definition_version_id};}
-  else if(path==='/reviews'){const doc=visible(a.branch_id).find(d=>d.document_id===a.document_id),created={...main,id:version(),name:doc.title+' · '+version().slice(0,6),visibility:'members',version:1};branches.push(created);bases.set(created.id,structuredClone(visible('main')));documents.set(created.id,[...structuredClone(visible('main')).filter(d=>d.document_id!==doc.document_id),doc]);commit(created,a.reason||'提交审核',visible('main').find(d=>d.document_id===doc.document_id),doc);const m={id:version(),branch_id:created.id,branch_name:created.name,head_id:created.head_id,title:doc.title,reason:a.reason||'提交审核',state:'open',approval_count:0,approved_by_me:0,auto_promote:1,source_key:a.branch_id+':'+doc.id};merges.push(m);sources.add(a.branch_id+':'+doc.id);result={id:m.id,branch_id:created.id,document_id:doc.document_id};}
+  else if(path==='/categories'||path==='/categories/definition'){
+    let c=categories.find(c=>c.id===a.id);
+    if(!c){c={id:version(),name:a.name,definition:a.definition,version:1,pending:1,independent:1,updated_at:date()};categories.push(c);}
+    const p={id:version(),category_id:c.id,name:a.name??c.name,definition:a.definition,current_name:c.name,current_definition:c.definition,pending:c.pending??0,author_name:actor.name,expires_at:new Date(Date.now()+7*86400000).toISOString(),approval_count:0,approved_by_me:0};
+    tagProposals.push(p);result={id:c.id,version:c.version,pending:c.pending,proposal_id:p.id,expires_at:p.expires_at};
+  }
+  else if(path==='/tag-proposals/approve'){
+    const p=tagProposals.find(t=>t.id===a.id);
+    if(!p||p.expires_at<=date())throw new Error('本轮标签认可已结束');
+    if(!p.approved_by_me){p.approval_count++;p.approved_by_me=1;}
+    result={id:p.id,approval_count:p.approval_count,approved_by_me:1};
+  }
+  else if(path==='/reviews'){
+   const doc=visible(a.branch_id).find(d=>d.document_id===a.document_id);
+   if(!b||b.version!==a.expected_version||!doc||doc.id!==a.version_id)throw new Error('草稿内容已变化，请重新核对');
+   const source_key=b.id+':'+doc.id;
+   const existing=merges.find(row=>row.source_key===source_key&&(row.state==='merged'||active(reviewState(row))));
+   if(existing) result={id:existing.id,branch_id:existing.branch_id,head_id:existing.head_id,document_id:doc.document_id,expires_at:existing.expires_at};
+   else {
+    const created={...main,id:version(),name:doc.title+' · '+version().slice(0,6),visibility:'members',version:1};
+    branches.push(created);
+    bases.set(created.id,structuredClone(visible('main')));
+    documents.set(created.id,[...structuredClone(visible('main')).filter(d=>d.document_id!==doc.document_id),doc]);
+    commit(created,a.reason||'提交审核',visible('main').find(d=>d.document_id===doc.document_id),doc);
+    const m={...makeReview(created,doc.title,a.reason||'提交审核'),auto_promote:1,source_key};
+    merges.push(m);
+    result={id:m.id,branch_id:m.branch_id,head_id:m.head_id,document_id:doc.document_id,expires_at:m.expires_at};
+   }
+  }
   else if(path==='/issues/from-comment'){const c=comments.find(c=>c.id===a.comment_id),cat=categories.find(x=>x.id===c.category_id),doc=visible(c.branch_id).find(d=>d.document_id===c.document_id),row={...a,id:version(),number:issues.length+1,state:'open',author_id:actor.id,author_name:actor.name,version:1,source_json:JSON.stringify({kind:cat?'category':'document',title:cat?.name??doc?.title,quote:c.quote,comment:c.body,author_name:c.author_name})};issues.unshift(row);result={id:row.id};}
   else if(path==='/issues'){const row={...a,id:version(),number:issues.length+1,state:'open',author_id:actor.id,author_name:actor.name,version:1,resolution:'',created_at:date(),updated_at:date()};issues.unshift(row);result={id:row.id};}
   else if(path==='/issues/state'){Object.assign(issues.find(i=>i.id===a.id),a);result={id:a.id};}
-  else if(path==='/merges'){const row={...a,id:version(),branch_name:b.name,head_id:b.head_id,current_head_id:b.head_id,state:'open',approval_count:0,approved_by_me:0,author_id:actor.id,author_name:actor.name,version:1,created_at:date(),updated_at:date()};merges.push(row);result={id:row.id};}
-  else if(path==='/merges/approve'){const m=merges.find(m=>m.id===a.id);if(!m.approved_by_me){m.approval_count++;m.approved_by_me=1;}result={id:m.id};}
+  else if(path==='/merges'){
+   if(!b||b.visibility!=='members'||b.version!==a.expected_version)throw new Error('分支已变化，请重新核对');
+   if(diff(b.id).length!==1)throw new Error('审核须按文档分别提交');
+   const old=merges.find(row=>row.branch_id===b.id&&row.state==='open');
+   let m=old;
+   if(!m||reviewState(m).expired&&m.head_id===b.head_id){
+    if(m)m.state='closed';
+    m=makeReview(b,a.title,a.reason);
+    merges.push(m);
+   }else{
+    const newHead=m.head_id!==b.head_id;
+    Object.assign(m,{head_id:b.head_id,title:a.title,reason:a.reason,updated_at:date(),version:m.version+1});
+    if(newHead)Object.assign(m,{approval_count:0,approved_by_me:0,expires_at:expires()});
+   }
+   result={id:m.id,head_id:m.head_id,expires_at:m.expires_at};
+  }
+  else if(path==='/merges/approve'){
+   const m=merges.find(row=>row.id===a.id),state=m&&reviewState(m);
+   if(!state||!active(state)||state.head_id!==a.head_id||state.voting_closed)throw new Error('审核已更新或投票已截止');
+   if(!m.approved_by_me){m.approval_count++;m.approved_by_me=1;}
+   result={id:m.id,approval_count:m.approval_count,merged:false};
+  }
   else if(path==='/documents/remove'){const rows=visible(a.branch_id),old=rows.find(d=>d.document_id===a.document_id),doc={...old,id:version(),deleted:1};documents.set(b.id,rows.map(d=>d.document_id===doc.document_id?doc:d));commit(b,a.message,old,doc);}
   else throw new Error('此操作请在连接真实接口的验收环境中验证');return structuredClone(result) as T;
  }};

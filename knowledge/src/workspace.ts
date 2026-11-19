@@ -4,6 +4,7 @@ import type { KnowledgeBranch, KnowledgeMerge, KnowledgeDiff } from '../../app/s
 import * as records from './workspace/records.ts';
 import * as command from './workspace/command.ts';
 import * as branches from './workspace/branches.ts';
+import * as ballots from './workspace/tag-ballots.ts';
 import * as categories from './workspace/categories.ts';
 import * as documents from './workspace/documents.ts';
 import * as review_queries from './workspace/review-queries.ts';
@@ -15,8 +16,8 @@ import { createWorkspaceContext, type ServiceContext } from './workspace/context
 export { workspaceSchemas } from './workspace/inputs.ts';
 export class KnowledgeWorkspace {
   private readonly context: ServiceContext;
-  constructor(readonly db: D1Database, readonly actor: CatalogActor, readonly clock: () => string = now) {
-    this.context = createWorkspaceContext(db, actor, clock);
+  constructor(readonly db: D1Database, readonly actor: CatalogActor, readonly clock: () => string = now, showPendingTags = true) {
+    this.context = createWorkspaceContext(db, actor, clock, showPendingTags);
   }
   stmt(sql: string, ...args: unknown[]) {
     return this.context.stmt(sql, ...args);
@@ -36,8 +37,8 @@ export class KnowledgeWorkspace {
   editable(b: KnowledgeBranch, version: number) {
     return records.assertEditable(this.context, b, version);
   }
-  receipt(id: string, fingerprint?: string) {
-    return command.findReceipt(this.context, id, fingerprint);
+  receipt(id: string) {
+    return command.readReceipt(this.context, id);
   }
   command(input: {
     request_id: string;
@@ -59,6 +60,8 @@ export class KnowledgeWorkspace {
   deleteBranch(input: unknown) {
     return branches.deleteBranch(this.context, input);
   }
+  tagProposals() { return ballots.listTagProposals(this.context); }
+  approveTag(input: unknown) { return ballots.approveTag(this.context,input); }
   categories(branchId = 'main') {
     return categories.listCategories(this.context, branchId);
   }
@@ -95,11 +98,13 @@ export class KnowledgeWorkspace {
   }, at: string) {
     return categories.prepareCategoryChanges(this.context, a, at);
   }
-  editCategory(input: unknown) {
-    return categories.editCategory(this.context, input);
+  async editCategory(input: unknown) {
+    const result = await categories.editCategory(this.context, input);
+    return this.context.showPendingTags ? result : {submitted:true};
   }
-  defineCategory(input: unknown) {
-    return categories.defineCategory(this.context, input);
+  async defineCategory(input: unknown) {
+    const result = await categories.defineCategory(this.context, input);
+    return this.context.showPendingTags ? result : {submitted:true};
   }
   diff(branchId: string) {
     return documents.branchDiff(this.context, branchId);

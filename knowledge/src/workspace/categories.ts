@@ -6,14 +6,16 @@ import { runCommand } from './command.ts';
 import { workspaceSchemas } from './inputs.ts';
 export async function listCategories(context: ServiceContext, branchId = 'main') {
   await getBranch(context, branchId);
-  const rows = await context.stmt('SELECT c.*,(SELECT COUNT(*) FROM kw_items i JOIN kw_versions v ON v.id=i.version_id WHERE i.branch_id=? AND EXISTS(SELECT 1 FROM kw_document_tags t WHERE t.version_id=v.id AND t.category_id=c.id) AND v.deleted=0) AS count FROM kw_categories c WHERE (?=0 AND c.independent=1) OR EXISTS(SELECT 1 FROM kw_items i JOIN kw_versions v ON v.id=i.version_id WHERE i.branch_id=? AND EXISTS(SELECT 1 FROM kw_document_tags t WHERE t.version_id=v.id AND t.category_id=c.id) AND v.deleted=0) ORDER BY c.name', branchId, context.guest ? 1 : 0, branchId).all<KnowledgeCategory>();
-  return {
-    categories: rows.results
-  };
+  const usage = `SELECT COUNT(*) FROM kw_items i JOIN kw_versions v ON v.id=i.version_id
+    JOIN kw_document_tags t ON t.version_id=v.id WHERE i.branch_id=? AND t.category_id=c.id AND v.deleted=0`;
+  const rows = await context.stmt(`SELECT * FROM (SELECT c.*,(${usage}) AS count FROM kw_categories c
+    WHERE (?=1 OR c.pending=0)) WHERE (?=1 AND independent=1) OR count>0 ORDER BY name`,
+    branchId,context.showPendingTags ? 1 : 0,context.guest ? 0 : 1).all<KnowledgeCategory>();
+  return {categories:rows.results};
 }
 export async function getCategory(context: ServiceContext, branchId: string, id: string) {
   const found = (await listCategories(context, branchId)).categories.find(c => c.id === id);
-  if (!found) throw new KnowledgeError(404, 'NOT_FOUND', '当前分支没有这个分类的文档');
+  if (!found) throw new KnowledgeError(404, 'NOT_FOUND', '未找到这个标签');
   return found;
 }
 export async function prepareCategoryChanges(context: ServiceContext, a: {
@@ -24,26 +26,25 @@ export async function prepareCategoryChanges(context: ServiceContext, a: {
   definition: string;
 }, at: string) {
   const old = a.id ? await getCategory(context, a.branch_id, a.id) : null;
-  if (old && old.version !== a.expected_version) throw new KnowledgeError(409, 'CONFLICT', '分类已更新，请重新读取');
+  if (old && old.version !== a.expected_version) throw new KnowledgeError(409, 'CONFLICT', '标签已更新，请重新读取');
   const name = a.name ?? old!.name,
     duplicate = await context.stmt('SELECT id FROM kw_categories WHERE name=?', name).first<{
       id: string;
     }>();
-  if (duplicate && duplicate.id !== old?.id) throw new KnowledgeError(409, 'CATEGORY_EXISTS', '已有同名分类，请选择它或使用其他名称');
-  const id = old?.id ?? uid(),
-    versionId = uid(),
-    documentId = 'category-' + id,
-    statements: D1PreparedStatement[] = [];
-  if (!old) statements.push(context.stmt('INSERT INTO kw_categories(id,name,definition,independent,updated_at) VALUES(?,?,?,1,?)', id, name, a.definition, at));
-  statements.push(context.stmt('INSERT OR IGNORE INTO kw_documents VALUES(?,?,?,?)', documentId, context.actor.id, context.actor.name, at), context.stmt('INSERT INTO kw_versions VALUES(?,?,?,?,?,?,?,?,?,?,?)', versionId, documentId, name, a.definition, id, '分类解释', '', 0, context.actor.id, context.actor.name, at), context.stmt('UPDATE kw_categories SET name=?,definition=?,definition_version_id=?,version=?,updated_at=? WHERE id=?', name, a.definition, versionId, old ? old.version + 1 : 1, at, id));
-  return {
-    statements,
-    result: {
-      id,
-      version: old ? old.version + 1 : 1,
-      definition_version_id: versionId
-    }
-  };
+  if (duplicate && duplicate.id !== old?.id) throw new KnowledgeError(409, 'CATEGORY_EXISTS', '已有同名标签，请选择它或使用其他名称');
+  if (await context.stmt("SELECT 1 FROM kw_tag_proposals WHERE name=? AND state='pending' AND expires_at>? AND category_id<>?",name,at,old?.id ?? '').first())
+    throw new KnowledgeError(409,'CATEGORY_EXISTS','已有同名标签正在等待认可');
+  const id = old?.id ?? uid(), proposalId = uid();
+  if (old && await context.stmt("SELECT 1 FROM kw_tag_proposals WHERE category_id=? AND state='pending' AND expires_at>?",id,at).first())
+    throw new KnowledgeError(409,'TAG_PROPOSAL_OPEN','这个标签已有待认可的版本');
+  const expiresAt = new Date(Date.parse(at) + 7 * 86400000).toISOString();
+  const statements: D1PreparedStatement[] = [];
+  if (!old) statements.push(context.stmt('INSERT INTO kw_categories(id,name,definition,independent,updated_at,pending) VALUES(?,?,?,1,?,1)',id,name,a.definition,at));
+  else statements.push(context.stmt('UPDATE kw_categories SET independent=1 WHERE id=?',id));
+  statements.push(context.stmt("UPDATE kw_tag_proposals SET state='expired' WHERE category_id=? AND state='pending'",id),
+    context.stmt('INSERT INTO kw_tag_proposals(id,category_id,name,definition,base_version,author_id,author_name,created_at,expires_at) VALUES(?,?,?,?,?,?,?,?,?)',
+      proposalId,id,name,a.definition,old?.version ?? 1,context.actor.id,context.actor.name,at,expiresAt));
+  return {statements,result:{id,proposal_id:proposalId,version:old?.version ?? 1,pending:old?.pending ?? 1,expires_at:expiresAt}};
 }
 export async function editCategory(context: ServiceContext, input: unknown) {
   const a = workspaceSchemas.categoryEdit.parse(input);
@@ -51,8 +52,15 @@ export async function editCategory(context: ServiceContext, input: unknown) {
 }
 export async function defineCategory(context: ServiceContext, input: unknown) {
   const a = workspaceSchemas.category.parse(input);
-  return runCommand(context, a, 'category.define', at => prepareCategoryChanges(context, a, at));
+  return runCommand(context, a, 'category.define', async at => {
+    const category = await getCategory(context,a.branch_id,a.id);
+    const branch = await getBranch(context,a.branch_id);
+    if (branch.visibility==='private' && !await isCategoryPublic(context,a.id)) {
+      throw new KnowledgeError(409,'PRIVATE_SOURCE','私人草稿中的标签尚未公开。若要共享其词义，请明确提议新标签。');
+    }
+    return prepareCategoryChanges(context,{...a,name:category.name},at);
+  });
 }
 export async function isCategoryPublic(context: ServiceContext, id: string) {
-  return !!(await context.stmt("SELECT 1 FROM kw_categories c WHERE c.id=? AND (c.independent=1 OR EXISTS(SELECT 1 FROM kw_items i JOIN kw_versions v ON v.id=i.version_id JOIN kw_branches b ON b.id=i.branch_id WHERE EXISTS(SELECT 1 FROM kw_document_tags t WHERE t.version_id=v.id AND t.category_id=c.id) AND v.deleted=0 AND b.visibility='members' AND b.state<>'closed'))", id).first());
+  return !!(await context.stmt("SELECT 1 FROM kw_categories c WHERE c.id=? AND (?=1 OR c.pending=0) AND (c.independent=1 OR EXISTS(SELECT 1 FROM kw_items i JOIN kw_versions v ON v.id=i.version_id JOIN kw_branches b ON b.id=i.branch_id WHERE EXISTS(SELECT 1 FROM kw_document_tags t WHERE t.version_id=v.id AND t.category_id=c.id) AND v.deleted=0 AND b.visibility='members' AND b.state<>'closed'))", id, context.showPendingTags ? 1 : 0).first());
 }
