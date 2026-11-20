@@ -2,10 +2,17 @@ import assert from 'node:assert/strict';
 import {connectMcp} from '../knowledge/tests/connected-fixture.mjs';
 import {request} from '../knowledge/tests/fixture.mjs';
 
-export async function verifyKnowledgeReferences(page, fixture, base, services) {
-  const identityOrigin = fixture.env.IDENTITY_ORIGIN;
-  const viewport = page.viewportSize();
-  fixture.env.IDENTITY_ORIGIN = base;
+export async function verifyKnowledgeReferences(workspacePage, fixture, base, services) {
+  const origin = fixture.env.IDENTITY_ORIGIN;
+  const context = workspacePage.context();
+  const page = await context.newPage();
+  await context.addCookies([{name: 'cts_session', value: fixture.session, url: origin}]);
+  // The fixture's canonical HTTPS URL uses the real local HTTP worker as its upstream.
+  await page.route(origin + '/**', async route => {
+    const url = new URL(route.request().url());
+    const response = await route.fetch({url: base + url.pathname + url.search});
+    await route.fulfill({response});
+  });
   const writer = services[0];
   const title = '版本引用验收示例';
   const oldBody = '引用链接固定到第一版正文。';
@@ -24,7 +31,7 @@ export async function verifyKnowledgeReferences(page, fixture, base, services) {
   }
   const article = page.locator('.kb-article');
   async function open(reference, text) {
-    assert.equal(new URL(reference.reference_url).origin, base);
+    assert.equal(new URL(reference.reference_url).origin, origin);
     await page.goto(reference.reference_url);
     await article.getByRole('heading', {name: title, exact: true}).waitFor();
     await article.getByText(text, {exact: true}).waitFor();
@@ -75,7 +82,6 @@ export async function verifyKnowledgeReferences(page, fixture, base, services) {
     assert.equal(await article.count(), 0);
     return {main: true, independent: true, draft: true, candidate: true, historical: true, mobile: true};
   } finally {
-    fixture.env.IDENTITY_ORIGIN = identityOrigin;
-    await page.setViewportSize(viewport);
+    await page.close();
   }
 }
