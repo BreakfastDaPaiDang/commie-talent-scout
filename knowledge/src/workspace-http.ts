@@ -2,6 +2,7 @@ import {Hono} from 'hono';
 import {z} from 'zod';
 import {catalogIdentity} from './catalog-auth.ts';
 import {KnowledgeWorkspace} from './workspace.ts';
+import {key} from './workspace/inputs.ts';
 import type {Env} from './types.ts';
 
 export const workspaceApp=new Hono<{Bindings:Env;Variables:{workspace:KnowledgeWorkspace}}>();
@@ -25,8 +26,13 @@ const activityQuery = z.object({
   cursor: z.string().max(400).optional(),
 }).strict().refine(exactReview, '请选择具体候选版本');
 workspaceApp.get('/branches',async c=>c.json(await c.get('workspace').branches()));
-workspaceApp.get('/documents',async c=>c.json(await c.get('workspace').list(c.req.query())));
-workspaceApp.get('/documents/:id',async c=>c.json(await c.get('workspace').get(branch(c.req.query('branch_id')),c.req.param('id'))));
+workspaceApp.get('/documents',async c=>{
+  const query = {...c.req.query(), any_tag_ids: c.req.queries('any_tag_ids')};
+  return c.json(await c.get('workspace').list(query));
+});
+workspaceApp.get('/documents/:id',async c=>c.json(await c.get('workspace').get(
+  branch(c.req.query('branch_id')), c.req.param('id'), key.optional().parse(c.req.query('version_id')),
+)));
 workspaceApp.get('/tag-proposals',async c=>c.json(await c.get('workspace').tagProposals()));
 workspaceApp.get('/tag-proposals/:id',async c=>c.json({proposal:await c.get('workspace').tagProposal(c.req.param('id'))}));
 workspaceApp.get('/categories',async c=>c.json(await c.get('workspace').categories(branch(c.req.query('branch_id')))));

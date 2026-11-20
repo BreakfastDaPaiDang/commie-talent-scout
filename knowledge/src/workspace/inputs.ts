@@ -13,8 +13,10 @@ export const workspaceSchemas = {
     scope: z.enum(['main', 'public', 'drafts']).optional(),
     search: z.string().max(100).default(''),
     category_id: key.optional(),
+    any_tag_ids: z.array(key).min(1).max(32).optional().describe('显式阅读范围。传入一个或多个已认可标签的 ID，返回匹配任一标签的已入库文档。'),
     ...page
-  }).strict(),
+  }).strict().refine(a => !a.any_tag_ids || (!a.category_id && a.branch_id === 'main' && (!a.scope || a.scope === 'main')),
+    '按多个标签阅读时，请使用 main 并省略 category_id'),
   branch: z.object({
     name: z.string().trim().min(1).max(80),
     visibility: z.enum(['private', 'members']).default('members'),

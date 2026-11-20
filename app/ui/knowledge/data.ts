@@ -82,9 +82,9 @@ function useKnowledgeRead<T>(api: KnowledgeApi, path: string | null, revision: n
   return {data: view?.data, error: view?.error, loading: !!path && view?.revision !== revision};
 }
 
-type Selection = Pick<ReturnType<typeof useKnowledgeNavigation>, 'scope' | 'branchId' | 'documentId' | 'tagProposalId'>;
+type Selection = Pick<ReturnType<typeof useKnowledgeNavigation>, 'scope' | 'branchId' | 'documentId' | 'versionId' | 'tagProposalId'>;
 
-export function useKnowledgeData(api: KnowledgeApi, canWrite: boolean, {scope, branchId, documentId, tagProposalId}: Selection) {
+export function useKnowledgeData(api: KnowledgeApi, canWrite: boolean, {scope, branchId, documentId, versionId, tagProposalId}: Selection) {
   const [branches, setBranches] = useState<KnowledgeBranch[]>([]);
   const [reviewResult, setReviewResult] = useState<{search: string; merges: KnowledgeMerge[]}>();
   const [category, setCategory] = useState('');
@@ -98,8 +98,11 @@ export function useKnowledgeData(api: KnowledgeApi, canWrite: boolean, {scope, b
   const list = useDocumentList(api, listFilter(scope === 'all' ? 'main' : scope, branchId, search, category), revision);
   const drafts = useDocumentList(api, all ? listFilter('drafts', 'main', search, category) : null, revision);
   const reviewSearch = all ? search : '';
-  const document = useKnowledgeRead<{document: KnowledgeVersion}>(api, documentId ?
-    '/documents/' + encodeURIComponent(documentId) + '?branch_id=' + encodeURIComponent(branchId) : null, revision);
+  const document = useKnowledgeRead<{document: KnowledgeVersion; historical?: boolean; reference_context?: string}>(api, documentId ?
+    '/documents/' + encodeURIComponent(documentId) + '?' + new URLSearchParams({
+      branch_id: branchId, ...(versionId === null ? {} : {version_id: versionId}),
+    }) : null, revision);
+  const versionMismatch = versionId !== null && !!document.data && document.data.document?.id !== versionId;
   const tagQueue = useKnowledgeRead<{proposals: KnowledgeTagProposal[]}>(api, all ? '/tag-proposals' : null, revision);
   const tagDetail = useKnowledgeRead<{proposal: KnowledgeTagProposal}>(api, all && tagProposalId ?
     '/tag-proposals/' + encodeURIComponent(tagProposalId) : null, revision);
@@ -144,8 +147,10 @@ export function useKnowledgeData(api: KnowledgeApi, canWrite: boolean, {scope, b
     loadingMerges,
     reviewError,
     tagQueue, tagDetail,
-    doc: document.data?.document ?? null,
+    doc: versionMismatch ? null : document.data?.document ?? null,
+    historical: !!document.data?.historical,
+    publicReview: document.data?.reference_context === 'public',
     loadingDoc: document.loading,
-    error: document.error || branchError,
+    error: document.error || (versionMismatch ? '无法读取链接所指的文档版本' : branchError),
   };
 }

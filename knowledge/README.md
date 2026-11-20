@@ -37,7 +37,9 @@
 
 所有写操作提供 UUID `request_id`，失败重试保持参数与 ID。分支和主分支版本检查与全库修订守卫在同一 D1 事务提交，防止并发静默覆盖；响应丢失可通过回执恢复。网页与主站／独立服务 MCP 共用业务服务，不提供快捷采纳接口。
 
-Agent 先读 `knowledge_workspace_guide`，再用 `knowledge_documents` 读取 `main`，按 `next_offset` 逐页读取。每页核对 `branch.head_id` 和 `tag_revision`，继续业务前再次核对。任一值变化或收到 `KNOWLEDGE_SNAPSHOT_CHANGED` 时从第一页开始。标签认可可能单独改变 `tag_revision`。通过 MCP 保存文档可以省略 `category`，已有标签关联继续保留。MCP 标签提议返回提交确认，正式成员在网页查看并认可。
+独立知识 MCP 用 `knowledge_branches` 核对身份和读写权限。每个会话首次开展人事业务或丢失上下文后，先读 `knowledge_workspace_guide`，再用 `knowledge_documents` 从 `main` 第一页读取全部生效正文和版本链接。把 `next_offset` 传给下一页的 `offset`，每页及继续业务前核对 `branch.head_id` 和 `tag_revision`。任一值变化或收到 `KNOWLEDGE_SNAPSHOT_CHANGED` 时从第一页重读。标签认可可以单独更新 `tag_revision`。完整操作见 [MCP 生效知识流程](../docs/mcp/agent-guide.md#knowledge--生效知识与修订提案)。
+
+通过 MCP 保存文档可以省略 `category`，保留已有标签关联。MCP 标签提议返回提交确认，正式成员在网页查看并认可。
 
 资源目录保留 `/api/catalog` 及相应 MCP 工具。旧 `/api/entries` 提供历史兼容读取，旧写接口返回 410。权威切换见 [ADR 0020](../docs/adr/0020-production-resource-authority.md)。
 

@@ -9,6 +9,7 @@ type Navigation = {
   tab: Tab;
   branchId: string;
   documentId: string | null;
+  versionId: string | null;
   issueId: string | null;
   reviewId: string | null;
   tagProposalId: string | null;
@@ -28,6 +29,7 @@ function readNavigation(canWrite: boolean): Navigation {
   const tagProposalId = canWrite && mode === 'simple' && !reviewId ? params.get('tagProposal') : null;
   const issueId = tab === 'issues' ? params.get('issue') : null;
   const documentId = reviewId || tagProposalId ? null : params.get('document');
+  const versionId = documentId ? params.get('version') : null;
   let scope: Scope = 'main';
   if (canWrite && mode === 'simple') {
     // Old todo links include the same private drafts and candidates in the combined view.
@@ -37,7 +39,7 @@ function readNavigation(canWrite: boolean): Navigation {
     else if (params.has('branch')) scope = 'branch';
   }
   const mobileDetail = history.state?.knowledgeMobileDetail ?? !!(documentId || reviewId || tagProposalId || tab !== 'content');
-  return {mode, scope, tab, branchId: tagProposalId ? 'main' : branchId, documentId, issueId, reviewId, reviewHead, tagProposalId, mobileDetail};
+  return {mode, scope, tab, branchId: tagProposalId ? 'main' : branchId, documentId, versionId, issueId, reviewId, reviewHead, tagProposalId, mobileDetail};
 }
 
 function writeNavigation(state: Navigation, method: 'push' | 'replace') {
@@ -49,12 +51,13 @@ function writeNavigation(state: Navigation, method: 'push' | 'replace') {
     issue: state.tab === 'issues' ? state.issueId : null,
     branch: state.branchId === 'main' ? null : state.branchId,
     document: state.documentId,
+    version: state.documentId ? state.versionId : null,
     review: state.reviewId,
     head: state.reviewId ? state.reviewHead : null,
     tagProposal: state.tagProposalId,
   };
   for (const [key, value] of Object.entries(entries)) {
-    if (value) url.searchParams.set(key, value);
+    if (value !== null) url.searchParams.set(key, value);
     else url.searchParams.delete(key);
   }
   if (url.href === location.href && history.state?.knowledgeMobileDetail === state.mobileDetail) return;

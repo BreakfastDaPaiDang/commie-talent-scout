@@ -1,11 +1,20 @@
 import { KnowledgeError, uid } from "../types.ts";
 import type { KnowledgeBranch, KnowledgeVersion, KnowledgeCategory, KnowledgeDiff } from "../../../app/shared/knowledge.ts";
 import type { ServiceContext } from './context.ts';
-import { getBranch, getDocument, assertEditable, prepareCommit, getVersion, changedDocument, tagProjection, visibleTag, withTags, type TaggedRow } from './records.ts';
+import { getBranch, getDocument, getDocumentRecord, assertEditable, prepareCommit, getVersion, changedDocument, tagProjection, visibleTag, withTags, type TaggedRow } from './records.ts';
 import { listCategories } from './categories.ts';
 import { runCommand } from './command.ts';
 import { workspaceSchemas } from './inputs.ts';
 import { reviewSourceMatches, reviewVisible, singleDocumentBranch } from './review-queries.ts';
+
+export type DocumentReferenceContext = 'main' | 'public' | 'drafts' | 'branch';
+
+function branchReferenceContext(branch: KnowledgeBranch): DocumentReferenceContext {
+  return branch.id === 'main' ? 'main' : branch.visibility === 'private' ? 'drafts' : 'branch';
+}
+
+const publicDocument = `b.visibility='members' AND b.state='open' AND ${changedDocument} AND ${singleDocumentBranch}
+  AND EXISTS(SELECT 1 FROM kw_merges m WHERE m.branch_id=b.id AND m.state='open' AND m.head_id=b.head_id AND ${reviewVisible})`;
 
 async function approvedTagRevision(context: ServiceContext) {
   return await context.stmt("SELECT COUNT(*) AS revision FROM kw_tag_proposals WHERE state='approved'").first<number>('revision') ?? 0;
@@ -29,34 +38,50 @@ export async function listDocuments(context: ServiceContext, input: unknown) {
     scopeArgs = [context.actor.id, at];
   }
   if (a.scope === 'public') {
-    scope = `b.visibility='members' AND b.state='open' AND ${changedDocument} AND ${singleDocumentBranch}
-      AND EXISTS(SELECT 1 FROM kw_merges m WHERE m.branch_id=b.id AND m.state='open' AND m.head_id=b.head_id AND ${reviewVisible})`;
+    scope = publicDocument;
     scopeArgs = [at];
   }
   const from = `FROM kw_items i JOIN kw_branches b ON b.id=i.branch_id JOIN kw_versions v ON v.id=i.version_id LEFT JOIN kw_categories c ON c.id=v.category_id AND ${visibleTag(context, 'c')}`;
-  const where = `${scope} AND v.deleted=0 AND (? IS NULL OR EXISTS(SELECT 1 FROM kw_document_tags t JOIN kw_categories filter_tag ON filter_tag.id=t.category_id WHERE t.version_id=v.id AND t.category_id=? AND ${visibleTag(context, 'filter_tag')})) AND (v.title LIKE ? ESCAPE '!' OR v.body LIKE ? ESCAPE '!')`,
-    args = [...scopeArgs, a.category_id ?? null, a.category_id ?? null, pattern, pattern];
+  const tagIds = a.any_tag_ids ?? (a.category_id ? [a.category_id] : []);
+  const tagVisibility = a.any_tag_ids ? 'filter_tag.pending=0' : visibleTag(context, 'filter_tag');
+  const tagClause = tagIds.length ? `AND EXISTS(SELECT 1 FROM kw_document_tags t
+    JOIN kw_categories filter_tag ON filter_tag.id=t.category_id WHERE t.version_id=v.id
+    AND t.category_id IN (${tagIds.map(() => '?').join(',')}) AND ${tagVisibility})` : '';
+  const where = `${scope} AND v.deleted=0 ${tagClause} AND (v.title LIKE ? ESCAPE '!' OR v.body LIKE ? ESCAPE '!')`,
+    args = [...scopeArgs, ...tagIds, pattern, pattern];
   const rows = await context.stmt(`SELECT v.*,i.branch_id,c.id AS visible_category_id,c.name AS category_name,${tagProjection(context)} ${from} WHERE ${where} ORDER BY v.created_at DESC,v.id,i.branch_id LIMIT ? OFFSET ?`, ...args, a.limit + 1, a.offset).all<TaggedRow>();
   const categories = a.scope === 'public' || a.scope === 'drafts' ? (await context.stmt(`SELECT c.*,COUNT(*) AS count,MIN(i.branch_id) AS branch_id
     FROM kw_items i JOIN kw_branches b ON b.id=i.branch_id JOIN kw_versions v ON v.id=i.version_id JOIN kw_document_tags t ON t.version_id=v.id JOIN kw_categories c ON c.id=t.category_id
-    WHERE ${scope} AND v.deleted=0 AND ${visibleTag(context, 'c')} GROUP BY c.id ORDER BY c.name`, ...scopeArgs).all<KnowledgeCategory>()).results : (await listCategories(context, branch.id)).categories;
+    WHERE ${scope} AND v.deleted=0 AND ${visibleTag(context, 'c')} GROUP BY c.id ORDER BY c.name`, ...scopeArgs).all<KnowledgeCategory>()).results : (await listCategories(context, branch.id, a.any_tag_ids)).categories;
   if (!context.guest && (a.scope === 'public' || a.scope === 'drafts')) for (const c of (await context.stmt(`SELECT c.*,0 AS count FROM kw_categories c WHERE c.independent=1 AND ${visibleTag(context, 'c')} ORDER BY c.name`).all<KnowledgeCategory>()).results) if (!categories.some(x => x.id === c.id)) categories.push(c);
-  if (!context.showPendingTags && (tagRevision !== await approvedTagRevision(context) || branch.head_id !== (await getBranch(context, branch.id)).head_id)) {
+  if ((!context.showPendingTags || a.any_tag_ids) && (tagRevision !== await approvedTagRevision(context) || branch.head_id !== (await getBranch(context, branch.id)).head_id)) {
     throw new KnowledgeError(409, 'KNOWLEDGE_SNAPSHOT_CHANGED', '知识库在读取时发生变化，请从第一页重新读取');
+  }
+  if (a.any_tag_ids) {
+    const available = new Set(categories.filter(tag => !tag.pending).map(tag => tag.id));
+    if (!a.any_tag_ids.every(id => available.has(id))) {
+      throw new KnowledgeError(400, 'READING_TAG_UNAVAILABLE', '阅读范围包含不可用的标签，请核对当前已认可的标签');
+    }
   }
   return {
     branch,
     tag_revision: tagRevision,
+    reference_context: a.scope === 'public' || a.scope === 'drafts' ? a.scope : branchReferenceContext(branch),
     documents: rows.results.slice(0, a.limit).map(withTags),
     next_offset: rows.results.length > a.limit ? a.offset + a.limit : null,
     categories
   };
 }
-export async function readDocument(context: ServiceContext, branchId: string, id: string) {
-  const document = await getDocument(context, branchId, id);
-  return {
-    document
-  };
+export async function readDocument(context: ServiceContext, branchId: string, id: string, versionId?: string) {
+  const {branch, document, historical} = await getDocumentRecord(context, branchId, id, versionId);
+  let reference_context = branchReferenceContext(branch);
+  if (reference_context === 'branch' && !historical) {
+    const review = await context.stmt(`SELECT 1 FROM kw_items i JOIN kw_branches b ON b.id=i.branch_id
+      JOIN kw_versions v ON v.id=i.version_id WHERE i.branch_id=? AND i.document_id=? AND i.version_id=? AND ${publicDocument}`,
+      branchId, id, document.id, context.clock()).first();
+    if (review) reference_context = 'public';
+  }
+  return {document, historical, reference_context};
 }
 export async function saveDocument(context: ServiceContext, input: unknown) {
   const a = workspaceSchemas.save.parse(input);

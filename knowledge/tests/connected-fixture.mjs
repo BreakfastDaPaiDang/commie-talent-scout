@@ -1,3 +1,4 @@
+import assert from 'node:assert/strict';
 import {historicalSql} from '../../tests/personnel-fixture.mjs';
 import {fixture,request} from './fixture.mjs';
 import {fixture as personnelFixture} from '../../tests/d1-fixture.mjs';
@@ -16,4 +17,18 @@ export async function connectedFixture(){
  const call=async(path,body,headers={Authorization:'Bearer '+token})=>{const response=await worker.fetch(new Request(env.APP_ORIGIN+path,{method:body===undefined?'GET':'POST',headers:{...headers,...(body===undefined?{}:{'Content-Type':'application/json'})},...(body===undefined?{}:{body:JSON.stringify(body)})}),env,ctx);return {status:response.status,headers:response.headers,body:await response.json()};};
  async function close(){await Promise.allSettled(pending);k.close();p.close();}
  return {k,p,env,ctx,call,paths,token,session,membership,objects,close};
+}
+
+export async function connectMcp(f,direct=false){
+ const origin=direct?f.env.APP_ORIGIN:f.env.IDENTITY_ORIGIN;
+ const headers={Authorization:'Bearer '+f.token,'Content-Type':'application/json',Accept:'application/json, text/event-stream',Host:new URL(origin).hostname};
+ const rpc=async(method,params)=>{
+  const input=new Request(origin+'/mcp',{method:'POST',headers,body:JSON.stringify({jsonrpc:'2.0',id:1,method,params})});
+  const r=direct?await worker.fetch(input,f.env,f.ctx):await personnel.fetch(input,f.p.env,f.ctx);
+  const body=await r.text();assert.equal(r.status,200,body);
+  return JSON.parse(body.startsWith('{')?body:body.split('\n').find(l=>l.startsWith('data:')).slice(5)).result;
+ };
+ const init=await rpc('initialize',{protocolVersion:'2025-03-26',capabilities:{},clientInfo:{name:'workspace-test',version:'1'}});
+ headers['MCP-Protocol-Version']=init.protocolVersion;
+ return Object.assign(rpc, {init});
 }

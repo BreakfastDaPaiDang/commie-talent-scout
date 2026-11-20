@@ -4,13 +4,18 @@ import type { ServiceContext } from './context.ts';
 import { getBranch } from './records.ts';
 import { runCommand } from './command.ts';
 import { workspaceSchemas } from './inputs.ts';
-export async function listCategories(context: ServiceContext, branchId = 'main') {
+export async function listCategories(context: ServiceContext, branchId = 'main', ids?: string[]) {
   await getBranch(context, branchId);
   const usage = `SELECT COUNT(*) FROM kw_items i JOIN kw_versions v ON v.id=i.version_id
     JOIN kw_document_tags t ON t.version_id=v.id WHERE i.branch_id=? AND t.category_id=c.id AND v.deleted=0`;
+  const selected = ids ? `AND c.id IN (${ids.map(() => '?').join(',')})` : '';
+  // An older tag can have adopted uses but no independent entry or current documents.
+  const formerUse = ids && !context.guest && branchId === 'main' ? `OR EXISTS(
+    SELECT 1 FROM kw_document_tags t JOIN kw_changes ch ON ch.after_id=t.version_id
+    JOIN kw_commits co ON co.id=ch.commit_id WHERE co.branch_id='main' AND t.category_id=visible.id)` : '';
   const rows = await context.stmt(`SELECT * FROM (SELECT c.*,(${usage}) AS count FROM kw_categories c
-    WHERE (?=1 OR c.pending=0)) WHERE (?=1 AND independent=1) OR count>0 ORDER BY name`,
-    branchId,context.showPendingTags ? 1 : 0,context.guest ? 0 : 1).all<KnowledgeCategory>();
+    WHERE (?=1 OR c.pending=0) ${selected}) visible WHERE (?=1 AND independent=1) OR count>0 ${formerUse} ORDER BY name`,
+    branchId,context.showPendingTags ? 1 : 0,...(ids ?? []),context.guest ? 0 : 1).all<KnowledgeCategory>();
   return {categories:rows.results};
 }
 export async function getCategory(context: ServiceContext, branchId: string, id: string) {

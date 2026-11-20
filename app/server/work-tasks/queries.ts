@@ -13,6 +13,7 @@ import type { ServiceContext } from './context.ts';
 import { visibleReference } from './references.ts';
 import { getTask, taskRoundStartedSql, ownerRoundObservationSql } from './records.ts';
 import { readTaskHistory } from './history.ts';
+import { readReviewRecognition } from './recognition.ts';
 import { workTaskListInput } from './inputs.ts';
 import { type Row } from './model.ts';
 export async function listTasks(context: ServiceContext, input: unknown = {}) {
@@ -185,7 +186,8 @@ export function isPushableTask(context: ServiceContext, task: Row) {
 }
 export async function getTaskDetail(context: ServiceContext, id: string) {
   const task = await getTask(context, id);
-  const archive = task.archive_id ? await new Archives(context.env, context.actor, context.source).get(task.archive_id) : null;
+  const archives = new Archives(context.env, context.actor, context.source);
+  const archive = task.archive_id ? await archives.get(task.archive_id) : null;
   const resultRefs = JSON.parse(task.result_references_json ?? '[]') as {
       observation_id: string;
       content_version: number;
@@ -221,18 +223,21 @@ export async function getTaskDetail(context: ServiceContext, id: string) {
   delete (safeTask as {
     labels_json?: string;
   }).labels_json;
-  const [events, comments] = await Promise.all([readTaskHistory(context, {
+  const [events, comments, recognition] = await Promise.all([readTaskHistory(context, {
     id,
     section: 'events'
   }), readTaskHistory(context, {
     id,
     section: 'comments'
-  })]);
+  }), context.source === 'mcp' && task.kind === 'audit' && task.source === 'rule' && archive
+    ? readReviewRecognition(context, id, archive.id, archives.url(archive))
+    : null]);
   return {
     task: safeTask,
     events: events.items,
     comments: comments.items,
     events_next_cursor: events.next_cursor,
-    comments_next_cursor: comments.next_cursor
+    comments_next_cursor: comments.next_cursor,
+    ...(recognition ? { personnel_recognition: recognition } : {})
   };
 }
