@@ -9,16 +9,21 @@ import {catalogGuide,catalogTools} from './catalog-tools.ts';
 import {KnowledgeWorkspace} from './workspace.ts';
 import {workspaceGuide,workspaceTools} from './workspace-tools.ts';
 export const guide=[...workspaceGuide,...catalogGuide];
+const instructions=[
+ '使用 knowledge_branches 核对知识服务返回的身份与读写能力。仅接入时完成最小身份核验。准备、进行或复盘人事审核时，连接主站并调用 get_usage_guide(topic="personnel_review")，通过主站工具读取人物档案、观察与审核任务。',
+ ...guide,
+].join('\n');
 export async function handleMcp(request:Request,env:Env,ctx:ExecutionContext,actor:CatalogActor){
- const server=new McpServer({name:'commie-knowledge',version:'0.4.0'},{instructions:guide.join('\n')});
+ const server=new McpServer({name:'commie-knowledge',version:'0.4.0'},{instructions});
  function register(name:string,description:string,schema:z.ZodType,run:(args:any)=>Promise<unknown>,write=false){
   server.registerTool(name,{description,inputSchema:schema,annotations:{readOnlyHint:!write,destructiveHint:name==='knowledge_delete_branch',idempotentHint:true,openWorldHint:false}},async(args:unknown)=>{
    try{const data=await run(args);return {content:[{type:'text' as const,text:JSON.stringify(data)}],structuredContent:data as Record<string,unknown>};}
    catch(error){const known=error instanceof KnowledgeError,data={error:{code:known?error.code:error instanceof z.ZodError?'INVALID_INPUT':'RESULT_UNKNOWN',message:known?error.message:'请核对输入并先查询原请求结果'}};return {isError:true,content:[{type:'text' as const,text:JSON.stringify(data)}],structuredContent:data};}
   });
  }
- register('catalog_guide','读取生产资源库范围、权限与操作指南',z.object({}).strict(),async()=>({rules:guide}));
- for(const tool of workspaceTools(new KnowledgeWorkspace(env.KNOWLEDGE_DB,actor,undefined,false)))register(tool.name,tool.description,tool.schema,tool.run,tool.write);
+ register('catalog_guide','读取独立知识库与生产资源库的范围、权限与操作指南',z.object({}).strict(),async()=>({rules:guide}));
+ const frontendUrl=(path:string)=>new URL(path,env.IDENTITY_ORIGIN).href;
+ for(const tool of workspaceTools(new KnowledgeWorkspace(env.KNOWLEDGE_DB,actor,undefined,false),frontendUrl))register(tool.name,tool.description,tool.schema,tool.run,tool.write);
  for(const t of catalogTools)register(t.name,t.description,t.schema,async args=>{
   const headers=new Headers(request.headers);headers.set('Origin',env.APP_ORIGIN);headers.delete('Content-Length');headers.set('Content-Type','application/json');
   const response=await catalogApp.fetch(new Request(env.APP_ORIGIN+t.path(args),{method:t.write?'POST':'GET',headers,body:t.write?JSON.stringify(args):undefined}),env,ctx),data=await response.json() as Record<string,any>;

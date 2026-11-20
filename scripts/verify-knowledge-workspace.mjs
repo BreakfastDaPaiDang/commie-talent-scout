@@ -14,6 +14,7 @@ import {verifyKnowledgeCategories,verifyKnowledgeDemo} from './verify-knowledge-
 import {verifyKnowledgeBranchDeletion,verifyEmptyKnowledgeChrome} from './verify-knowledge-branches.mjs';
 import {verifyKnowledgeHelp,verifyReadOnlyKnowledgeHelp} from './verify-knowledge-help.mjs';
 import {verifyKnowledgeReviewQueue} from './verify-knowledge-review.mjs';
+import {verifyKnowledgeReferences} from './verify-knowledge-references.mjs';
 
 const f=await connectedFixture(),base='http://127.0.0.1:8797',out='tmp/verification/knowledge-workspace';mkdirSync(out,{recursive:true});
 const identity=(await f.call('/api/identity')).body,services=[identity,...f.k.actors.slice(1,3)].map(a=>new KnowledgeWorkspace(f.k.db,a));
@@ -130,6 +131,7 @@ try{
  assert.doesNotMatch(await flatEditor.innerText(),/分类|条目/);await page.screenshot({path:out+'/flat-editor-desktop.png',fullPage:true});await page.keyboard.press('Escape');
  report.flatTags={noBreadcrumb:true,noKind:true,explicitTag:true,filterChangesDetail:true,clearRestoresList:true,nestedEditor:true};
  report.agentEntry=await verifyKnowledgeAgentEntry();
+ report.documentReferences=await verifyKnowledgeReferences(page,f,base,services);
  assert.deepEqual(errors,[]);writeFileSync(out+'/report.json',JSON.stringify(report,null,2));console.log(JSON.stringify(report));
 }catch(error){await page.screenshot({path:out+'/failure.png',fullPage:true}).catch(()=>{});writeFileSync(out+'/failure.txt',String(error)+'\n'+JSON.stringify(errors));throw error;}
 finally{await browser.close();await preview.close();await new Promise(r=>server.close(r));await f.close();}

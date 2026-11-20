@@ -40,6 +40,20 @@ export function knowledgeDemo():KnowledgeApi{
   if(!review||!doc)throw new Error('候选版本不存在、已更新或不可见');
   return {review,doc};
  }
+ function readDocument(branchId:string, documentId:string, versionId:string|null) {
+  const current=visible(branchId).find(d=>d.document_id===documentId);
+  if(versionId===null)return {document:current};
+  const branch=branches.find(b=>b.id===branchId&&b.state!=='closed');
+  if(branch&&current?.id===versionId&&!current.deleted){
+   const inReview=merges.some(row=>{const review=reviewState(row);return review.branch_id===branchId&&active(review)&&review.changes.length===1&&review.changes[0].document_id===documentId;});
+   return {document:current,historical:false,reference_context:inReview?'public':undefined};
+  }
+  for(let head=branch?.head_id;head;head=commits.find(c=>c.id===head)?.parent_id){
+   const previous=changes.get(head)?.find(change=>change.document_id===documentId&&change.after.id===versionId)?.after;
+   if(previous&&!previous.deleted)return {document:previous,historical:true};
+  }
+  throw new Error('文档版本不存在或不可见');
+ }
  function ancestry(branchId:string) {
   const ids=new Set<string>();
   const pending=[branches.find(b=>b.id===branchId)?.head_id];
@@ -117,7 +131,7 @@ export function knowledgeDemo():KnowledgeApi{
    result={branch:branches.find(x=>x.id===b),documents:rows.slice(offset,offset+limit),next_offset:rows.length>offset+limit?offset+limit:null,
     categories:categories.map(c=>{const tagged=all.filter(d=>hasTag(d,c.id));return {...c,count:tagged.length,branch_id:tagged[0]?.branch_id};}).filter(c=>c.independent||c.count)};
   }
-  else if(url.pathname.startsWith('/documents/'))result={document:visible(b).find(d=>d.document_id===url.pathname.split('/').pop())};
+  else if(url.pathname.startsWith('/documents/'))result=readDocument(b,url.pathname.split('/').pop()!,q.get('version_id'));
   else if(url.pathname==='/tag-proposals')result={proposals:tagProposals.filter(p=>p.state==='pending'&&p.expires_at>date())};
   else if(url.pathname.startsWith('/tag-proposals/')){
    const proposal=tagProposals.find(p=>p.id===url.pathname.split('/').pop());

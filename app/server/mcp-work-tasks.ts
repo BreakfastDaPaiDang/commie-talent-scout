@@ -31,11 +31,22 @@ registerJournalFields('restore_work_task_comment',['id','expected_version','requ
 registerJournalFields('refer_archive',['archive_id','expected_version','deadline_at','request_id']);
 registerJournalFields('confirm_membership',['archive_id','expected_version','deadline_at','request_id']);
 registerJournalFields('assign_work_task',['id','member_id','expected_version','reason','request_id']);
+const taskDetailOutput=z.looseObject({
+  personnel_recognition:z.object({
+    round_id:z.string(),round_number:z.number(),legacy:z.boolean(),
+    votes:z.array(z.object({
+      id:z.string(),member_archive_id:z.string(),name:z.string(),created_at:z.string(),
+      withdrawn_at:z.string().nullable(),triggered:z.boolean(),evidence_deleted:z.boolean(),
+      evidence:z.object({archive_id:z.string(),observation_id:z.string(),content_version:z.number(),url:z.string()}).nullable()
+    }))
+  }).optional()
+});
 export const workTaskGuides=[
  memberArchiveGuidance,
  '工作任务使用 list_work_tasks/get_work_task；record_task_context 返回的是 Agent 调用审查记录 ID，不是工作任务 ID。档案、观察、账号 ID 也不能混用。先核对目标和用户授权，工具 schema 是可填字段的依据。',
  'list_work_tasks 默认开启任务，按 P0 → P1 → P2、同级最近更新排序；scope=mine 只看本人已领取，recommended 是本人倾向推荐，all 是全组可见。archive_id 查档案关联任务，state=closed/all 查历史；next_offset 非空时传 offset 继续，不能把首批当全部。',
  'get_work_task 返回任务版本及最近各100条评论/操作历史；comments_next_cursor 或 events_next_cursor 非空时，用 list_work_task_history 对应 section 和 cursor 继续。每部分 next_cursor=null 才读完；评论引用正文要按 observation_id 及 content_version 读取有权查看的观察版本。',
+ '人员认可触发的审核任务通过 get_work_task.personnel_recognition 返回该任务所属轮次和触发时有效的认可。triggered 标记触发任务的那一份，withdrawn_at 和 evidence_deleted 反映当前状态。evidence 为空表示当前不可读，legacy=true 的旧审核保留空列表。使用 evidence.url 打开当时的版本，或将 evidence.observation_id 传给 list_observation_versions，before 传内容版本加一、limit 传 1，并核对返回版本。',
  '创建 → 领取 → 记录进展 → 提交交付：create_work_task 提供目的、交付要求、期限、标签与优先级；普通创建不分配负责人；采纳对接推荐可带 handoff，原子关联来源观察、候选和经确认的负责人。claim_work_task 由调用账号本人主动领取；推荐不限制从全组领取。管理员明确指派用 assign_work_task，不能把指派记成主动领取。',
  '编辑/领取/交付使用 get_work_task.task.version 作为 expected_version；评论编辑使用评论自身 version。每个新业务动作使用新的 UUID request_id。网络结果不明先 get_request_result，仍重试时保持原参数和 ID；解决版本冲突后依据重新读取的结果建立新动作，不猜版本。',
  '月度人事跟进、人事审核、入社对接、接触跟进任务的 requires_observation_reference=true，交付必须引用至少一条本轮任务创建或最近重开后新增的关联档案观察，评论和结果说明不能替代。先复用本次已有观察；尚未留档时先 create_observation 保存用户授权的实际接触结果，再以返回的 id/content_version 构造 references，complete_work_task 提供 result_kind/result_text。只有当前负责人可交付；新增观察、评论或改档案状态都不会自动完成任务，未联系到需如实留观察，提交 unable_to_contact 与未来的 next_contact_at，任务保持开启。',
@@ -53,7 +64,7 @@ export function registerWorkTaskTools(server:any,env:Env,actor:Actor,reply:McpRe
  server.registerTool('create_work_task_label',{description:'用户授权创建任务标签时使用；先搜索并优先复用，找不到合适标签才新建。同名复用，返回 key，标签本身不触发业务规则。名称是共享词库内容，不写私人材料。',annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:true,openWorldHint:false},inputSchema:taskLabelCreateInput,outputSchema:z.object({key:z.string(),name:z.string(),changed:z.boolean()}).passthrough()},(input:any)=>reply(()=>labels.create(input)));
 
   server.registerTool('list_work_tasks',{description:'查看工作任务看板，默认按优先级 P0 → P1 → P2、同级最近更新排序；query 搜索任务标题、目的、交付要求和相关对象；labels 为任一标签匹配，可与 priority、state 组合，先筛选再限制数量；next_offset 非空时传入 offset 读取后续任务。scope=recommended 只看按本人倾向推荐的未领取任务，scope=mine 看本人已领取任务，scope=admin 仅管理员查看待处理队列。',annotations:{readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:false},inputSchema:workTaskListInput,outputSchema:z.object({tasks:z.array(z.record(z.string(),z.unknown())),next_offset:z.number().nullable()})},(input:any)=>reply(()=>service.list(input),r=>({count:(r.tasks as unknown[]).length})));
-  server.registerTool('get_work_task',{description:'读取任务及最近各100条评论/历史；task.requires_observation_reference 表示交付是否必须引用关联档案观察。comments_next_cursor、events_next_cursor非空时用 list_work_task_history 继续读取对应 section。观察引用按当前权限过滤，首批不代表全部历史。',annotations:{readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:false},inputSchema:z.object({id:z.uuid()}),outputSchema:z.record(z.string(),z.unknown())},(input:any)=>reply(()=>service.detail(input.id),r=>({events:(r.events as unknown[]).length,comments:(r.comments as unknown[]).length})));
+  server.registerTool('get_work_task',{description:'读取任务及最近各100条评论/历史。人员认可触发的审核任务附带该轮触发时有效的认可、当前撤回和删除状态，以及有权读取的观察依据和固定版本链接。task.requires_observation_reference 表示交付是否必须引用关联档案观察。comments_next_cursor、events_next_cursor非空时用 list_work_task_history 继续读取对应 section。',annotations:{readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:false},inputSchema:z.object({id:z.uuid()}),outputSchema:taskDetailOutput},(input:any)=>reply(()=>service.detail(input.id),r=>({events:(r.events as unknown[]).length,comments:(r.comments as unknown[]).length})));
   server.registerTool('list_work_task_history',{description:'按 section=comments 或 events 分页读取任务评论及操作历史，最新在前。cursor 来自 get_work_task 对应的 comments_next_cursor/events_next_cursor 或本工具的 next_cursor；只有 next_cursor=null 才读完该部分。每页重新校验当前权限，不返回无权阅读的观察引用。',annotations:{readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:false},inputSchema:workTaskHistoryInput,outputSchema:z.object({section:z.enum(['comments','events']),items:z.array(z.record(z.string(),z.unknown())),next_cursor:z.string().nullable()})},(input:any)=>reply(()=>service.history(input),r=>({count:(r.items as unknown[]).length})));
   server.registerTool('create_work_task',{description:'手动创建工作任务，提供标题、目的、交付要求、期限和标签。先搜索复用任务标签；省略 kind 即普通手动任务，保留在全组看板，不因标签触发审核或入社流程。旧 kind 参数仅兼容旧调用；自动任务由对应业务操作生成。普通创建不分配负责人；采纳对接推荐可带 handoff，原子关联来源观察、候选和经确认的负责人。',annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:true,openWorldHint:false},inputSchema:workTaskCreateInput,outputSchema:z.object({id:z.string(),kind:z.string(),status:z.string(),version:z.number(),changed:z.boolean()}).passthrough()},(input:any)=>reply(()=>service.create(input),r=>({id:r.id,version:r.version,changed:r.changed})));
   server.registerTool('claim_work_task',{description:'主动领取开启且无负责人的工作任务。推荐只影响推送，不限制从全组看板领取。',annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:true,openWorldHint:false},inputSchema:workTaskClaimInput,outputSchema:z.object({id:z.string(),owner_id:z.string(),version:z.number(),changed:z.boolean()}).passthrough()},(input:any)=>reply(()=>service.claim(input),r=>({id:r.id,version:r.version,changed:r.changed})));

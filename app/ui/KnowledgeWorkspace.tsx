@@ -3,10 +3,11 @@ import { Icon } from './icons';
 import { ShareLink } from './ShareLink';
 import { KnowledgeDocumentBody } from './KnowledgeComments';
 import { KnowledgeAvatar } from './KnowledgeDocumentActivity';
+import { KnowledgeVersionBody } from './KnowledgeHistoryDetails';
 import { KnowledgeCategoryDrawer, KnowledgeCategoryEditor } from './KnowledgeCategories';
 import { KnowledgeReviewBar, KnowledgeReviewDetail, reviewDeadline, votingClosed } from './KnowledgeReview';
 import { KnowledgeTagReviewDetail } from './KnowledgeTagProposals';
-import { remainingVoteTime } from '../shared/knowledge';
+import { knowledgeDocumentPath, remainingVoteTime } from '../shared/knowledge';
 import { KnowledgeHelp, KnowledgeHelpButton } from './KnowledgeHelp';
 import { KnowledgeBranches, KnowledgeBranchForm, KnowledgeIssues, KnowledgeHistory } from './KnowledgeCollaboration';
 import type { KnowledgeApi, KnowledgeCategory, KnowledgeIdentity, KnowledgeVersion } from '../shared/knowledge';
@@ -22,7 +23,7 @@ import './knowledge-index.css';
 const versionTabs: [Tab, string][] = [
   ['content', '内容'], ['issues', '议题'], ['branches', '分支'], ['history', '历史'],
 ];
-const noSelection = {documentId: null, reviewId: null, reviewHead: null, issueId: null, tagProposalId: null};
+const noSelection = {documentId: null, versionId: null, reviewId: null, reviewHead: null, issueId: null, tagProposalId: null};
 const knowledgeDate = new Intl.DateTimeFormat('sv-SE', {timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit'});
 
 function Byline({name, at}: {name: string; at: string}) {
@@ -61,11 +62,11 @@ export function KnowledgeWorkspace({api, identity}: {api: KnowledgeApi; identity
   const canWrite = identity.can_write;
   const navigation = useKnowledgeNavigation(canWrite);
   const {
-    scope, issueId, reviewId, reviewHead, tagProposalId, mode, branchId, documentId, tab, mobileDetail, navigate,
+    scope, issueId, reviewId, reviewHead, tagProposalId, mode, branchId, documentId, versionId, tab, mobileDetail, navigate,
   } = navigation;
   const {
     search, revision, merges, reviewMatches, branches, list, drafts, category, setCategory, query,
-    setQuery, doc, loadingDoc, loadingMerges, reviewError, tagQueue, tagDetail, error, refresh,
+    setQuery, doc, historical, publicReview, loadingDoc, loadingMerges, reviewError, tagQueue, tagDetail, error, refresh,
   } = useKnowledgeData(api, canWrite, navigation);
   const workspace = useRef<HTMLElement>(null);
   const detailScroll = useRef<HTMLDivElement>(null);
@@ -104,7 +105,7 @@ export function KnowledgeWorkspace({api, identity}: {api: KnowledgeApi; identity
 
   useEffect(() => {
     detailScroll.current?.scrollTo(0, 0);
-  }, [reviewId, tagProposalId, documentId, branchId, tab]);
+  }, [reviewId, tagProposalId, documentId, versionId, branchId, tab]);
 
   useEffect(() => {
     if (review && review.branch_id !== branchId) navigate({branchId: review.branch_id}, 'replace');
@@ -299,13 +300,13 @@ export function KnowledgeWorkspace({api, identity}: {api: KnowledgeApi; identity
   const openHelp = () => setHelp(value => !value);
   const modeLabel = simple ? '版本协作' : '返回普通视图';
   const documentTags = doc ? tagsFor(doc) : [];
-  const documentState = branchId === 'main' ? '已入库' : branch?.visibility === 'private' ? '我的草稿' : branch?.state === 'merged' ? '已合入的分支版本' : '分支中的修改';
+  const documentWritable = canWrite && versionId === null;
+  const documentState = historical ? '历史版本' : branchId === 'main' ? '已入库' : branch?.visibility === 'private' ? '我的草稿' :
+    versionId && publicReview ? '公开审核' : branch?.state === 'merged' ? '已合入的分支版本' : '分支中的修改';
   const noDocuments = !list.items.length && (!all || !drafts.items.length && !visibleReviews.length && !visibleTagReviews.length);
   const editorBranch = simple && !editor?.document ? branches.find(candidate => candidate.id === 'main') : branch;
-  const shareDocument = doc && (branchId === 'main' || branch?.visibility === 'members') && <ShareLink path={'/knowledge?' + new URLSearchParams({
-    document: doc.document_id,
-    ...(branchId !== 'main' ? {branch: branchId, mode: 'git'} : {}),
-  })} label="分享文档" />;
+  const shareDocument = doc && (branchId === 'main' || branch?.visibility === 'members') &&
+    <ShareLink path={knowledgeDocumentPath(doc.document_id, branchId, versionId ?? undefined)} label="分享文档" />;
 
   return <main ref={workspace} className={'kb-workspace ' + (simple ? 'kb-index ' : '') + (mobileDetail ? 'kb-detail-visible ' : '') + (help ? 'kb-help-active' : '')}>
     <aside className="kb-list-pane" aria-label="知识库文档">
@@ -409,7 +410,7 @@ export function KnowledgeWorkspace({api, identity}: {api: KnowledgeApi; identity
           doc ? <article className="kb-article">
             {simple ? <header className="kb-reading-header">
               <div className="kb-article-title">
-                <h1>{doc.title}</h1><span className={'kb-reading-status' + (branchId === 'main' ? ' is-adopted' : '')}>{documentState}</span>
+                <h1>{doc.title}</h1><span className={'kb-reading-status' + (branchId === 'main' && !historical ? ' is-adopted' : '')}>{documentState}</span>
               </div>
               <div className="kb-reading-details">
                 <p className="kb-reading-byline">
@@ -419,9 +420,9 @@ export function KnowledgeWorkspace({api, identity}: {api: KnowledgeApi; identity
                 {!!documentTags.length && <div className="kb-document-tags" aria-label="文档标签">
                   {documentTags.map(tag => <TagChip key={tag.id} tag={tag} />)}
                 </div>}
-                {(shareDocument || canWrite && editable) && <div className="kb-reading-actions">
+                {(shareDocument || documentWritable && editable) && <div className="kb-reading-actions">
                   {shareDocument}
-                  {canWrite && editable && <button data-kb-help="edit" className="button quiet" onClick={() => setEditor({document: doc})}>
+                  {documentWritable && editable && <button data-kb-help="edit" className="button quiet" onClick={() => setEditor({document: doc})}>
                     <Icon name="edit" size={16} />{branch?.visibility === 'private' ? '编辑草稿' : '建议修改'}
                   </button>}
                 </div>}
@@ -430,17 +431,17 @@ export function KnowledgeWorkspace({api, identity}: {api: KnowledgeApi; identity
               <div className="kb-article-title"><h1>{doc.title}</h1></div>
               <p className="kb-article-meta">{documentState}{branch && ' · ' + branch.name}<span>{doc.author_name}</span></p>
             </>}
-            <KnowledgeDocumentBody key={branchId + doc.id} api={api} document={doc} branchId={branchId} writable={canWrite} identity={identity} onIssue={openIssue}
+            {historical ? <KnowledgeVersionBody version={doc} /> : <KnowledgeDocumentBody key={branchId + doc.id} api={api} document={doc} branchId={branchId} writable={documentWritable} identity={identity} onIssue={openIssue}
               footer={!simple && <div className="kb-document-actions">
                 <div>
                   {canWrite && <button data-kb-help="issues" className="text-button" onClick={() => openTab('issues')}>议题</button>}
                   <button data-kb-help="history" className="text-button" onClick={() => openTab('history')}>历史版本</button>
                 </div>
-                {canWrite && editable && <button data-kb-help="edit" className="button" onClick={() => setEditor({document: doc})}>
+                {documentWritable && editable && <button data-kb-help="edit" className="button" onClick={() => setEditor({document: doc})}>
                   <Icon name="edit" size={18} />在分支中修改
                 </button>}
-                {canWrite && branchId !== 'main' && editable && <button data-kb-help="remove" className="text-button" onClick={() => setRemoving(true)}>移除文档</button>}
-              </div>} />
+                {documentWritable && branchId !== 'main' && editable && <button data-kb-help="remove" className="text-button" onClick={() => setRemoving(true)}>移除文档</button>}
+              </div>} />}
           </article> : <div className="kb-empty">
             {loadingDoc ? <p role="status">正在读取文档…</p> : !error && <p>选择一篇文档开始阅读。</p>}
           </div>)}
@@ -450,7 +451,7 @@ export function KnowledgeWorkspace({api, identity}: {api: KnowledgeApi; identity
           onReview={merge => selectReview(merge.id, merge.head_id, merge.branch_id)} />}
         {tab === 'history' && <KnowledgeHistory key={branchId + revision} api={api} branchId={branchId} />}
       </div>
-      {tab === 'content' && !reviewId && !tagProposalId && doc && branch && canWrite && <KnowledgeReviewBar key={branchId + doc.id} api={api} branch={branch} document={doc}
+      {tab === 'content' && !reviewId && !tagProposalId && doc && branch && documentWritable && <KnowledgeReviewBar key={branchId + doc.id} api={api} branch={branch} document={doc}
         actorId={identity.id} now={now} merge={merges.find(m => m.branch_id === branchId && m.state === 'open')}
         onSubmitted={(bid, id, head) => {
           if (simple) selectReview(id, head, bid);

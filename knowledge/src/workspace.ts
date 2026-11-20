@@ -73,8 +73,8 @@ export class KnowledgeWorkspace {
   document(branchId: string, id: string) {
     return records.getDocument(this.context, branchId, id);
   }
-  get(branchId: string, id: string) {
-    return documents.readDocument(this.context, branchId, id);
+  get(branchId: string, id: string, versionId?: string) {
+    return documents.readDocument(this.context, branchId, id, versionId);
   }
   version(id: string | null) {
     return records.getVersion(this.context, id);

@@ -1,25 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {connectedFixture} from './connected-fixture.mjs';
+import {connectedFixture, connectMcp} from './connected-fixture.mjs';
 import {request} from './fixture.mjs';
 import personnel from '../../app/server/index.ts';
-import worker from '../src/index.ts';
 import {KnowledgeWorkspace} from '../src/workspace.ts';
 import {emptyCatalogContent} from '../../app/shared/catalog.ts';
-
-async function connectMcp(f,direct=false){
- const origin=direct?f.env.APP_ORIGIN:'https://identity.example';
- const headers={Authorization:'Bearer '+f.token,'Content-Type':'application/json',Accept:'application/json, text/event-stream',Host:new URL(origin).hostname};
- const rpc=async(method,params)=>{
-  const input=new Request(origin+'/mcp',{method:'POST',headers,body:JSON.stringify({jsonrpc:'2.0',id:1,method,params})});
-  const r=direct?await worker.fetch(input,f.env,f.ctx):await personnel.fetch(input,f.p.env,f.ctx);
-  const body=await r.text();assert.equal(r.status,200,body);
-  return JSON.parse(body.startsWith('{')?body:body.split('\n').find(l=>l.startsWith('data:')).slice(5)).result;
- };
- const init=await rpc('initialize',{protocolVersion:'2025-03-26',capabilities:{},clientInfo:{name:'workspace-test',version:'1'}});
- headers['MCP-Protocol-Version']=init.protocolVersion;
- return rpc;
-}
 
 async function approveTag(f,proposal){
  for(const actor of f.k.actors.slice(0,3)){

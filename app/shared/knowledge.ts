@@ -30,6 +30,16 @@ export type KnowledgeReviewDocument={document_id:string;title:string;tags:{id:st
 export type KnowledgeDiff={document_id:string;base:KnowledgeVersion|null;current:KnowledgeVersion|null;proposed:KnowledgeVersion;conflict:boolean};
 export type KnowledgeApi={read<T=any>(path:string):Promise<T>;write<T=any>(path:string,body:Record<string,unknown>):Promise<T>};
 
+export function knowledgeDocumentPath(documentId: string, branchId = 'main', versionId?: string) {
+ const params = new URLSearchParams({document: documentId});
+ if (branchId !== 'main') {
+  params.set('branch', branchId);
+  params.set('mode', 'git');
+ } else if (versionId) params.set('scope', 'main');
+ if (versionId) params.set('version', versionId);
+ return '/knowledge?' + params;
+}
+
 // Offsets use JavaScript UTF-16, exactly like DOM Range. A changed quote is never guessed.
 export function locateAnnotation(body:string,comment:KnowledgeComment,versionId:string):{start:number;end:number}|null{
  if(!comment.quote||comment.start_offset===null||comment.end_offset===null)return null;

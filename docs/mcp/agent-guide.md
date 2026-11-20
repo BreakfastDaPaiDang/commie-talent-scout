@@ -1,6 +1,6 @@
 # 服务内 Agent 主题指南（正式产品内容基线）
 
-本文件是现行 MCP 操作路线的阅读入口。运行时主题指南来自 app/server/mcp-*.ts，实际字段与权限以连接服务的目录及执行结果为准。本地探针不是正式服务。2026-10-12 按 #89 同步社员、任务与统一消息机制。
+本文件是现行 MCP 操作路线的阅读入口。主站和独立知识服务共用知识指南。运行时可通过主站 `get_usage_guide` 或两套服务的 `knowledge_workspace_guide` 读取对应内容。字段与权限以连接服务的目录和执行结果为准。
 
 ## overview · 理解用途并开始任务
 
@@ -14,9 +14,37 @@
 
 只确认观察就只发观察；修改草稿、讨论、连接授权与工具许可都不是发布确认。已确认当前方案、已给最终正文并明确要求按原文发布或明确要求本次免预览直接执行时沿用授权，不反复确认。明确授权的任务直接执行；只查资料不等于授权改状态、标签或负责人。需要询问时只问会改变结果的缺项。写入后简短报告实际完成的对象及链接、失败和剩余事项，不只报告“已调用工具”。
 
+## knowledge · 生效知识与修订提案
+
+身份核验在主站用 `whoami`，在独立知识 MCP 用 `knowledge_branches` 返回的 `identity`。仅接入时完成身份核验。每个会话首次开展人事业务时，先调用 `knowledge_workspace_guide`，再读取知识正文。上下文丢失后重新获取指南与全量知识。
+
+1. 从 `knowledge_documents({branch_id:"main",offset:0})` 开始，省略搜索和标签过滤。每页读取标题、已认可标签、正文全文、`document_id`、`version_id` 和版本链接 `reference_url`。把 `next_offset` 传为下一页的 `offset`，直到 `next_offset` 为 `null`。
+2. 记录首页的 `branch.head_id` 和 `tag_revision`，后续每页都核对。继续业务前用 `knowledge_documents({branch_id:"main",offset:0,limit:1})` 复核这两个值。任一值变化或收到 `KNOWLEDGE_SNAPSHOT_CHANGED` 时丢弃已读旧快照，从第一页重读。标签认可可以单独更新 `tag_revision`。
+3. 已有修订在审核时，继续以主分支当前版本为共同依据。草稿、待认可和移除后的历史只在讨论、修改或认可相应条目时，按权限另读。外部链接和附件按本次工作需要查阅。读取失败或截断时补齐缺页并重查快照，仍失败就说明知识未核验，以及哪些建议因此无法确认。
+
+只有用户明确要求按多个已认可标签缩小知识范围时，才用 `knowledge_documents({scope:"main",any_tag_ids:[标签 ID]})` 读取匹配任一所选标签的文档。续页保留相同筛选。普通单标签浏览用 `category_id`，恢复全量时从第一页重读。
+
+后续按任务自动选择适用知识的规则供组会讨论。见[组织共用知识库，按工作选择默认阅读范围](../adr/0023-agent-knowledge-reading-scope.md)。
+
+对照同一快照的各篇相关条款、适用范围和反例。发现跨文档业务矛盾、实际情形超出规则或值得补入的新经验时，提出新条目或修订草稿。写清问题、业务影响、各条款的适用条件、拟改措辞及待确认事项，每个引用给出标题、相关原句、版本和工具返回的链接。
+
+用户明确授权发起讨论后，可用 `knowledge_create_issue`，在议题正文中放入多个可公开的文档引用。已有可公开的批注可用 `knowledge_issue_from_annotation`。获准保存私人草稿时，用 `knowledge_create_branch` 指定 `visibility:"private"`，再用 `knowledge_save_document` 保存。获准提审时用 `knowledge_submit_review` 逐篇提交，获准认可具体候选版本时用 `knowledge_agree`。发布、修改、关闭和出具认可归属所连接账号，须取得对具体内容和动作的明确授权。采纳仍由共同认可决定。
+
+## personnel_review · 会前、会中、会后的人事审核
+
+使用主站 `get_usage_guide(topic="personnel_review")`，按上面的流程读完生效知识并核对快照。已有档案链接或任务明确关联人物时，直接用 `get_archive` 读取。仅知道姓名时，用 `list_archives(type="person")` 查询，目标仍有歧义才向用户确认。用 `list_observations` 分页阅读相关观察。用 `get_work_task` 核对本次任务，其 `personnel_recognition` 提供该任务的触发依据。
+
+- 会前归纳已经了解的事实，找出仍需核实的能力、意愿和协作情况。给审核者建议少量问题及追问方式，逐项说明为何问、想取得何种依据，引用适用知识的标题、版本和链接。
+- 会中按现场交流更新问题。核对提问是否服务于审核目的，发现重复询问、遗漏及证据不足的判断。注明可核实事实、本人自述或他人转述、成员和 Agent 判断的来源、时间和适用条件。
+- 会后整理可审阅的观察草稿，保留有依据的结论和仍待核实的情况及其理由。是否写入以及正式结论由审核者确认。可以主动提出有依据的后续问题，建议认可具体人物或知识版本，或指出可修订的知识条目。
+
+只确认发布观察时，按确认稿调用 `create_observation`。用户已明确要求“发布观察并认可他”时，发布后读取该观察的确切版本，核对 `get_personnel_recognition` 的轮次和余额，再用 `recognize_person` 引用该版本，沿用已有授权。人员认可使用所连接账号对应社员的月度额度。关闭、修改、投票或交付等动作同样按用户明确批准的范围执行。
+
+只有审核任务的当前负责人可在结论明确授权后调用 `complete_work_task`。按任务的 `requires_observation_reference` 提供本次任务创建或最近重开后新增、未删除的关联档案观察 ID 和内容版本。自动审核任务经明确确认通过后以 `result_kind:"audit_passed"` 交付，推进档案至已加入待对接。
+
 ## personnel_recognition · 观察关联人员认可
 
-首次开展人事业务前，读取全部主分支生效知识，按 next_offset 翻完并记录 head_id；继续业务前检查主分支是否更新。提案和草稿不是已通过共识，写入仍需用户具体授权。
+首次开展人事业务时按 [生效知识流程](#knowledge--生效知识与修订提案) 获取依据。审核准备及复盘可读取 `personnel_review` 指南。
 
 先读取人物及相关观察，再 get_personnel_recognition 核对轮次与额度。recognize_person 仅用于用户明确认可当前人物及具体观察版本的情况；每个正式社员每北京时间自然月两份，每人物每轮一次，三人触发待领取审核。管理员遵循同一规则，服务账号无票。withdraw_personnel_recognition 不退额度、不删除已触发任务。详细规则见 [人员认可](../personnel-recognition.md)。直接 refer_archive、confirm_membership 或 set_archive_state 不再用于推进审核和入社；交付自动审核/对接任务完成后续流程。
 

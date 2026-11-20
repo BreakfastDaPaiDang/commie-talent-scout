@@ -43,10 +43,31 @@ export function withTags({tags_json, visible_category_id, ...version}: TaggedRow
   return {...version, category_id: visible_category_id, tags: JSON.parse(tags_json)};
 }
 export async function getDocument(context: ServiceContext, branchId: string, id: string, includeRemoved = false) {
-  await getBranch(context, branchId);
-  const v = await context.stmt(`SELECT v.*,c.id AS visible_category_id,c.name AS category_name,${tagProjection(context)} FROM kw_items i JOIN kw_versions v ON v.id=i.version_id LEFT JOIN kw_categories c ON c.id=v.category_id AND ${visibleTag(context, 'c')} WHERE i.branch_id=? AND i.document_id=?`, branchId, id).first<TaggedRow>();
-  if (!v || v.deleted && !includeRemoved) throw new KnowledgeError(404, 'NOT_FOUND', '文档不存在或已在此分支移除');
-  return withTags(v);
+  return (await getDocumentRecord(context, branchId, id, undefined, includeRemoved)).document;
+}
+
+export async function getDocumentRecord(context: ServiceContext, branchId: string, id: string, versionId?: string, includeRemoved = false) {
+  const branch = await getBranch(context, branchId);
+  const projection = `v.*,i.version_id AS current_version_id,c.id AS visible_category_id,c.name AS category_name,${tagProjection(context)}`;
+  const category = `LEFT JOIN kw_categories c ON c.id=v.category_id AND ${visibleTag(context, 'c')}`;
+  type DocumentRow = TaggedRow & {current_version_id: string | null};
+  // Follow the branch's own history. Merge parents may contain versions never adopted by this branch.
+  const row = versionId === undefined
+    ? await context.stmt(`SELECT ${projection} FROM kw_items i JOIN kw_versions v ON v.id=i.version_id
+      ${category} WHERE i.branch_id=? AND i.document_id=?`, branchId, id).first<DocumentRow>()
+    : await context.stmt(`WITH RECURSIVE history(id) AS (
+      SELECT head_id FROM kw_branches WHERE id=?
+      UNION SELECT c.parent_id FROM history h JOIN kw_commits c ON c.id=h.id WHERE c.parent_id IS NOT NULL
+    ) SELECT ${projection} FROM kw_versions v
+      JOIN kw_branches b ON b.id=? AND b.state<>'closed'
+      LEFT JOIN kw_items i ON i.branch_id=b.id AND i.document_id=v.document_id ${category}
+      WHERE v.id=? AND v.document_id=? AND (v.id=i.version_id OR EXISTS(
+        SELECT 1 FROM history h JOIN kw_changes x ON x.commit_id=h.id WHERE x.document_id=v.document_id AND x.after_id=v.id
+      ))`, branchId, branchId, versionId, id).first<DocumentRow>();
+  if (!row || row.deleted && !includeRemoved) throw new KnowledgeError(404, 'NOT_FOUND', versionId === undefined
+    ? '文档不存在或已在此分支移除' : '文档版本不存在或不可见');
+  const {current_version_id, ...tagged} = row;
+  return {branch, document: withTags(tagged), historical: current_version_id !== row.id};
 }
 export async function getVersion(context: ServiceContext, id: string | null) {
   const definitionVisible = context.showPendingTags ? '1=1' : `NOT EXISTS(SELECT 1 FROM kw_categories hidden

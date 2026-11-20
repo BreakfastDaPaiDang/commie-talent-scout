@@ -1,8 +1,12 @@
 import { useEffect, useState } from 'react';
-import type { KnowledgeApi, KnowledgeCommitDetail } from '../shared/knowledge';
+import type { KnowledgeApi, KnowledgeCommitDetail, KnowledgeVersion } from '../shared/knowledge';
 import { Modal } from './Modal';
 
 export type VersionTarget = {branchId: string; commitId: string; documentId?: string};
+
+export function KnowledgeVersionBody({version}: {version: KnowledgeVersion}) {
+  return <p className="kb-prose">{version.deleted ? '此版本移除了文档' : version.body}</p>;
+}
 
 export function KnowledgeVersionModal({api, target, close}: {api: KnowledgeApi; target: VersionTarget; close: () => void}) {
   const {branchId, commitId, documentId} = target;
@@ -25,7 +29,7 @@ export function KnowledgeVersionModal({api, target, close}: {api: KnowledgeApi; 
         <h3>{detail.commit.message}</h3>
         {detail.changes.map(({document_id, after}) => after && <section key={document_id}>
           <h3>{after.title}</h3>
-          <p className="kb-prose">{after.deleted ? '此版本移除了文档' : after.body}</p>
+          <KnowledgeVersionBody version={after} />
         </section>)}
       </>}
     </div>
