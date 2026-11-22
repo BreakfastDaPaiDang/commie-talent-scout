@@ -22,7 +22,7 @@ function submit(writer,draft) {
   return writer.submitReview({branch_id:draft.branch.id,expected_version:draft.document.version,document_id:draft.document.id,version_id:draft.version.id,reason:'补充了可以结合实际作品追问的问题。',request_id:request()});
 }
 
-async function memberContext(browser,f,actor,base) {
+export async function memberContext(browser,f,actor,base) {
   const at=new Date().toISOString(),session=request(),hash=await digest(session);
   f.p.sqlite.prepare("INSERT INTO members(id,username,name,role,password_hash,must_change_password,created_at) VALUES(?,?,?,'member','fixture',0,?)").run(actor.id,actor.username,actor.name,at);
   historicalSql(f.p,()=>f.p.sqlite.prepare("INSERT INTO archives(id,type,name,status,person_role,member_status,linked_account_id,created_by,created_at,updated_at) VALUES(?,'person',?,'已入伙','member','可接工作',?,?,?,?)").run(actor.membership_id,actor.name,actor.id,actor.id,at,at));

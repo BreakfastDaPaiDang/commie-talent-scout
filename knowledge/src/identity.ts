@@ -1,7 +1,7 @@
 import {z} from 'zod';
 import {KnowledgeError,type Env,type Identity} from './types.ts';
 
-const identity=z.object({id:z.uuid(),name:z.string(),username:z.string(),role:z.enum(['member','admin']),eligible:z.boolean(),membership_id:z.uuid().nullable(),verified_at:z.iso.datetime(),environment:z.enum(['staging','production'])});
+const identity=z.object({id:z.uuid(),name:z.string(),username:z.string(),role:z.enum(['member','admin']),eligible:z.boolean(),membership_id:z.uuid().nullable(),membership_name:z.string().nullish(),verified_at:z.iso.datetime(),environment:z.enum(['staging','production'])});
 export function identityHeaders(request:Request,allowCookie=false){
  const headers=new Headers(),bearer=request.headers.get('Authorization');
  if(bearer&&/^Bearer \S{1,1024}$/.test(bearer)&&!bearer.startsWith('Bearer candy_'))headers.set('Authorization',bearer);

@@ -10,8 +10,8 @@
 
 ## 共识规则
 
-- 主分支 `main` 提供只读的当前共识。文档新增、修改或移除逐篇进入审核。
-- 同一版本在七天内取得三名不同正式成员明确同意才具备合入资格。截止后已达标的候选可继续处理。修改或未达标过期后重提开启新一轮并保留旧票历史。
+- 主分支 `main` 提供当前生效版本。仅本人个人范围的文档可由本人发布和修订，其余范围变更及共享文档按单篇审核。
+- 提交共同认可的版本，在七天内取得三名不同正式成员同意后具备合入资格。截止后已达标的候选可继续处理。修改或未达标过期后重提开启新一轮并保留旧票历史。
 - 通过 `/reviews` 提交的单篇候选在第三票时检查冲突和同篇的其他有效候选。没有这两项时随本票合入。版本协作的合并请求保留显式合入。同一篇文档的多个达标候选需要记录会议或议题选择。
 - 合入前用与主分支的共同基础检查冲突。处理冲突后重新征求同意。
 - 知识标签的新增和改写独立提议，七天内取得三票后生效。网页成员可以给文档附加待认可的标签。MCP、连接令牌和糖果接收者的读取仅返回已认可标签。
@@ -25,10 +25,11 @@
 |---|---|
 | `/branches`、`/branches/share` | 分支与私人草稿共享 |
 | `/documents`、`/documents/:id`、`/documents/remove` | 搜索、分页、不可变版本写入与移除 |
+| `/reading-scopes`、`/reading-defaults` | 查找已发布的个人范围，读取和设置账号默认额外通读的范围 |
 | `/categories`、`/categories/definition` | 当前分支标签及定义 |
 | `/tag-proposals`、`/tag-proposals/:id`、`/tag-proposals/approve` | 正式成员在网页查看待认可列表、读取提议详情和认可标签 |
 | `/diff`、`/branches/resolve` | 与主分支比较、明确解决冲突 |
-| `/reviews` | 单篇文档审核，含旧批量候选中的单篇文档 |
+| `/reviews` | 单篇文档提交，按新旧版本范围直接发布或发起审核 |
 | `/merges`、`/merges/approve`、`/merges/accept` | 合并请求、同意与执行合入 |
 | `/issues`、`/issues/:id`、`/issues/state` | 独立议题、结论及候选选择 |
 | `/comments` | 文末评论、句下批注、类别和议题讨论 |
@@ -37,7 +38,9 @@
 
 所有写操作提供 UUID `request_id`，失败重试保持参数与 ID。分支和主分支版本检查与全库修订守卫在同一 D1 事务提交，防止并发静默覆盖；响应丢失可通过回执恢复。网页与主站／独立服务 MCP 共用业务服务，不提供快捷采纳接口。
 
-独立知识 MCP 用 `knowledge_branches` 核对身份和读写权限。每个会话首次开展人事业务或丢失上下文后，先读 `knowledge_workspace_guide`，再用 `knowledge_documents` 从 `main` 第一页读取全部生效正文和版本链接。把 `next_offset` 传给下一页的 `offset`，每页及继续业务前核对 `branch.head_id` 和 `tag_revision`。任一值变化或收到 `KNOWLEDGE_SNAPSHOT_CHANGED` 时从第一页重读。标签认可可以单独更新 `tag_revision`。完整操作见 [MCP 生效知识流程](../docs/mcp/agent-guide.md#knowledge--生效知识与修订提案)。
+独立知识 MCP 用 `knowledge_branches` 核对身份和读写权限。每个会话首次开展人事业务或丢失上下文后，先读 `knowledge_workspace_guide`，再用 `knowledge_documents` 从 `main` 第一页读取默认范围内的生效正文和版本链接。把 `next_offset` 传给下一页的 `offset`，每页及继续业务前核对 `branch.head_id`、`tag_revision` 和本次实际读取的范围。任一值变化或收到 `KNOWLEDGE_SNAPSHOT_CHANGED` 时从第一页重读。标签认可可以单独更新 `tag_revision`。完整操作见 [MCP 生效知识流程](../docs/mcp/agent-guide.md#knowledge--生效知识与修订提案)。
+
+文档范围支持多选。人事默认范围、附加范围及个人文档发布见 [ADR 0024](../docs/adr/0024-document-scopes-and-personal-publication.md)。
 
 通过 MCP 保存文档可以省略 `category`，保留已有标签关联。MCP 标签提议返回提交确认，正式成员在网页查看并认可。
 

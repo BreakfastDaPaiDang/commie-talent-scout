@@ -4,7 +4,7 @@ const trigger=page=>page.getByRole('button',{name:'知识库教程',exact:true})
 const tutorial=page=>page.getByRole('dialog',{name:'知识库按钮说明',exact:true});
 const caption=(page,id)=>page.locator('.kb-help-caption[data-help-id="'+id+'"]');
 const definitions={
- 'scope-main':'已形成共识，当前采用的正式内容',
+ 'scope-main':'查看已入库的正式内容',
  'scope-all':'草稿',
 };
 async function fitted(page){

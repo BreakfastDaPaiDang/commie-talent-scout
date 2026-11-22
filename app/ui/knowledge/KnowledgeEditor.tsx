@@ -1,8 +1,9 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useId, useRef, useState } from 'react';
 import { Modal, ModalActions } from "../Modal";
 import { KnowledgeCategoryEditor } from "../KnowledgeCategories";
 import type { KnowledgeApi, KnowledgeBranch, KnowledgeCategory, KnowledgeIdentity, KnowledgeVersion } from "../../shared/knowledge";
 import { TagChip } from "../TagCatalog";
+import { documentScopeOptions, documentScopes, isPersonalScope, personalScopeLabel } from './KnowledgeDocumentScopes';
 export function KnowledgeEditor({
   api,
   identity,
@@ -22,12 +23,14 @@ export function KnowledgeEditor({
   close: () => void;
   done: (id: string, branch: string) => void;
 }) {
+  const scopeLabel = useId();
   const draftKey = 'cts.knowledge.draft.' + identity.id + '.' + branch.id + '.' + (doc?.document_id ?? 'new'),
     defaults = {
       title: doc?.title ?? '',
       body: doc?.body ?? '',
       category: doc?.category_name ?? '',
       additional_tags: doc?.tags?.filter(tag => tag.id !== doc.category_id).map(tag => tag.name) ?? [] as string[],
+      scopes: documentScopes(doc),
       kind: doc?.kind ?? '知识',
       source: doc?.source ?? '',
       message: ''
@@ -61,7 +64,7 @@ export function KnowledgeEditor({
       sessionStorage.setItem(draftKey, JSON.stringify(fields));
     } catch {}
   }, [fields, draftKey]);
-  const field = (name: Exclude<keyof typeof defaults, 'additional_tags'>) => ({
+  const field = (name: Exclude<keyof typeof defaults, 'additional_tags' | 'scopes'>) => ({
     'aria-label': {
       title: '标题',
       body: '正文',
@@ -80,6 +83,10 @@ export function KnowledgeEditor({
     event.preventDefault();
     if (!fields.category.trim()) {
       setError('请选择标签');
+      return;
+    }
+    if (!fields.scopes.length) {
+      setError('请至少选择一个文档范围');
       return;
     }
     setBusy(true);
@@ -126,6 +133,18 @@ export function KnowledgeEditor({
   function changeTags(names: string[]) {
     setFields((old: typeof defaults) => ({...old, category: names[0] ?? '', additional_tags: names.slice(1)}));
   }
+  const personal = doc?.scopes?.find(isPersonalScope);
+  const ownPersonal = identity.membership_id ? 'personal:' + identity.membership_id : null;
+  const scopes = [...documentScopeOptions];
+  if (personal && personal !== ownPersonal) scopes.push({id: personal, name: personalScopeLabel(doc?.personal_scope_name)});
+  if (ownPersonal) scopes.push({id: ownPersonal, name: personalScopeLabel(identity.membership_name)});
+
+  function changeScope(id: string, checked: boolean) {
+    setFields((old: typeof defaults) => {
+      const kept = old.scopes.filter(scope => checked && isPersonalScope(id) ? !isPersonalScope(scope) : scope !== id);
+      return {...old, scopes: checked ? [...kept, id] : kept};
+    });
+  }
   return <Modal title={doc ? '修改文档' : '新文档'} onClose={close} busy={busy} wide>
     <form className="kb-form kb-editor" onSubmit={save}>
       <label>标题<input required maxLength={200} {...field('title')} /></label>
@@ -141,6 +160,15 @@ export function KnowledgeEditor({
               {chosen.length ? '＋ 添加标签' : '选择标签'}
             </button>
           </div>
+        </div>
+      </div>
+      <div className="kb-editor-scopes" role="group" aria-labelledby={scopeLabel}>
+        <span id={scopeLabel}>文档范围</span>
+        <div className="kb-scope-options">
+          {scopes.map(scope => <label key={scope.id}>
+            <input type="checkbox" checked={fields.scopes.includes(scope.id)} disabled={busy}
+              onChange={event => changeScope(scope.id, event.target.checked)} /><span>{scope.name}</span>
+          </label>)}
         </div>
       </div>
       <label>正文<textarea rows={10} required maxLength={60000} placeholder="写下内容。可用 ## 表示小标题。" {...field('body')} /></label>

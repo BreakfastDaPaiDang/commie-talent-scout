@@ -10,10 +10,10 @@ type Placement=Box&{ax:number;ay:number;ex:number;ey:number};
 
 const definitions:Definition[]=[
  {id:'help',selector:'.kb-help-button',text:'按钮说明已开启',side:'bottom',width:190},
- {id:'scope-main',selector:'[data-kb-help="scope-main"]',text:'已形成共识，当前采用的正式内容',side:'bottom',width:138},
+ {id:'scope-main',selector:'[data-kb-help="scope-main"]',text:'查看已入库的正式内容',side:'bottom',width:138},
  {id:'scope-all',selector:'[data-kb-help="scope-all"]',text:'查看自己的草稿、待认可和已入库文档',side:'bottom',width:138},
  {id:'scope-public',selector:'[data-kb-help="scope-public"]',text:'查看提交给成员审核的文档版本',side:'bottom',width:138},
- {id:'scope-drafts',selector:'[data-kb-help="scope-drafts"]',text:'尚未提交，仅自己可见的个人内容',side:'bottom',width:138},
+ {id:'scope-drafts',selector:'[data-kb-help="scope-drafts"]',text:'仅自己可见的未提交草稿',side:'bottom',width:138},
  {id:'search',selector:'.kb-search',text:'在当前范围内查找',side:'top'},
  {id:'new-entry',selector:'[data-kb-help="new-entry"]',text:'写一篇新草稿',side:'top'},
  {id:'view',selector:'.kb-view-switch, .kb-list-collaboration',text:'在普通视图和版本协作之间切换',side:'bottom'},
@@ -28,6 +28,7 @@ const definitions:Definition[]=[
  {id:'edit',selector:'[data-kb-help="edit"]',text:'打开文档编辑表单',side:'bottom'},
  {id:'remove',selector:'[data-kb-help="remove"]',text:'从当前分支移除这篇文档',side:'top'},
  {id:'submit',selector:'.kb-review-bar > button',match:/^提交到审核$/,text:'核对这篇草稿，再公开提交审核',side:'top'},
+ {id:'publish',selector:'.kb-review-bar > button',match:/^发布并入库$/,text:'核对仅个人范围的草稿，再直接发布到知识库',side:'top'},
  {id:'approve',selector:'.kb-review-bar > button, .kb-review-buttons > button',match:/^认可此版本$/,text:'认可这一版内容。七天内需要三名正式成员认可。',side:'top',width:250},
  {id:'review',selector:'.kb-review-progress button',text:'查看认可人数与尚未入库的原因',side:'top'},
  {id:'quote',selector:'.kb-article .kb-body .kb-text, .kb-proposed-version .kb-body .kb-text, .kb-review-reading .kb-body .kb-text',text:'选中文字，可添加批注',side:'bottom',members:true},

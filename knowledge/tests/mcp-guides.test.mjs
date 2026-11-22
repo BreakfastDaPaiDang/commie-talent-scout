@@ -20,7 +20,7 @@ test('both MCP entry points discover the same knowledge workflow and the main si
   assert.deepEqual((await invoke(main, 'get_usage_guide', {topic: 'knowledge'})).rules, rules);
   for (const rpc of [main, direct]) {
     assert.ok(rpc.init.instructions.includes(rules[0]));
-    assert.match(rpc.init.instructions, /首次开展人事业务.*丢失上下文.*knowledge_workspace_guide.*knowledge_documents.*next_offset.*branch\.head_id.*tag_revision.*KNOWLEDGE_SNAPSHOT_CHANGED/);
+    assert.match(rpc.init.instructions, /首次开展人事业务.*丢失上下文.*knowledge_workspace_guide.*knowledge_documents.*next_offset.*branch\.head_id.*tag_revision.*reading_scope_ids.*reading_defaults_version.*KNOWLEDGE_SNAPSHOT_CHANGED/);
   }
   assert.equal((await invoke(main, 'whoami')).member.id, f.p.actor.id);
   const {identity} = await invoke(direct, 'knowledge_branches');
@@ -31,6 +31,9 @@ test('both MCP entry points discover the same knowledge workflow and the main si
 
   const knowledgeGuide = rules.join('\n');
   assert.match(knowledgeGuide, /正文全文.*version_id.*reference_url/);
+  assert.match(knowledgeGuide, /组织.*人事.*正式社员的个人范围.*补充项/);
+  assert.match(knowledgeGuide, /scope_ids.*knowledge_reading_scopes.*all_scopes:true/);
+  assert.match(knowledgeGuide, /明确授权.*expected_version.*knowledge_set_reading_defaults/);
   assert.match(knowledgeGuide, /跨文档业务矛盾.*不适配.*新经验/);
   assert.match(knowledgeGuide, /明确获准.*knowledge_create_issue.*引用.*body/);
   assert.match(knowledgeGuide, /获准保存私人草稿.*visibility="private".*knowledge_save_document.*获准提审.*knowledge_submit_review.*knowledge_agree.*明确授权/);
@@ -72,6 +75,10 @@ test('the documented pagination and freshness check expose whole effective versi
     assert.equal(second.next_offset, null);
     assert.equal(second.branch.head_id, first.branch.head_id);
     assert.equal(second.tag_revision, first.tag_revision);
+    assert.deepEqual(first.reading_scope_ids, ['org', 'hr', 'personal:' + f.membership]);
+    assert.deepEqual(second.reading_scope_ids, first.reading_scope_ids);
+    assert.equal(first.reading_defaults_version, 0);
+    assert.equal(second.reading_defaults_version, first.reading_defaults_version);
     const documents = new Map([...first.documents, ...second.documents].map(doc => [doc.document_id, doc]));
     assert.equal(documents.size, 2);
     for (const {doc, body} of [a, b]) {

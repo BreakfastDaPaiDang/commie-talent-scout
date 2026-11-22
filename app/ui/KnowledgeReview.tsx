@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import type { KnowledgeApi, KnowledgeBranch, KnowledgeDiff, KnowledgeIdentity, KnowledgeMerge, KnowledgeVersion } from '../shared/knowledge';
+import type { KnowledgeApi, KnowledgeBranch, KnowledgeDiff, KnowledgeIdentity, KnowledgeMerge, KnowledgeSubmission, KnowledgeVersion } from '../shared/knowledge';
 import { remainingVoteTime } from '../shared/knowledge';
 import { KnowledgeDocumentBody } from './KnowledgeComments';
 import { KnowledgeReviewBallot, KnowledgeReviewComparison, KnowledgeReviewHeader } from './KnowledgeReviewLayout';
 import { Modal, ModalActions } from './Modal';
 import { TagChip } from './TagCatalog';
+import { KnowledgeDocumentScopes } from './knowledge/KnowledgeDocumentScopes';
 
 export function votingClosed(merge: KnowledgeMerge, now: number) {
   return !!merge.voting_closed || (!!merge.expires_at && Date.parse(merge.expires_at) <= now);
@@ -39,7 +40,7 @@ type ReviewDetailProps = {
   onCollaborate: () => void;
   onOpenCurrent: () => void;
   onReadDocument: (id: string) => void;
-  onResubmitted: (id: string, head: string, branch: string) => void;
+  onResubmitted: (result: KnowledgeSubmission) => void;
 };
 
 export function KnowledgeReviewDetail({
@@ -95,14 +96,15 @@ export function KnowledgeReviewDetail({
     setBusy(true);
     setWriteError('');
     try {
-      const result = await api.write('/reviews', {
+      const result = await api.write<KnowledgeSubmission>('/reviews', {
         branch_id: diff.branch.id,
         expected_version: diff.branch.version,
         document_id: change.document_id,
         version_id: change.proposed.id,
         reason: merge.reason,
+        expected_publication: 'review',
       });
-      onResubmitted(result.id, result.head_id, result.branch_id);
+      onResubmitted(result);
     } catch (error) {
       setWriteError((error as Error).message);
     } finally {
@@ -152,12 +154,14 @@ export function KnowledgeReviewDetail({
           lineClassName={originalLines ? line => originalLines.has(line) ? undefined : 'kb-line-added' : undefined}
           renderBody={body => currentVersion ? <KnowledgeReviewComparison
             current={<>{renamed && <h4>{currentVersion.title}</h4>}
+              <KnowledgeDocumentScopes version={currentVersion} />
               <ReviewTags version={currentVersion}/><StaticVersionBody body={currentVersion.body} proposedBody={change.proposed.body}/>
             </>}
             proposed={<>{renamed && <h4>{change.proposed.title}</h4>}
+              <KnowledgeDocumentScopes version={change.proposed} />
               <ReviewTags version={change.proposed}/>{body}
             </>}
-          /> : <div className="kb-review-reading"><ReviewTags version={change.proposed}/>{body}</div>}
+          /> : <div className="kb-review-reading"><KnowledgeDocumentScopes version={change.proposed} /><ReviewTags version={change.proposed}/>{body}</div>}
           footer={bundle ? canResubmit && <button className="button" disabled={busy} onClick={() => resubmit(change)}>单独提交这篇文档</button> : ballot} />
       </section>;
     })}
@@ -186,14 +190,15 @@ type ReviewBarProps = {
   document: KnowledgeVersion;
   merge?: KnowledgeMerge;
   now: number;
-  onSubmitted: (branch: string, merge: string, head: string) => void;
+  publishDirectly: boolean;
+  onSubmitted: (result: KnowledgeSubmission) => void;
   onMerged: () => void;
   onChanged: () => void;
   onBranches: () => void;
 };
 
-export function KnowledgeReviewBar({api, actorId, branch, document, merge, now, onSubmitted, onMerged, onChanged, onBranches}: ReviewBarProps) {
-  const [submitting, setSubmitting] = useState(false);
+export function KnowledgeReviewBar({api, actorId, branch, document, merge, now, publishDirectly, onSubmitted, onMerged, onChanged, onBranches}: ReviewBarProps) {
+  const [submitting, setSubmitting] = useState<'direct' | 'review' | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [approved, setApproved] = useState(false);
@@ -202,6 +207,7 @@ export function KnowledgeReviewBar({api, actorId, branch, document, merge, now, 
   if (!current && branch.owner_id !== actorId) return null;
   const canApprove = current && !votingClosed(merge, now) && merge.changes?.length === 1;
   const deadline = current && reviewDeadline(merge, now);
+  const action = publishDirectly ? '发布并入库' : '提交到审核';
 
   async function approve() {
     if (!current) return;
@@ -222,21 +228,27 @@ export function KnowledgeReviewBar({api, actorId, branch, document, merge, now, 
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!submitting) return;
     const form = new FormData(event.currentTarget);
     setBusy(true);
     setError('');
     try {
-      const result = await api.write('/reviews', {
+      const result = await api.write<KnowledgeSubmission>('/reviews', {
         branch_id: branch.id,
         expected_version: branch.version,
         document_id: document.document_id,
         version_id: document.id,
         reason: String(form.get('reason') ?? ''),
+        expected_publication: submitting,
       });
-      setSubmitting(false);
-      onSubmitted(result.branch_id, result.id, result.head_id);
+      setSubmitting(null);
+      onSubmitted(result);
     } catch (error) {
       setError((error as Error).message);
+      if ((error as {code?: string}).code === 'PUBLICATION_ROUTE_CHANGED') {
+        setSubmitting(null);
+        onChanged();
+      }
     } finally {
       setBusy(false);
     }
@@ -250,15 +262,18 @@ export function KnowledgeReviewBar({api, actorId, branch, document, merge, now, 
         <button className="text-button" onClick={onBranches}>查看审核</button>
       </div>
       {canApprove && <button className="button primary" disabled={busy || approved || !!merge.approved_by_me} onClick={approve}>{approved || merge.approved_by_me ? '我已认可' : '认可此版本'}</button>}
-    </> : <button className="button primary" onClick={() => {setError(''); setSubmitting(true);}}>提交到审核</button>}
-    {submitting && <Modal title="提交到审核" onClose={() => setSubmitting(false)} wide busy={busy}>
+    </> : <button className="button primary" onClick={() => {setError(''); setSubmitting(publishDirectly ? 'direct' : 'review');}}>{action}</button>}
+    {submitting && <Modal title={submitting === 'direct' ? '发布并入库' : '提交到审核'} onClose={() => setSubmitting(null)} wide busy={busy}>
       <form className="kb-form kb-review-preview" onSubmit={submit}>
         <h3>{document.title}</h3>
-        <p className="kb-muted">公开这篇文档供正式成员审核。七天内获得三人同意即可入库。</p>
+        <KnowledgeDocumentScopes version={document} />
+        <p className="kb-muted">{submitting === 'direct'
+          ? '发布后，成员可在知识库查阅。此版本无需投票。'
+          : '公开这篇文档供正式成员审核。七天内获得三人同意即可入库。'}</p>
         <div className="kb-review-copy">{document.body}</div>
         <label>提交说明（可选）<textarea name="reason" rows={2} maxLength={4000} /></label>
         {error && <p role="alert" className="form-error">{error}</p>}
-        <ModalActions><button className="button primary" disabled={busy}>公开并提交审核</button></ModalActions>
+        <ModalActions><button className="button primary" disabled={busy}>{submitting === 'direct' ? '确认发布' : '公开并提交审核'}</button></ModalActions>
       </form>
     </Modal>}
   </footer>;

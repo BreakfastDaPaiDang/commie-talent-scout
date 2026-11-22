@@ -7,6 +7,7 @@ import * as branches from './workspace/branches.ts';
 import * as ballots from './workspace/tag-ballots.ts';
 import * as categories from './workspace/categories.ts';
 import * as documents from './workspace/documents.ts';
+import * as readingDefaults from './workspace/reading-defaults.ts';
 import * as review_queries from './workspace/review-queries.ts';
 import * as reviews from './workspace/reviews.ts';
 import * as issue_queries from './workspace/issue-queries.ts';
@@ -67,8 +68,17 @@ export class KnowledgeWorkspace {
   categories(branchId = 'main') {
     return categories.listCategories(this.context, branchId);
   }
-  list(input: unknown) {
-    return documents.listDocuments(this.context, input);
+  list(input: unknown, useMcpDefaults = false) {
+    return documents.listDocuments(this.context, input, useMcpDefaults);
+  }
+  readingScopes(input: unknown) {
+    return readingDefaults.listReadingScopes(this.context, input);
+  }
+  readingDefaults() {
+    return readingDefaults.readReadingDefaults(this.context);
+  }
+  setReadingDefaults(input: unknown) {
+    return readingDefaults.setReadingDefaults(this.context, input);
   }
   document(branchId: string, id: string) {
     return records.getDocument(this.context, branchId, id);

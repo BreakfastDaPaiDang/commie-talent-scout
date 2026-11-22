@@ -3,6 +3,7 @@ import {Modal,ModalActions} from './Modal';
 import {Discussion} from './KnowledgeComments';
 import {KnowledgeVersionModal} from './KnowledgeHistoryDetails';
 import {reviewDeadline,reviewStatus,votingClosed} from './KnowledgeReview';
+import { KnowledgeDocumentScopes } from './knowledge/KnowledgeDocumentScopes';
 import type {KnowledgeApi,KnowledgeBranch,KnowledgeCommit,KnowledgeDiff,KnowledgeIssue,KnowledgeMerge} from '../shared/knowledge';
 
 export function KnowledgeBranchForm({api,close,done}:{api:KnowledgeApi;close:()=>void;done:(id:string)=>void}){
@@ -30,7 +31,26 @@ export function KnowledgeBranches({api,actorId,branches,branchId,writable,revisi
  {branchId==='main'?<div className="kb-merge-list"><h2>合并请求</h2>{merges.filter(m=>m.state==='open').map(m=><button className="kb-merge-row" key={m.id} onClick={()=>onBranch(m.branch_id)}><strong>{m.title}</strong><span>{reviewStatus(m,now)+' · '+m.approval_count+' / 3 人同意'}</span></button>)}{!merges.some(m=>m.state==='open')&&<p className="kb-muted">没有待处理的合并请求</p>}</div>:data&&<>
  <header className="kb-section-head"><h2>{current?.name} → 主分支</h2>{current?.visibility==='private'&&current.owner_id===actorId&&writable&&<button className="button" onClick={()=>setSharing(true)}>共享此分支</button>}</header>
  <p className="kb-muted">{data.changes.length} 篇文档有修改{current?.visibility==='private'?' · 仅你可见':''}</p>
- {data.changes.map(change=><section className="kb-diff" key={change.document_id}><h3>{change.proposed.title}{!!change.proposed.deleted&&<span className="kb-badge">移除文档</span>}</h3>{change.conflict&&<p className="form-error">主分支也修改了这篇文档，需要先处理冲突。</p>}<div className="kb-diff-columns"><div><h4>当前主分支</h4><p>{change.current?.deleted?'已移除':change.current?.body??'尚无此文档'}</p></div><div><h4>分支版本</h4><p>{change.proposed.deleted?'移除这篇文档':change.proposed.body}</p></div></div>{writable&&change.conflict&&current?.state==='open'&&<div className="kb-form-actions"><button className="button" disabled={busy} onClick={()=>act('/branches/resolve',{branch_id:branchId,expected_version:current.version,main_version:data.main.version,document_id:change.document_id,choice:'main'})}>保留主分支版本</button><button className="button" disabled={busy} onClick={()=>act('/branches/resolve',{branch_id:branchId,expected_version:current.version,main_version:data.main.version,document_id:change.document_id,choice:'branch'})}>保留分支版本</button></div>}</section>)}
+ {data.changes.map(change => <section className="kb-diff" key={change.document_id}>
+  <h3>{change.proposed.title}{!!change.proposed.deleted && <span className="kb-badge">移除文档</span>}</h3>
+  {change.conflict && <p className="form-error">主分支也修改了这篇文档，需要先处理冲突。</p>}
+  <div className="kb-diff-columns">
+   <div>
+    <h4>当前主分支</h4>
+    {change.current && !change.current.deleted && <KnowledgeDocumentScopes version={change.current} />}
+    <p>{change.current?.deleted ? '已移除' : change.current?.body ?? '尚无此文档'}</p>
+   </div>
+   <div>
+    <h4>分支版本</h4>
+    {!change.proposed.deleted && <KnowledgeDocumentScopes version={change.proposed} />}
+    <p>{change.proposed.deleted ? '移除这篇文档' : change.proposed.body}</p>
+   </div>
+  </div>
+  {writable && change.conflict && current?.state === 'open' && <div className="kb-form-actions">
+   <button className="button" disabled={busy} onClick={() => act('/branches/resolve', {branch_id:branchId,expected_version:current.version,main_version:data.main.version,document_id:change.document_id,choice:'main'})}>保留主分支版本</button>
+   <button className="button" disabled={busy} onClick={() => act('/branches/resolve', {branch_id:branchId,expected_version:current.version,main_version:data.main.version,document_id:change.document_id,choice:'branch'})}>保留分支版本</button>
+  </div>}
+ </section>)}
  {merge&&<section className="kb-merge-status">
   <h3>{merge.title}</h3><p>{merge.reason}</p>
   <p>{reviewStatus(merge,now)} · {merge.approval_count} / 3 人同意{reviewDeadline(merge,now)&&<> · <time dateTime={merge.expires_at!}>{reviewDeadline(merge,now)}</time></>}</p>

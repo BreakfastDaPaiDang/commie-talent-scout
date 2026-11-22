@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {emptyCatalogContent} from '../../app/shared/catalog.ts';
 import {connectedFixture, connectMcp} from './connected-fixture.mjs';
-import {applyMigration, draft, fixture, request} from './fixture.mjs';
+import {applyMigrationsAfter, draft, fixture, request} from './fixture.mjs';
 import {KnowledgeWorkspace} from '../src/workspace.ts';
 
 function toolCall(rpc, name, args = {}) {
@@ -118,8 +118,7 @@ test('fixed version reads include the imported version of a legacy private draft
   const f = fixture({through: '0002_production_catalog.sql'});
   t.after(f.close);
   const original = await draft(f.services[0]);
-  for (const migration of ['0003_knowledge_workspace.sql', '0004_reviews_and_categories.sql', '0005_document_tags.sql',
-    '0006_review_deadlines.sql', '0007_tag_proposals.sql']) applyMigration(f.sqlite, migration);
+  applyMigrationsAfter(f.sqlite,'0002_production_catalog.sql');
   const owner = new KnowledgeWorkspace(f.db, f.actors[0], f.clock);
   const branchId = 'legacy-' + f.actors[0].id;
   const changed = await owner.save({branch_id: branchId, expected_version: 1, document_id: original.entry_id,

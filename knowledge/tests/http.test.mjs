@@ -16,6 +16,18 @@ test('HTTP uses separate D1, checks live formal membership and retires the old v
  f.p.sqlite.prepare('UPDATE members SET frozen=1 WHERE id=?').run(f.p.actor.id);assert.equal((await f.call('/api/catalog/entries')).status,401);f.p.sqlite.prepare('UPDATE members SET frozen=0 WHERE id=?').run(f.p.actor.id);
  f.p.sqlite.prepare('UPDATE credentials SET revoked_at=? WHERE id=?').run(new Date().toISOString(),f.p.actor.credential_id);assert.equal((await f.call('/api/identity')).status,401);assert.ok(f.paths.every(p=>['/api/knowledge/identity','/api/knowledge/members'].includes(p)));
 });
+test('knowledge identity uses the currently bound member archive for personal scope attribution',async t=>{
+ const f=await connected(t);
+ const archive=f.p.sqlite.prepare('SELECT name FROM archives WHERE id=?').get(f.membership);
+ const {body}=await f.call('/api/knowledge-workspace/branches');
+ assert.equal(body.identity.name,f.p.actor.name);
+ assert.equal(body.identity.membership_id,f.membership);
+ assert.equal(body.identity.membership_name,archive.name);
+ f.p.sqlite.prepare('UPDATE archives SET linked_account_id=NULL WHERE id=?').run(f.membership);
+ const unbound=await f.call('/api/identity');
+ assert.equal(unbound.body.membership_id,null);
+ assert.equal(unbound.body.membership_name,null);
+});
 test('HTTPS, cross-origin, unavailable identity and cross-environment protections fail closed',async t=>{
  const f=await connected(t);const plain=await worker.fetch(new Request('http://knowledge.example/api/catalog/entries',{headers:{Authorization:'Bearer '+f.token}}),f.env,f.ctx);assert.equal(plain.status,403);assert.equal(f.paths.length,0);
  assert.equal((await f.call('/api/catalog/entries',undefined,{Authorization:'Bearer '+f.token,Origin:'https://other.example'})).status,403);

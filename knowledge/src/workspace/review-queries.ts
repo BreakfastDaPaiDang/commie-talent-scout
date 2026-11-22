@@ -1,7 +1,7 @@
 import { KnowledgeError } from "../types.ts";
 import type { KnowledgeMerge, KnowledgeReviewDocument } from "../../../app/shared/knowledge.ts";
 import type { ServiceContext } from './context.ts';
-import { changedDocument, versionTags, visibleTag } from './records.ts';
+import { changedDocument, versionPersonalScopeName, versionScopes, versionTags, visibleTag } from './records.ts';
 
 const approvalCount = '(SELECT COUNT(*) FROM kw_approvals a WHERE a.merge_id=m.id AND a.head_id=m.head_id)';
 // Older writers can still create a proposal between the migration and the code rollout.
@@ -11,6 +11,9 @@ export const singleDocumentBranch = `(SELECT COUNT(*) FROM kw_items i JOIN kw_ve
   WHERE i.branch_id=b.id AND ${changedDocument})=1`;
 export const reviewSourceMatches = `EXISTS(SELECT 1 FROM kw_items reviewed
   WHERE reviewed.branch_id=m.branch_id AND reviewed.document_id=s.document_id AND reviewed.version_id=s.source_version_id)`;
+export const matchingReviewSubmission = `FROM kw_review_sources s JOIN kw_merges m ON m.id=s.merge_id JOIN kw_branches b ON b.id=m.branch_id
+  WHERE s.source_branch_id=? AND s.document_id=? AND s.source_version_id=? AND ${reviewSourceMatches}
+    AND (m.state='merged' OR (m.state='open' AND m.head_id=b.head_id AND ${singleDocumentBranch} AND ${reviewVisible}))`;
 
 export async function listMergeRequests(context: ServiceContext, {at = context.clock(), id, search = ''}: {at?: string; id?: string; search?: string} = {}) {
   const actor = context.actor;
@@ -31,7 +34,7 @@ export async function listMergeRequests(context: ServiceContext, {at = context.c
       AND (a.actor_id=? OR a.membership_id=?)) AS approved_by_me,
     (SELECT json_group_array(json_object(
       'document_id', i.document_id, 'title', v.title, 'deleted', v.deleted,
-      'tags', json(${versionTags(context)})
+      'tags', json(${versionTags(context)}), 'scopes', json(${versionScopes}), 'personal_scope_name', ${versionPersonalScopeName}
     ) ORDER BY i.document_id)
     FROM kw_items i JOIN kw_versions v ON v.id=i.version_id
     WHERE m.state='open' AND m.head_id=b.head_id AND i.branch_id=b.id AND ${changedDocument}) AS changes_json${match}

@@ -38,9 +38,25 @@ export const versionTags = (context: ServiceContext) => `(SELECT json_group_arra
   FROM kw_document_tags t JOIN kw_categories c ON c.id=t.category_id WHERE t.version_id=v.id AND ${visibleTag(context, 'c')})`;
 
 export const tagProjection = (context: ServiceContext) => `${versionTags(context)} AS tags_json`;
-export type TaggedRow = KnowledgeVersion & {tags_json: string; visible_category_id: string | null};
-export function withTags({tags_json, visible_category_id, ...version}: TaggedRow): KnowledgeVersion {
-  return {...version, category_id: visible_category_id, tags: JSON.parse(tags_json)};
+export const versionScopes = `(SELECT CASE WHEN COUNT(*)=0 THEN json_array('hr')
+  ELSE json_group_array(s.scope_id ORDER BY CASE s.scope_id WHEN 'org' THEN 0 WHEN 'hr' THEN 1 ELSE 2 END, s.scope_id) END
+  FROM kw_version_scopes s WHERE s.version_id=v.id)`;
+export const versionPersonalScopeName = `(SELECT s.scope_name FROM kw_version_scopes s WHERE s.version_id=v.id AND s.scope_name IS NOT NULL)`;
+export const scopeProjection = `${versionScopes} AS scopes_json,${versionPersonalScopeName} AS personal_scope_name`;
+
+export function versionScopeFilter(scopeIds: string[] | null) {
+  if (!scopeIds) return {clause: '', args: []};
+  const inheritedHr = scopeIds.includes('hr') ? 'OR NOT EXISTS(SELECT 1 FROM kw_version_scopes s WHERE s.version_id=v.id)' : '';
+  return {
+    clause: `AND (EXISTS(SELECT 1 FROM kw_version_scopes s WHERE s.version_id=v.id
+      AND s.scope_id IN (SELECT value FROM json_each(?))) ${inheritedHr})`,
+    args: [JSON.stringify(scopeIds)]
+  };
+}
+
+export type TaggedRow = Omit<KnowledgeVersion, 'scopes'> & {tags_json: string; scopes_json: string; visible_category_id: string | null};
+export function withTags({tags_json, scopes_json, visible_category_id, ...version}: TaggedRow): KnowledgeVersion {
+  return {...version, category_id: visible_category_id, tags: JSON.parse(tags_json), scopes: JSON.parse(scopes_json)};
 }
 export async function getDocument(context: ServiceContext, branchId: string, id: string, includeRemoved = false) {
   return (await getDocumentRecord(context, branchId, id, undefined, includeRemoved)).document;
@@ -48,7 +64,7 @@ export async function getDocument(context: ServiceContext, branchId: string, id:
 
 export async function getDocumentRecord(context: ServiceContext, branchId: string, id: string, versionId?: string, includeRemoved = false) {
   const branch = await getBranch(context, branchId);
-  const projection = `v.*,i.version_id AS current_version_id,c.id AS visible_category_id,c.name AS category_name,${tagProjection(context)}`;
+  const projection = `v.*,i.version_id AS current_version_id,c.id AS visible_category_id,c.name AS category_name,${tagProjection(context)},${scopeProjection}`;
   const category = `LEFT JOIN kw_categories c ON c.id=v.category_id AND ${visibleTag(context, 'c')}`;
   type DocumentRow = TaggedRow & {current_version_id: string | null};
   // Follow the branch's own history. Merge parents may contain versions never adopted by this branch.
@@ -72,7 +88,7 @@ export async function getDocumentRecord(context: ServiceContext, branchId: strin
 export async function getVersion(context: ServiceContext, id: string | null) {
   const definitionVisible = context.showPendingTags ? '1=1' : `NOT EXISTS(SELECT 1 FROM kw_categories hidden
     WHERE hidden.id=v.category_id AND hidden.pending=1 AND v.document_id='category-'||hidden.id)`;
-  const row = id ? await context.stmt(`SELECT v.*,c.id AS visible_category_id,c.name AS category_name,${tagProjection(context)}
+  const row = id ? await context.stmt(`SELECT v.*,c.id AS visible_category_id,c.name AS category_name,${tagProjection(context)},${scopeProjection}
     FROM kw_versions v LEFT JOIN kw_categories c ON c.id=v.category_id AND ${visibleTag(context, 'c')}
     WHERE v.id=? AND ${definitionVisible}`, id).first<TaggedRow>() : null;
   return row ? withTags(row) : null;

@@ -1,7 +1,12 @@
-import type {KnowledgeActivity,KnowledgeActivityPage,KnowledgeApi,KnowledgeTagProposal,KnowledgeVersion} from '../../../app/shared/knowledge';
+import type {KnowledgeActivity,KnowledgeActivityPage,KnowledgeApi,KnowledgeIdentity,KnowledgeSubmission,KnowledgeTagProposal,KnowledgeVersion} from '../../../app/shared/knowledge';
 // Preview data only. Formal identity, consent and persistence are enforced by the service.
+export const knowledgeDemoIdentity = {
+ id:'preview-member',name:'示例成员',kind:'member',can_write:true,
+ membership_id:'preview-person',membership_name:'示例社员',
+} satisfies KnowledgeIdentity;
+
 export function knowledgeDemo():KnowledgeApi{
- const actor={id:'preview-member',name:'示例成员',kind:'member',can_write:true},at='2026-11-13T04:00:00.000Z',main:any={id:'main',name:'主分支',owner_id:actor.id,owner_name:actor.name,visibility:'members',state:'open',head_id:'preview-initial',base_head_id:null,version:1,created_at:at,updated_at:at};
+ const actor=knowledgeDemoIdentity,personalScope='personal:'+actor.membership_id,at='2026-11-13T04:00:00.000Z',main:any={id:'main',name:'主分支',owner_id:actor.id,owner_name:actor.name,visibility:'members',state:'open',head_id:'preview-initial',base_head_id:null,version:1,created_at:at,updated_at:at};
  const branches:any[]=[main],categories:any[]=[{id:crypto.randomUUID(),name:'知性',definition:'理解经验、解释行为并形成判断的能力。',version:1,updated_at:at},{id:crypto.randomUUID(),name:'组织',definition:'表达共同活动中的需求与协作关系。',version:1,updated_at:at}];
  for(const c of categories)c.definition_version_id=crypto.randomUUID();
  const titles=['审核应该了解什么','验证目标的理论能力','从实际作品展开追问','已知信息不必重复询问','资料整理需要校对协作'],kinds=['共识','方法','方法','共识','需求'];
@@ -9,6 +14,7 @@ export function knowledgeDemo():KnowledgeApi{
  const documents=new Map<string,any[]>([['main',initial]]),bases=new Map<string,any[]>(),comments:any[]=[],merges:any[]=[],issues:any[]=[],commits:any[]=[{id:main.head_id,branch_id:'main',parent_id:null,merge_parent_id:null,message:'示例共识',author_id:actor.id,author_name:actor.name,created_at:at}],changes=new Map<string,any[]>();
  changes.set(main.head_id,initial.map(after=>({document_id:after.document_id,before:null,after})));
  const tagProposals:KnowledgeTagProposal[]=[];
+ const directPublications=new Map<string,KnowledgeSubmission>();
  const hasTag=(doc:KnowledgeVersion,id:string|null)=>doc.category_id===id || !!doc.tags?.some(tag=>tag.id===id);
  const version=()=>crypto.randomUUID(),date=()=>new Date().toISOString(),visible=(branch:string)=>documents.get(branch)??[],cats=(branch:string)=>categories.map(c=>({...c,count:visible(branch).filter(d=>!d.deleted&&hasTag(d,c.id)).length})).filter(c=>c.independent||c.count>0);
  function commit(branch:any,message:string,before:any,after:any){const id=version();commits.unshift({id,branch_id:branch.id,parent_id:branch.head_id,merge_parent_id:null,message,author_id:actor.id,author_name:actor.name,created_at:date()});changes.set(id,[{document_id:after.document_id,before,after}]);branch.head_id=id;branch.version++;return id;}
@@ -27,7 +33,15 @@ export function knowledgeDemo():KnowledgeApi{
   return {...merge,current_head_id,voting_closed,expired:voting_closed&&merge.approval_count<3,changes};
  }
  const active=(merge:any)=>merge.state==='open'&&merge.head_id===merge.current_head_id&&!merge.expired;
- const reviewed=(source:string)=>merges.some(row=>row.source_key===source&&(row.state==='merged'||active(reviewState(row))));
+ const reviewed=(source:string)=>directPublications.has(source)||merges.some(row=>row.source_key===source&&(row.state==='merged'||active(reviewState(row))));
+ const onlyPersonal=(doc?:KnowledgeVersion)=>doc?.scopes?.length===1&&doc.scopes[0]===personalScope;
+ function canPublishDirectly(branchId:string,doc?:KnowledgeVersion) {
+  const branch=branches.find(item=>item.id===branchId);
+  if (!doc || doc.deleted || !onlyPersonal(doc) || !branch || branch.id==='main' || branch.owner_id!==actor.id || branch.state!=='open') return false;
+  const base=bases.get(branchId)?.find(item=>item.document_id===doc.document_id);
+  const adopted=visible('main').find(item=>item.document_id===doc.document_id);
+  return base?.id!==doc.id&&base?.id===adopted?.id&&(!adopted||onlyPersonal(adopted));
+ }
  function makeReview(branch:any,title:string,reason:string) {
   const at=date();
   return {id:version(),branch_id:branch.id,branch_name:branch.name,head_id:branch.head_id,title,reason,state:'open',
@@ -42,11 +56,12 @@ export function knowledgeDemo():KnowledgeApi{
  }
  function readDocument(branchId:string, documentId:string, versionId:string|null) {
   const current=visible(branchId).find(d=>d.document_id===documentId);
-  if(versionId===null)return {document:current};
+  const published_directly=!!current&&directPublications.has(branchId+':'+current.id);
+  if(versionId===null)return {document:current,can_publish_directly:canPublishDirectly(branchId,current),published_directly};
   const branch=branches.find(b=>b.id===branchId&&b.state!=='closed');
   if(branch&&current?.id===versionId&&!current.deleted){
    const inReview=merges.some(row=>{const review=reviewState(row);return review.branch_id===branchId&&active(review)&&review.changes.length===1&&review.changes[0].document_id===documentId;});
-   return {document:current,historical:false,reference_context:inReview?'public':undefined};
+   return {document:current,historical:false,reference_context:inReview?'public':undefined,published_directly};
   }
   for(let head=branch?.head_id;head;head=commits.find(c=>c.id===head)?.parent_id){
    const previous=changes.get(head)?.find(change=>change.document_id===documentId&&change.after.id===versionId)?.after;
@@ -169,7 +184,19 @@ export function knowledgeDemo():KnowledgeApi{
  },async write<T=any>(path:string,input:Record<string,unknown>):Promise<T>{const a:any=input,b=branches.find(b=>b.id===a.branch_id);let result:any={};
   if(path==='/branches'){const created={...main,id:version(),name:a.name,visibility:a.visibility??'members',base_head_id:main.head_id,version:1,updated_at:date()};branches.push(created);documents.set(created.id,structuredClone(visible('main')));bases.set(created.id,structuredClone(visible('main')));result={id:created.id,version:1};}
   else if(path==='/branches/delete'){if(!b||b.id==='main'||b.owner_id!==actor.id)throw new Error('不能删除这个分支');if(b.version!==a.expected_version)throw new Error('分支已变化，请刷新后核对');b.state='closed';b.version++;for(const m of merges)if(m.branch_id===b.id&&m.state==='open'){m.state='closed';}result={id:b.id,version:b.version,deleted:true};}
-  else if(path==='/documents'){if(a.branch_id==='main')throw new Error('请在分支中修改');let category=categories.find(c=>c.name===a.category);if(!category){category={id:version(),name:a.category,definition:'',version:1,updated_at:date()};categories.push(category);}const rows=visible(a.branch_id),old=rows.find(d=>d.document_id===a.document_id),doc={...a,id:version(),document_id:a.document_id??version(),category_id:category.id,category_name:category.name,tags:[category,...(a.additional_tags??[]).map((name:string)=>categories.find(c=>c.name===name)).filter(Boolean)].map(c=>({id:c.id,name:c.name,pending:c.pending})),deleted:0,author_id:actor.id,author_name:actor.name,created_at:date()};documents.set(a.branch_id,[...rows.filter(d=>d.document_id!==doc.document_id),doc]);const id=commit(b,a.message,old,doc);result={id:doc.document_id,version:b.version,commit_id:id};}
+  else if(path==='/documents'){
+   if(a.branch_id==='main')throw new Error('请在分支中修改');
+   let category=categories.find(c=>c.name===a.category);
+   if(!category){category={id:version(),name:a.category,definition:'',version:1,updated_at:date()};categories.push(category);}
+   const rows=visible(a.branch_id),old=rows.find(d=>d.document_id===a.document_id);
+   const scopes=(a.scopes??old?.scopes??['hr']).map((scope:string)=>scope==='personal'?personalScope:scope);
+   const doc={...a,id:version(),document_id:a.document_id??version(),category_id:category.id,category_name:category.name,
+    tags:[category,...(a.additional_tags??[]).map((name:string)=>categories.find(c=>c.name===name)).filter(Boolean)].map(c=>({id:c.id,name:c.name,pending:c.pending})),
+    scopes,personal_scope_name:scopes.includes(personalScope)?actor.membership_name:null,deleted:0,author_id:actor.id,author_name:actor.name,created_at:date()};
+   documents.set(a.branch_id,[...rows.filter(d=>d.document_id!==doc.document_id),doc]);
+   const id=commit(b,a.message,old,doc);
+   result={id:doc.document_id,version:b.version,commit_id:id};
+  }
   else if(path==='/comments'){
    const snapshot=a.review_id?reviewedDocument(a.branch_id,a.document_id,a.review_id,a.head_id):null;
    const parent=comments.find(c=>c.id===a.parent_id);
@@ -211,7 +238,22 @@ export function knowledgeDemo():KnowledgeApi{
    if(!b||b.version!==a.expected_version||!doc||doc.id!==a.version_id)throw new Error('草稿内容已变化，请重新核对');
    const source_key=b.id+':'+doc.id;
    const existing=merges.find(row=>row.source_key===source_key&&(row.state==='merged'||active(reviewState(row))));
-   if(existing) result={id:existing.id,branch_id:existing.branch_id,head_id:existing.head_id,document_id:doc.document_id,expires_at:existing.expires_at};
+   const previousPublication=directPublications.get(source_key);
+   const direct=!!previousPublication||(!existing&&canPublishDirectly(b.id,doc));
+   if(a.expected_publication&&a.expected_publication!==(direct?'direct':'review')){
+    throw Object.assign(new Error('发布方式已变更，请重新核对'),{code:'PUBLICATION_ROUTE_CHANGED'});
+   }
+   if(previousPublication) result=previousPublication;
+   else if(existing) result={id:existing.id,branch_id:existing.branch_id,head_id:existing.head_id,document_id:doc.document_id,expires_at:existing.expires_at,state:existing.state};
+   else if(direct){
+    const current=visible('main').find(item=>item.document_id===doc.document_id);
+    documents.set('main',[...visible('main').filter(item=>item.document_id!==doc.document_id),doc]);
+    const head_id=commit(main,a.reason||'发布：'+doc.title,current,doc);
+    bases.set(b.id,[...(bases.get(b.id)??[]).filter(item=>item.document_id!==doc.document_id),doc]);
+    b.version++;
+    result={id:head_id,branch_id:'main',head_id,document_id:doc.document_id,state:'merged',published_directly:true,version_id:doc.id};
+    directPublications.set(source_key,result);
+   }
    else {
     const created={...main,id:version(),name:doc.title+' · '+version().slice(0,6),visibility:'members',version:1};
     branches.push(created);
@@ -220,7 +262,7 @@ export function knowledgeDemo():KnowledgeApi{
     commit(created,a.reason||'提交审核',visible('main').find(d=>d.document_id===doc.document_id),doc);
     const m={...makeReview(created,doc.title,a.reason||'提交审核'),auto_promote:1,source_key};
     merges.push(m);
-    result={id:m.id,branch_id:m.branch_id,head_id:m.head_id,document_id:doc.document_id,expires_at:m.expires_at};
+    result={id:m.id,branch_id:m.branch_id,head_id:m.head_id,document_id:doc.document_id,expires_at:m.expires_at,state:m.state};
    }
   }
   else if(path==='/issues/from-comment'){const c=comments.find(c=>c.id===a.comment_id),cat=categories.find(x=>x.id===c.category_id),doc=visible(c.branch_id).find(d=>d.document_id===c.document_id),row={...a,id:version(),number:issues.length+1,state:'open',author_id:actor.id,author_name:actor.name,version:1,source_json:JSON.stringify({kind:cat?'category':'document',title:cat?.name??doc?.title,quote:c.quote,comment:c.body,author_name:c.author_name})};issues.unshift(row);result={id:row.id};}

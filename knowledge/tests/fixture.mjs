@@ -2,14 +2,18 @@ import {DatabaseSync} from 'node:sqlite';
 import {readFileSync,readdirSync} from 'node:fs';
 import {randomUUID} from 'node:crypto';
 import {Knowledge} from '../src/service.ts';
+const migrations = readdirSync(new URL('../migrations/',import.meta.url)).filter(name => name.endsWith('.sql')).sort();
+export function applyMigrationsAfter(db, lastApplied) {
+ for (const name of migrations) if (name > lastApplied) applyMigration(db, name);
+}
 export function fixture({through}={}){
  const sqlite=new DatabaseSync(':memory:');sqlite.exec('PRAGMA foreign_keys=ON');
- for(const name of readdirSync(new URL('../migrations/',import.meta.url)).filter(n=>n.endsWith('.sql')&&(!through||n<=through)).sort())applyMigration(sqlite,name);
+ for(const name of migrations) if (!through || name <= through) applyMigration(sqlite,name);
  const wrap=(sql,args=[])=>({bind(...next){return wrap(sql,next);},async first(column){const row=sqlite.prepare(sql).get(...args);return row?(column?row[column]:row):null;},async all(){return {results:sqlite.prepare(sql).all(...args)};},async run(){return {meta:{changes:Number(sqlite.prepare(sql).run(...args).changes)}};}});
  // Queue like the single D1 primary; a failing statement rolls back the whole batch.
  let queue=Promise.resolve();const db={prepare:sql=>wrap(sql),batch(statements){const run=queue.then(async()=>{sqlite.exec('BEGIN');try{const result=[];for(const s of statements)result.push(await s.run());sqlite.exec('COMMIT');return result;}catch(e){sqlite.exec('ROLLBACK');throw e;}});queue=run.catch(()=>{});return run;}};
  let time='2026-11-12T04:00:00.000Z';
- const actors=Array.from({length:4},(_,i)=>({id:randomUUID(),name:'虚构社员'+i,username:'fixture'+i,role:i?'member':'admin',eligible:true,membership_id:randomUUID(),verified_at:time,environment:'staging'}));
+ const actors=Array.from({length:4},(_,i)=>({id:randomUUID(),name:'虚构社员'+i,username:'fixture'+i,role:i?'member':'admin',eligible:true,membership_id:randomUUID(),membership_name:'虚构社员档案'+i,verified_at:time,environment:'staging'}));
  const services=actors.map(a=>new Knowledge(db,a,()=>time));
  return {sqlite,db,actors,services,clock:()=>time,advance:ms=>{time=new Date(Date.parse(time)+ms).toISOString();},close:()=>sqlite.close()};
 }

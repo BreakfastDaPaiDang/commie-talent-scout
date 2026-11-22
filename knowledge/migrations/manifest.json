@@ -25,10 +25,20 @@
                                                                "backwards_compatible":  true,
                                                                "reason":  "Adds single-document review provenance, automatic three-member promotion for new reviews, independent category definitions and annotation issue sources; preserves existing branches, comments and legacy merge behavior."
                                                            },
+                       "0009_mcp_reading_defaults.sql": {
+                           "sha256": "20641734aeba52a3862a9c5ef9b4a726b34ce4beb11c463fe531a002e9b0c604",
+                           "backwards_compatible": true,
+                           "reason": "Adds an account's supplemental MCP knowledge scopes and version guard without changing any content or existing permissions."
+                       },
                        "0007_tag_proposals.sql": {
                            "sha256": "8c95d644a47414816723aa1db17de194de1271ceee56271dd5bcb860908d9b8f",
                            "backwards_compatible": true,
                            "reason": "Adds independent tag proposal ballots and retains existing tag IDs and document associations."
+                       },
+                       "0008_document_scopes.sql": {
+                           "sha256": "a77975b1534f04b2f589b4e827e175c62b18ec2f901a3dde6b002ec3b7ada31d",
+                           "backwards_compatible": true,
+                           "reason": "Adds ranges and personal publication provenance alongside existing versions. Versions from older writers still default to HR."
                        },
                        "0006_review_deadlines.sql": {
                            "sha256": "9d627244974032b5e0894947847cadab41714f4ea0817bea352f18ce6ffcc9fa",
