@@ -53,3 +53,21 @@ test('main-site cookie proxy crosses only the fixed binding and grants do not un
  const giftHeaders={Cookie:'cts_candy='+key};assert.equal((await personnel.fetch(new Request(origin+'/api/catalog/entries',{headers:giftHeaders}),f.p.env,f.ctx)).status,200);assert.equal((await personnel.fetch(new Request(origin+'/api/archives',{headers:giftHeaders}),f.p.env,f.ctx)).status,401);
  assert.equal((await personnel.fetch(new Request(origin+'/api/catalog/entries',{method:'POST',headers:{...giftHeaders,Origin:origin,'Content-Type':'application/json'},body:JSON.stringify(entry(f))}),f.p.env,f.ctx)).status,403);
 });
+
+test('knowledge workspace and member directory recognize open joined legacy archives', async t => {
+  const f = await connected(t);
+  f.p.sqlite.prepare('UPDATE archives SET person_role=NULL WHERE id=?').run(f.membership);
+  const headers = {Cookie: 'cts_session=' + f.session};
+  const read = path => personnel.fetch(new Request('https://identity.example' + path, {headers}), f.p.env, f.ctx);
+
+  const workspace = await read('/api/knowledge-workspace/branches');
+  const data = await workspace.json();
+  assert.equal(workspace.status, 200, JSON.stringify(data));
+  assert.equal(data.identity.membership_id, f.membership);
+  const directory = await read('/api/knowledge/members');
+  assert.equal(directory.status, 200);
+  assert.ok((await directory.json()).members.some(m => m.id === f.p.actor.id));
+
+  f.p.sqlite.prepare('UPDATE archives SET closed=1 WHERE id=?').run(f.membership);
+  assert.equal((await read('/api/knowledge-workspace/branches')).status, 403);
+});
