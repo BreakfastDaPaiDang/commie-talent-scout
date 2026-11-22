@@ -8,6 +8,20 @@ export const memberMonthlyRule='member.monthly_follow_up';
 export const legacyMemberMonthlyCopy={purpose:'了解社员本月的近况、参与意愿、需要的支持和联系情况，保持持续的人事联系。',delivery:'将实际接触情况与结论写入社员档案的观察记录，再提交任务交付；暂时联系不到也如实记录。必要时维护可接工作、请假或失联状态，不为完成任务编造沟通。'};
 export function canRefreshMemberMonthlyCopy(t:{status:string;kind:string;source:string;automation_rule?:string|null;period_key?:string|null;purpose:string;delivery:string},period:string){return t.status==='open'&&t.kind==='monthly'&&t.source==='rule'&&t.automation_rule===memberMonthlyRule&&t.period_key===period&&t.purpose===legacyMemberMonthlyCopy.purpose&&t.delivery===legacyMemberMonthlyCopy.delivery;}
 
+// A backfilled member starts with their archive. A promotion (including rejoining)
+// starts a new membership period even when the external archive is much older.
+export const monthlyEligibleArchiveSql = `${memberArchiveSql()} AND a.closed=0 AND a.deleted=0
+ AND NOT EXISTS (
+   SELECT 1 FROM (
+     SELECT a.created_at AS started_at
+     UNION ALL
+     SELECT e.created_at FROM archive_events e
+     WHERE e.archive_id=a.id AND e.kind='archive.state_changed'
+       AND json_extract(e.after_json,'$.status')='已入伙'
+       AND json_extract(e.before_json,'$.status') IS NOT '已入伙'
+   ) WHERE strftime('%Y-%m',started_at,'+8 hours') >= ?
+ )`;
+
 export type MonthlyTarget={id:string;name:string;type:'person'|'org';status:string;person_role:'member'|'external'|null;closed:boolean;deleted:boolean;version:number};
 // A business month is always Asia/Shanghai, regardless of scheduler host timezone.
 export function memberMonth(at:string){
@@ -21,10 +35,10 @@ export function createMemberMonthly(c:Context){
  const {purpose,delivery}=memberMonthlyCopy;
  return [c.stmt(`INSERT INTO work_tasks(id,archive_id,kind,labels_json,priority,initiator_kind,initiator_id,title,purpose,delivery,source,status,deadline_at,created_by,created_at,updated_at,period_key,automation_rule,automation_key)
   SELECT ?,a.id,'monthly','["月度沟通"]','P2','system',?,?,?,?,'rule','open',?,?,?,?,?,?,? FROM archives a
-  WHERE a.id=? AND a.version=? AND ${memberArchiveSql()} AND a.closed=0 AND a.deleted=0
+  WHERE a.id=? AND a.version=? AND ${monthlyEligibleArchiveSql}
    AND EXISTS(SELECT 1 FROM members WHERE id=? AND identity_kind='service' AND frozen=0)
   ON CONFLICT(archive_id,kind,period_key) WHERE kind='monthly' AND period_key IS NOT NULL DO NOTHING`,
- c.taskId,zaojiSubject.id,month.title,purpose,delivery,month.deadline,zaojiSubject.id,c.at,c.at,month.key,memberMonthlyRule,month.key,t.id,t.version,zaojiSubject.id),
+ c.taskId,zaojiSubject.id,month.title,purpose,delivery,month.deadline,zaojiSubject.id,c.at,c.at,month.key,memberMonthlyRule,month.key,t.id,t.version,month.key,zaojiSubject.id),
  c.stmt(`INSERT INTO work_task_events(id,task_id,actor_id,source,kind,after_json,created_at)
   SELECT ?,id,?,'system','task.created',?,? FROM work_tasks WHERE id=?`,c.eventId,zaojiSubject.id,JSON.stringify({automation_rule:memberMonthlyRule,period_key:month.key,deadline_at:month.deadline,initiator_kind:'system'}),c.at,c.taskId)];
 }
