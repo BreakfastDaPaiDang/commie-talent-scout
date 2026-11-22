@@ -29,6 +29,7 @@ import {handleMcp} from './mcp.ts';
 import {Members} from './members.ts';
 import {getRequestResult} from './commands.ts';
 import {Archives} from './archives.ts';
+import {backfillMember} from './historical-member-backfill.ts';
 import {Observations} from './observations.ts';
 import {Tags} from './tags.ts';
 import {Drafts} from './drafts.ts';
@@ -123,6 +124,7 @@ app.get('/api/commands/:id',async c=>c.json(await getRequestResult(c.env,await a
 app.get('/api/personnel-recognition/:id',async c=>c.json(await new PersonnelRecognition(c.env,await authenticate(c.req.raw,c.env),'web').summary({archive_id:c.req.param('id')})));
 app.post('/api/personnel-recognition/recognize',async c=>c.json(await new PersonnelRecognition(c.env,await authenticate(c.req.raw,c.env),'web').recognize(await c.req.json())));
 app.post('/api/personnel-recognition/withdraw',async c=>c.json(await new PersonnelRecognition(c.env,await authenticate(c.req.raw,c.env),'web').withdraw(await c.req.json())));
+app.post('/api/archives/backfill-member',async c=>c.json(await backfillMember(c.env,await authenticate(c.req.raw,c.env),'web',await c.req.json())));
 app.get('/api/archives',async c=>c.json(await new Archives(c.env,await authenticate(c.req.raw,c.env),'web').list({...c.req.query(),tag_ids:c.req.query('tag_ids')?.split(',').filter(Boolean)??[]})));
 app.get('/api/members',async c=>c.json(await new Members(c.env,await authenticate(c.req.raw,c.env),'web').directory(c.req.query())));
 app.post('/api/archives/delete',async c=>c.json(await new Archives(c.env,await authenticate(c.req.raw,c.env),'web').setDeleted(await c.req.json(),true)));

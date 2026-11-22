@@ -7,6 +7,12 @@ import {Failure,now,uid,type Actor,type Env} from './types.ts';
 import {TagState} from './tag-state.ts';
 import {Images,imageIds,attachmentProjection,type AttachmentInfo} from './images.ts';
 
+export function initialObservation(service: Archives, id: string, archiveId: string, body: string, occurredAt: string|null, at: string) {
+  return [
+    service.stmt('INSERT INTO observations(id,archive_id,author_id,created_at,updated_at) VALUES(?,?,?,?,?)',id,archiveId,service.actor.id,at,at),
+    service.stmt('INSERT INTO observation_versions(observation_id,version,body,occurred_at,editor_id,created_at) VALUES(?,1,?,?,?,?)',id,body,occurredAt,service.actor.id,at),
+  ];
+}
 export const observationBody=z.string().max(100000,'正文最多 100,000 个字符');
 export const occurredAt=z.iso.datetime({offset:true}).nullable();
 export const observationCreateInput=z.object({archive_id:z.uuid(),body:observationBody.default(''),attachment_ids:imageIds.default([]),occurred_at:occurredAt.default(null),request_id:requestId}).strict().refine(a=>!!a.body.trim()||a.attachment_ids.length>0,'正文与图片至少有一项');
@@ -42,8 +48,7 @@ export class Observations{
   async create(input:unknown){const a=observationCreateInput.parse(input);return command(this.env,this.actor,{requestId:a.request_id,operation:'observation.create',parameters:{...a,attachment_ids:a.attachment_ids.length?a.attachment_ids:undefined,request_id:undefined}},async()=>{
    const archive=await this.archives.get(a.archive_id,undefined,true);const id=uid(),at=now(),key=uid(),images=await this.images.planVersion(a.attachment_ids,a.archive_id,id,1);
   return {result:{id,archive_id:a.archive_id,archive_url:this.archives.url(archive),version:1,content_version:1,changed:true},statements:[
-   this.openGuard(a.archive_id,key),this.stmt('INSERT INTO observations(id,archive_id,author_id,created_at,updated_at) VALUES(?,?,?,?,?)',id,a.archive_id,this.actor.id,at,at),
-   this.stmt('INSERT INTO observation_versions(observation_id,version,body,occurred_at,editor_id,created_at) VALUES(?,1,?,?,?,?)',id,a.body,a.occurred_at,this.actor.id,at),...images.statements,this.touch(a.archive_id,at),
+   this.openGuard(a.archive_id,key),...initialObservation(this.archives,id,a.archive_id,a.body,a.occurred_at,at),...images.statements,this.touch(a.archive_id,at),
     this.archives.event(a.archive_id,'observation.created',null,{id,content_version:1},at,id),...images.cleanup,this.stmt('DELETE FROM mutation_guards WHERE id=?',key),
   ]};
  });}

@@ -1,5 +1,6 @@
 import React from 'react';
-import type {Member} from '../api';
+import {api,type Member} from '../api';
+import {MemberBackfill} from '../../ui/MemberBackfill';
 import {KnowledgePage} from '../KnowledgePage';
 import {CatalogPage} from '../CatalogPage';
 import {StatisticsPage} from '../StatisticsPage';
@@ -46,6 +47,8 @@ const views: Record<RouteId,(context:PageContext)=>React.ReactNode> = {
   profile: ({member,refreshActor}) => <ProfilePage actor={member} refreshActor={refreshActor}/>,
   tags: ({member}) => <TagLibraryPage isAdmin={member.role==='admin'}/>,
   agent: () => <AgentPage/>,
+  memberBackfill: ({navigate}) => <MemberBackfill save={input=>api('/archives/backfill-member',input)}
+    openArchive={id=>navigate('/members?archive='+encodeURIComponent(id))}/>,
   connections: () => <ConnectionsPage/>,
   admin: ({member,path,refreshActor}) => member.role==='admin'
     ? path==='/admin/trash'?<ArchiveTrashPage actor={member}/>:path==='/admin/members'?<MembersPage actor={member} refreshActor={refreshActor}/>:<CallsPage/>

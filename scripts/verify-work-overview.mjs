@@ -1,5 +1,6 @@
 import {historicalSql} from '../tests/personnel-fixture.mjs';
 import {verifyTaskCreation} from './verify-task-creation.mjs';
+import {verifyMemberBackfill} from './verify-member-backfill.mjs';
 import {verifyFeishuInvitation} from './verify-feishu-invitation.mjs';
 import {verifyScrollHints} from './verify-scroll-hints.mjs';
 import {verifyObservationContainers} from './verify-observation-containers.mjs';
@@ -166,7 +167,7 @@ try{
  const limitedId=randomUUID(),limitedToken=randomUUID(),now=new Date().toISOString();f.sqlite.prepare("INSERT INTO members(id,username,name,role,password_hash,must_change_password,created_at) VALUES(?,?,?,'member','fixture',0,?)").run(limitedId,'share-reader','分享接收者',now);f.sqlite.prepare("INSERT INTO credentials(id,member_id,hash,kind,name,auth_epoch,created_at,expires_at) VALUES(?,?,?,'session','ui-fixture',1,?,'2099-01-01T00:00:00.000Z')").run(randomUUID(),limitedId,await digest(limitedToken),now);
  f.sqlite.prepare('UPDATE observations SET deleted=1 WHERE id=?').run(shareObservation.id);
  const limited=await browser.newContext({viewport:{width:390,height:844}});await limited.addCookies([{name:'cts_session',value:limitedToken,url:base}]);const restricted=await limited.newPage();await restricted.goto(base+sharePaths[2][1]);await restricted.locator('#focused-content [role=alert]').waitFor();assert.equal(await restricted.locator('#focused-content .observation-card').count(),0);await restricted.screenshot({path:out+'/share-deleted-observation.png',fullPage:true,animations:'disabled'});f.sqlite.prepare('UPDATE observations SET deleted=0 WHERE id=?').run(shareObservation.id);
- f.sqlite.prepare('UPDATE archives SET deleted=1 WHERE id=?').run(linkedId);await restricted.goto(base+sharePaths[0][1]);await restricted.locator('.detail-panel [role=alert]').waitFor();await restricted.screenshot({path:out+'/share-deleted-archive.png',fullPage:true,animations:'disabled'});f.sqlite.prepare('UPDATE archives SET deleted=0 WHERE id=?').run(linkedId);await limited.close();
+ f.sqlite.prepare('UPDATE archives SET deleted=1 WHERE id=?').run(linkedId);await restricted.goto(base+sharePaths[0][1]);await restricted.locator('.detail-panel [role=alert]').waitFor();await restricted.screenshot({path:out+'/share-deleted-archive.png',fullPage:true,animations:'disabled'});f.sqlite.prepare('UPDATE archives SET deleted=0 WHERE id=?').run(linkedId);await verifyMemberBackfill(restricted,base); await limited.close();
  // The task action area keeps share/assignment stacked next to an equally sized claim button.
  const waitingTask=f.sqlite.prepare("SELECT id FROM work_tasks WHERE status='open' AND owner_id IS NULL LIMIT 1").get();assert.ok(waitingTask);
  for(const width of [1440,390])for(const view of ['book','hall']){

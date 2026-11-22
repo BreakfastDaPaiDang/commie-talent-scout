@@ -1,4 +1,4 @@
-export type RouteId = 'people' | 'organizations' | 'members' | 'tasks' | 'statistics' | 'knowledge' | 'catalog' | 'messages' | 'resources' | 'tools' | 'profile' | 'tags' | 'agent' | 'connections' | 'admin';
+export type RouteId = 'people' | 'organizations' | 'members' | 'tasks' | 'statistics' | 'knowledge' | 'catalog' | 'messages' | 'resources' | 'tools' | 'profile' | 'tags' | 'agent' | 'connections' | 'memberBackfill' | 'admin';
 type RouteDefinition = {
   id: RouteId;
   path: string;
@@ -23,6 +23,7 @@ export const routes: readonly RouteDefinition[] = [
   {id: 'profile', path: '/account/profile'},
   {id: 'tags', path: '/tags'},
   {id: 'agent', path: '/agent'},
+  {id: 'memberBackfill', path: '/account/member-backfill'},
   {id: 'connections', path: '/account/connections'},
   {id: 'admin', path: '/admin/', prefix: true},
 ];
