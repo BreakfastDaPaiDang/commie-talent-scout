@@ -130,7 +130,7 @@ export function ArchivesPage({
       ...p,
       closed_history
     }))} /> : undefined} list={<>
-  <ArchiveHead label={trash ? '已删除档案' : label} count={String(items.length).padStart(2, '0') + (cursor ? '＋' : '')} query={query} onQuery={setQuery} onCreate={trash ? undefined : () => {
+  <ArchiveHead label={trash ? '已删除档案' : label} count={String(items.length).padStart(2, '0') + (cursor ? '＋' : '')} query={query} onQuery={setQuery} onCreate={trash || personScope === 'members' ? undefined : () => {
         setEditTab('profile');
         setDialog('create');
       }} searchRef={searchRef} />

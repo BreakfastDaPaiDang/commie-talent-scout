@@ -39,6 +39,7 @@ async function reader(f, actor = f.actor) {
   });
   headers['MCP-Protocol-Version'] = initialized.protocolVersion;
   return {
+    rpc,
     async detail(taskId) {
       const result = await rpc('tools/call', { name: 'get_work_task', arguments: { id: taskId } });
       assert.ok(!result.isError, JSON.stringify(result));
@@ -174,4 +175,19 @@ test('MCP task detail supports legacy audits and keeps the ordinary task contrac
   const detail = await mcp.detail(ordinary.id);
   assert.equal(detail.task.id, ordinary.id);
   assert.deepEqual(detail, await tasks.detail(ordinary.id));
+});
+
+test('ordinary MCP account can discover and execute evidence-backed historical member registration',async t=>{
+  const f=fixture();t.after(f.close);
+  const client=await reader(f);
+  const who=await client.rpc('tools/call',{name:'whoami',arguments:{}});
+  assert.equal(who.structuredContent.member.role,'member');
+  assert.ok(who.structuredContent.capabilities.includes('backfill_member_archive'));
+  const result=await client.rpc('tools/call',{name:'backfill_member_archive',arguments:{
+    name:'虚构旧社员',qq:'150123456',basis:'已和本人核对原入社记录',request_id:uuid(),
+  }});
+  assert.ok(!result.isError,JSON.stringify(result));
+  const row=f.sqlite.prepare('SELECT archive_id,actor_id,source FROM archive_events WHERE observation_id=?').get(result.structuredContent.observation_id);
+  assert.equal(row.archive_id,result.structuredContent.id);
+  assert.equal(row.actor_id,f.actor.id);assert.equal(row.source,'mcp');
 });

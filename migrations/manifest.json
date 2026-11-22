@@ -1,6 +1,6 @@
 {
   "format": 1,
-  "count": 43,
+  "count": 44,
   "migrations": {
     "0001_identity.sql": {
       "sha256": "ceb732997de6972d3f88ae3a15b52b4df0def3418cc4b0834cd289ce55daff6a",
@@ -216,6 +216,11 @@
       "sha256": "14a2ffc9ec097eb436570907a1e43b56e4c425b42d5d10dfbf162e0d5954be75",
       "backwards_compatible": true,
       "reason": "Additive personnel recognition rounds and quota ledger. Existing members and active reviews remain valid. Old code can read data, but direct personnel-stage bypass writes are deliberately blocked even after code rollback; no data deletion."
+    },
+    "0044_historical_member_backfill.sql": {
+      "sha256": "842acf726e159d33e7848ede5d0351fdee6079aaa4a6ef8b628d83c2fb4bfe52",
+      "backwards_compatible": true,
+      "reason": "Adds an evidence-backed one-version historical membership transition. Ordinary direct inserts, reviews and onboarding gates remain enforced for old clients."
     }
   }
 }
