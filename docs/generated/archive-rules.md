@@ -560,12 +560,12 @@ function planArchiveFollowUp(context) {
 
 ## 正式社员月度人事跟进
 
-模块：`member-monthly-follow-up`；触发入口：[generateMemberMonthlyFollowUps](../../app/server/member-monthly-follow-ups.ts#L25)、[generateScheduledMemberMonthlyFollowUps](../../app/server/member-monthly-follow-ups.ts#L33)。
+模块：`member-monthly-follow-up`；触发入口：[generateMemberMonthlyFollowUps](../../app/server/member-monthly-follow-ups.ts#L24)、[generateScheduledMemberMonthlyFollowUps](../../app/server/member-monthly-follow-ups.ts#L32)。
 档案 ID + monthly + 北京时间年月唯一，完成/取消仍占用本月义务；每小时补漏，不阻止下月生成。
 任务和创建事件一起提交；提交时复核社员身份、版本、开启状态与服务冻结；失败下次重试。
 ### memberMonth
 
-[memberMonth](../../app/rules/member-monthly-follow-up.ts#L13)
+[memberMonth](../../app/rules/member-monthly-follow-up.ts#L27)
 
 ```javascript
 function memberMonth(at) {
@@ -580,7 +580,7 @@ function memberMonth(at) {
 
 ### needsMemberMonthly
 
-[needsMemberMonthly](../../app/rules/member-monthly-follow-up.ts#L18)
+[needsMemberMonthly](../../app/rules/member-monthly-follow-up.ts#L32)
 
 ```javascript
 function needsMemberMonthly(c) {
@@ -590,7 +590,7 @@ function needsMemberMonthly(c) {
 
 ### createMemberMonthly
 
-[createMemberMonthly](../../app/rules/member-monthly-follow-up.ts#L19)
+[createMemberMonthly](../../app/rules/member-monthly-follow-up.ts#L33)
 
 ```javascript
 function createMemberMonthly(c) {
@@ -599,9 +599,9 @@ function createMemberMonthly(c) {
     return [
         c.stmt(`INSERT INTO work_tasks(id,archive_id,kind,labels_json,priority,initiator_kind,initiator_id,title,purpose,delivery,source,status,deadline_at,created_by,created_at,updated_at,period_key,automation_rule,automation_key)
   SELECT ?,a.id,'monthly','["月度沟通"]','P2','system',?,?,?,?,'rule','open',?,?,?,?,?,?,? FROM archives a
-  WHERE a.id=? AND a.version=? AND ${memberArchiveSql()} AND a.closed=0 AND a.deleted=0
+  WHERE a.id=? AND a.version=? AND ${monthlyEligibleArchiveSql}
    AND EXISTS(SELECT 1 FROM members WHERE id=? AND identity_kind='service' AND frozen=0)
-  ON CONFLICT(archive_id,kind,period_key) WHERE kind='monthly' AND period_key IS NOT NULL DO NOTHING`, c.taskId, zaojiSubject.id, month.title, purpose, delivery, month.deadline, zaojiSubject.id, c.at, c.at, month.key, memberMonthlyRule, month.key, t.id, t.version, zaojiSubject.id),
+  ON CONFLICT(archive_id,kind,period_key) WHERE kind='monthly' AND period_key IS NOT NULL DO NOTHING`, c.taskId, zaojiSubject.id, month.title, purpose, delivery, month.deadline, zaojiSubject.id, c.at, c.at, month.key, memberMonthlyRule, month.key, t.id, t.version, month.key, zaojiSubject.id),
         c.stmt(`INSERT INTO work_task_events(id,task_id,actor_id,source,kind,after_json,created_at)
   SELECT ?,id,?,'system','task.created',?,? FROM work_tasks WHERE id=?`, c.eventId, zaojiSubject.id, JSON.stringify({
             automation_rule: memberMonthlyRule,
@@ -615,7 +615,7 @@ function createMemberMonthly(c) {
 
 ### planMemberMonthly
 
-[planMemberMonthly](../../app/rules/member-monthly-follow-up.ts#L37)
+[planMemberMonthly](../../app/rules/member-monthly-follow-up.ts#L51)
 
 ```javascript
 function planMemberMonthly(context) {

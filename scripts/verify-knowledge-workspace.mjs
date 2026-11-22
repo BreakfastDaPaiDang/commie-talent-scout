@@ -15,6 +15,7 @@ import {verifyKnowledgeBranchDeletion,verifyEmptyKnowledgeChrome} from './verify
 import {verifyKnowledgeHelp,verifyReadOnlyKnowledgeHelp} from './verify-knowledge-help.mjs';
 import {verifyKnowledgeReviewQueue} from './verify-knowledge-review.mjs';
 import {verifyKnowledgeReferences} from './verify-knowledge-references.mjs';
+import {verifyWithdrawals} from './verify-knowledge-withdrawals.mjs';
 import {verifyKnowledgeDocumentScopes} from './verify-knowledge-scopes.mjs';
 
 const f=await connectedFixture(),base='http://127.0.0.1:8797',out='tmp/verification/knowledge-workspace';mkdirSync(out,{recursive:true});
@@ -134,6 +135,7 @@ try{
  report.agentEntry=await verifyKnowledgeAgentEntry();
  report.documentReferences=await verifyKnowledgeReferences(page,f,base,services);
  report.documentScopes=await verifyKnowledgeDocumentScopes({page,browser,previewUrl:'http://127.0.0.1:5197/?knowledge',out,fixture:f,services,documentUrl});
+ report.withdrawals=await verifyWithdrawals(page,base,services);
  assert.deepEqual(errors,[]);writeFileSync(out+'/report.json',JSON.stringify(report,null,2));console.log(JSON.stringify(report));
 }catch(error){await page.screenshot({path:out+'/failure.png',fullPage:true}).catch(()=>{});writeFileSync(out+'/failure.txt',String(error)+'\n'+JSON.stringify(errors));throw error;}
 finally{await browser.close();await preview.close();await new Promise(r=>server.close(r));await f.close();}

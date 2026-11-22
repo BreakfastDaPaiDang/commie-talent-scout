@@ -5,6 +5,8 @@ import {randomUUID as uuid} from 'node:crypto';
 import {fixture} from './d1-fixture.mjs';
 import {Archives} from '../app/server/archives.ts';
 import {Observations} from '../app/server/observations.ts';
+import {generateMemberMonthlyFollowUps,generateScheduledMemberMonthlyFollowUps} from '../app/server/member-monthly-follow-ups.ts';
+import {memberMonth} from '../app/rules/member-monthly-follow-up.ts';
 import {WorkTasks} from '../app/server/work-tasks.ts';
 
 async function fresh(f,id){const o=await new Observations(f.env,f.actor,'web').create({archive_id:id,body:'本轮新观察',request_id:uuid()});return [{observation_id:o.id,content_version:1}];}
@@ -38,6 +40,15 @@ for(const source of ['web','mcp'])test(`${source}: explicit personnel delivery a
  assert.equal((await s.archives.list({type:'person',person_scope:'external'})).archives.some(a=>a.id===s.id),false);
  assert.equal((await s.archives.list({type:'person',person_scope:'members'})).archives.some(a=>a.id===s.id),true);
  assert.deepEqual((await otherEntry.detail(next.id)).task.result_references,[{...nextRefs[0],archive_id:s.id}]);
+ f.sqlite.prepare("UPDATE archives SET created_at='2000-01-01T00:00:00Z' WHERE id=?").run(s.id);
+ f.actor.role='admin';f.sqlite.prepare("UPDATE members SET role='admin' WHERE id=?").run(f.actor.id);
+ const month=memberMonth((await s.archives.get(s.id)).updated_at);
+ const automatic=await generateScheduledMemberMonthlyFollowUps(f.env,month.deadline);
+ assert.equal(automatic.created_count,0);assert.equal(automatic.pending_count,0);
+ assert.equal((await generateMemberMonthlyFollowUps(f.env,f.actor,{archive_ids:[s.id],request_id:uuid()})).created_count,0);
+ const nextMonth=new Date(Date.parse(month.deadline)+1).toISOString();
+ assert.equal((await generateScheduledMemberMonthlyFollowUps(f.env,nextMonth)).created_count,1);
+ assert.equal((await generateScheduledMemberMonthlyFollowUps(f.env,nextMonth)).created_count,0);
  const events=f.sqlite.prepare("SELECT after_json FROM archive_events WHERE archive_id=? AND kind='archive.state_changed' ORDER BY seq").all(s.id).map(e=>JSON.parse(e.after_json));
  assert.deepEqual(events.map(e=>e.status),['人事审核','已加入待对接','已入伙']);assert.equal(events[1].task_id,next.id);
  assert.equal(f.sqlite.prepare('SELECT count(*) n FROM mutation_guards').get().n,0);

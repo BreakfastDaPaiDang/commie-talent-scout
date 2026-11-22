@@ -1,5 +1,10 @@
 {
     "migrations":  {
+                       "0010_tag_withdrawals.sql": {
+                           "sha256": "eb631f0706d350d3b803c894c06f5047f029add7e47d56133353845e967a804e",
+                           "backwards_compatible": true,
+                           "reason": "Retains withdrawn tag ballots and author-owned editable drafts without changing existing votes or category references."
+                       },
                        "0001_knowledge.sql":  {
                                                   "sha256":  "7abe666036c66417ae9b10e661519e0fa22dcbcec5cb1640962e516455f935df",
                                                   "backwards_compatible":  true,

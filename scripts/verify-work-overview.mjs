@@ -131,7 +131,7 @@ try{
  // The shared Agent landing page stays usable with the real connection endpoint.
  // Real archive navigation and identity-bound member links, then share both object types.
  const linkedId=randomUUID(),linkedName=f.sqlite.prepare('SELECT name FROM members WHERE id=?').get(f.actor.id).name;
- historicalSql(f,()=>f.sqlite.prepare("INSERT INTO archives(id,type,name,status,person_role,linked_account_id,created_by,created_at,updated_at) VALUES(?,'person',?,'已入伙','member',?,?,?,?)").run(linkedId,linkedName,f.actor.id,f.actor.id,demo.as_of,demo.as_of));
+ historicalSql(f,()=>f.sqlite.prepare("INSERT INTO archives(id,type,name,status,person_role,linked_account_id,created_by,created_at,updated_at) VALUES(?,'person',?,'已入伙','member',?,?,?,?)").run(linkedId,linkedName,f.actor.id,f.actor.id,"2020-01-01T00:00:00Z",demo.as_of));
  await page.goto(base+'/statistics');await page.locator('.statistics-self a').waitFor();await page.locator('.statistics-self a').click();await page.locator('.entity-heading h1').filter({hasText:linkedName}).waitFor();assert.equal(new URL(page.url()).searchParams.get('archive'),linkedId);assert.equal(new URL(page.url()).pathname,'/members');
  await page.goto(base+'/statistics');await page.getByRole('button',{name:'林晓',exact:true}).click();await page.locator('.entity-heading h1').filter({hasText:'林晓'}).waitFor();assert.equal(new URL(page.url()).searchParams.get('archive'),demo.people[0].id);
  const shareTask=f.sqlite.prepare('SELECT id FROM work_tasks LIMIT 1').get();assert.ok(shareTask);

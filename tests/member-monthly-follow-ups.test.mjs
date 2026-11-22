@@ -11,7 +11,11 @@ import {generateMemberMonthlyFollowUps,generateScheduledMemberMonthlyFollowUps a
 import {memberMonth,memberMonthlyRule} from '../app/rules/member-monthly-follow-up.ts';
 import {zaojiSubject} from '../app/rules/service-subjects.ts';
 const setup=t=>{const f=fixture();t.after(f.close);return f;};
-const member=async(f,extra={})=>historicalArchive(f,new Archives(f.env,f.actor,'web'),{type:'person',name:'虚构正式社员',status:'已入伙',request_id:uuid(),...extra});
+async function member(f,extra={},createdAt='2026-09-01T00:00:00.000Z'){
+ const result=await historicalArchive(f,new Archives(f.env,f.actor,'web'),{type:'person',name:'虚构正式社员',status:'已入伙',request_id:uuid(),...extra});
+ f.sqlite.prepare('UPDATE archives SET created_at=? WHERE id=?').run(createdAt,result.id);
+ return result;
+}
 const oct='2026-10-01T00:17:00.000+08:00';
 test('month follows China midnight, year boundary and leap February',()=>{
  assert.equal(memberMonth('2026-09-30T15:59:59.999Z').key,'2026-09');assert.deepEqual(memberMonth('2026-09-30T16:00:00.000Z'),{key:'2026-10',title:'10月人事跟进',deadline:'2026-10-31T15:59:59.999Z'});
@@ -45,11 +49,14 @@ test('scheduled and admin calls dedupe, recheck identity/freeze and roll task ba
  await assert.rejects(generateMemberMonthlyFollowUps(f.env,f.actor,{request_id:uuid()}),{code:'ADMIN_REQUIRED'});f.actor.role='admin';f.sqlite.prepare("UPDATE members SET role='admin' WHERE id=?").run(f.actor.id);
  const request={request_id:uuid()},first=await generateMemberMonthlyFollowUps(f.env,f.actor,request),again=await generateMemberMonthlyFollowUps(f.env,f.actor,request);assert.equal(again.replayed,true);assert.deepEqual(again.tasks,first.tasks);assert.equal((await generate(f.env)).created_count,0);
 });
-test('bounded batches drain all members and a later join gets only the current month',async t=>{
+test('bounded batches drain eligible members and skip a mid-month backfill until next month',async t=>{
  const f=setup(t);for(let i=0;i<45;i++)await member(f,{name:'虚构批量社员'+i});
  assert.equal((await generate(f.env,oct)).created_count,40);assert.equal((await generate(f.env,oct)).created_count,5);assert.equal((await generate(f.env,oct)).created_count,0);
- await member(f,{name:'虚构月中入社'});assert.equal((await generate(f.env,'2026-10-20T12:00:00+08:00')).created_count,1);
- assert.equal(f.sqlite.prepare('SELECT count(*) n FROM work_tasks').get().n,46);
+ const added=await member(f,{name:'虚构月中补档'},'2026-10-15T08:00:00.000Z');
+ const current=await generate(f.env,'2026-10-31T15:59:59.999Z');
+ assert.equal(current.created_count,0);assert.equal(current.pending_count,0);
+ await generate(f.env,'2026-10-31T16:00:00Z');await generate(f.env,'2026-10-31T16:17:00Z');
+ assert.deepEqual(f.sqlite.prepare('SELECT period_key FROM work_tasks WHERE archive_id=?').all(added.id).map(t=>t.period_key),['2026-11']);
 });
 
  test('copy refresh only targets untouched current-month open automation and preserves all task ownership/state/labels',async t=>{

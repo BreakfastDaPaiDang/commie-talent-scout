@@ -4,6 +4,7 @@ import type { KnowledgeBranch, KnowledgeMerge, KnowledgeDiff, KnowledgeDocumentT
 import * as records from './workspace/records.ts';
 import * as command from './workspace/command.ts';
 import * as branches from './workspace/branches.ts';
+import * as withdrawals from './workspace/withdrawals.ts';
 import * as ballots from './workspace/tag-ballots.ts';
 import * as categories from './workspace/categories.ts';
 import * as documents from './workspace/documents.ts';
@@ -62,6 +63,9 @@ export class KnowledgeWorkspace {
   deleteBranch(input: unknown) {
     return branches.deleteBranch(this.context, input);
   }
+  withdrawReview(input: unknown) { return withdrawals.withdrawReview(this.context,input); }
+  withdrawTag(input: unknown) { return withdrawals.withdrawTag(this.context,input); }
+  saveTagDraft(input: unknown) { return withdrawals.saveTagDraft(this.context,input); }
   tagProposals() { return ballots.listTagProposals(this.context); }
   tagProposal(id: string) { return ballots.getTagProposal(this.context, id); }
   approveTag(input: unknown) { return ballots.approveTag(this.context,input); }

@@ -122,6 +122,8 @@ export function KnowledgeWorkspace({api, identity}: {api: KnowledgeApi; identity
       (merge.author_id === identity.id && (merge.changes?.length ?? 0) > 1)))
     .sort((a, b) => (a.expires_at ?? '').localeCompare(b.expires_at ?? '') || a.id.localeCompare(b.id));
   const term = search.toLowerCase();
+  const tagDrafts = (tagQueue.data?.drafts ?? []).filter(p => p.draft && (!category || p.category_id === category) &&
+    [p.draft.name, p.draft.definition].some(value => value.toLowerCase().includes(term)));
   const visibleTagReviews = (tagQueue.data?.proposals ?? []).filter(proposal =>
     Date.parse(proposal.expires_at) > now && (!category || proposal.category_id === category) &&
     [proposal.name, proposal.definition].some(value => value.toLowerCase().includes(term)));
@@ -154,8 +156,9 @@ export function KnowledgeWorkspace({api, identity}: {api: KnowledgeApi; identity
   const listLoading = list.loading || (all && (drafts.loading || loadingMerges || !reviewMatches && !reviewError || tagQueue.loading));
   const listError = list.error || (all && (drafts.error || reviewError || tagQueue.error));
   const firstDraft = all ? drafts.items[0] : undefined;
-  const firstReview = all && !firstDraft ? visibleReviews[0] : undefined;
-  const firstTagReview = all && !firstDraft && !firstReview ? visibleTagReviews[0] : undefined;
+  const firstTagDraft = all && !firstDraft ? tagDrafts[0] : undefined;
+  const firstReview = all && !firstDraft && !firstTagDraft ? visibleReviews[0] : undefined;
+  const firstTagReview = all && !firstDraft && !firstTagDraft && !firstReview ? visibleTagReviews[0] : undefined;
   const firstDocument = firstDraft ?? list.items[0];
 
   useEffect(() => {
@@ -163,14 +166,15 @@ export function KnowledgeWorkspace({api, identity}: {api: KnowledgeApi; identity
     const desktop = window.matchMedia('(min-width: 701px)');
     function openFirst() {
       if (simple && !desktop.matches) return;
-      if (firstReview) navigate({reviewId: firstReview.id, reviewHead: firstReview.head_id, branchId: firstReview.branch_id}, 'replace');
+      if (firstTagDraft) navigate({tagProposalId:firstTagDraft.id, branchId:'main'}, 'replace');
+      else if (firstReview) navigate({reviewId: firstReview.id, reviewHead: firstReview.head_id, branchId: firstReview.branch_id}, 'replace');
       else if (firstTagReview) navigate({tagProposalId: firstTagReview.id, branchId: 'main'}, 'replace');
       else if (firstDocument) navigate({documentId: firstDocument.document_id, branchId: firstDocument.branch_id ?? branchId}, 'replace');
     }
     openFirst();
     desktop.addEventListener('change', openFirst);
     return () => desktop.removeEventListener('change', openFirst);
-  }, [simple, tab, documentId, reviewId, tagProposalId, listLoading, branchId, firstReview, firstTagReview, firstDocument, navigate]);
+  }, [simple, tab, documentId, reviewId, tagProposalId, listLoading, branchId, firstTagDraft, firstReview, firstTagReview, firstDocument, navigate]);
 
   function selectTag(id: string) {
     if (id === category) return;
@@ -324,7 +328,7 @@ export function KnowledgeWorkspace({api, identity}: {api: KnowledgeApi; identity
   const documentWritable = canWrite && versionId === null;
   const documentState = historical ? '历史版本' : branchId === 'main' ? '已入库' : branch?.visibility === 'private' ? '我的草稿' :
     versionId && publicReview ? '公开审核' : branch?.state === 'merged' ? '已合入的分支版本' : '分支中的修改';
-  const noDocuments = !list.items.length && (!all || !drafts.items.length && !visibleReviews.length && !visibleTagReviews.length);
+  const noDocuments = !list.items.length && (!all || !drafts.items.length && !tagDrafts.length && !visibleReviews.length && !visibleTagReviews.length);
   const editorBranch = simple && !editor?.document ? branches.find(candidate => candidate.id === 'main') : branch;
   const shareDocument = doc && (branchId === 'main' || branch?.visibility === 'members') &&
     <ShareLink path={knowledgeDocumentPath(doc.document_id, branchId, versionId ?? undefined)} label="分享文档" />;
@@ -371,9 +375,13 @@ export function KnowledgeWorkspace({api, identity}: {api: KnowledgeApi; identity
         {listError && <p className="kb-list-message form-error" role="alert">{listError} <button className="text-button" onClick={refresh}>重试</button></p>}
         {listLoading && <p className="kb-list-message" role="status">正在读取…</p>}
         {all && <>
-          {!!drafts.items.length && <section className="kb-index-group" aria-label="我的草稿">
+          {(drafts.items.length > 0 || tagDrafts.length > 0) && <section className="kb-index-group" aria-label="我的草稿">
             <h2>我的草稿</h2>
             {renderDocuments(drafts.items, 'main')}
+            {tagDrafts.map(p => <button type="button" key={p.id} aria-current={p.id === tagProposalId || undefined}
+              className={'kb-entry' + (p.id === tagProposalId ? ' selected' : '')} onClick={() => selectTagReview(p.id)}>
+              <IndexTitle title={p.draft!.name} /><span className="kb-index-meta">标签草稿</span>
+            </button>)}
             {drafts.next !== null && <button className="button quiet kb-index-more" disabled={drafts.loadingMore} onClick={drafts.more}>加载更多草稿</button>}
           </section>}
           {!!visibleReviews.length && <section className="kb-index-group" aria-label="待认可">
@@ -416,7 +424,7 @@ export function KnowledgeWorkspace({api, identity}: {api: KnowledgeApi; identity
         {error && <div className="kb-notice error" role="alert">{error}<button className="text-button" onClick={refresh}>重试</button></div>}
         {notice && <div className="kb-notice" role="status">{notice}<button aria-label="关闭提示" onClick={() => setNotice('')}>×</button></div>}
         {tab === 'content' && (all && tagProposalId ? tagDetail.data ?
-          <KnowledgeTagReviewDetail key={tagProposalId} api={api} identity={identity} now={now} onChanged={refresh} proposal={tagDetail.data.proposal} /> :
+          <KnowledgeTagReviewDetail key={tagProposalId} api={api} identity={identity} now={now} onChanged={refresh} onSubmitted={selectTagReview} proposal={tagDetail.data.proposal} /> :
           <div className="kb-empty">{tagDetail.loading ? <p role="status">正在读取标签提议…</p> :
             <p role="alert">{tagDetail.error} <button className="text-button" onClick={refresh}>重试</button></p>}</div> :
           simple && reviewId ? review ?
@@ -424,6 +432,7 @@ export function KnowledgeWorkspace({api, identity}: {api: KnowledgeApi; identity
             now={now} requestedHead={reviewHead} onChanged={refresh} onCollaborate={collaborateOnReview}
             onOpenCurrent={() => selectReview(review.id, review.head_id, review.branch_id)}
             onIssue={openIssue} onReadDocument={id => selectDocument(id, 'main')}
+            onWithdrawn={(id,bid) => {selectDocument(id,bid,'all');setNotice('已撤回到我的草稿。');}}
             onResubmitted={finishSubmission} /> :
           <div className="kb-empty"><p role="status">{loadingMerges ? '正在读取审核…' : reviewError || '无法打开该审核，可能已关闭或不可访问。'}</p>
             {reviewError && <button className="text-button" onClick={refresh}>重试</button>}
