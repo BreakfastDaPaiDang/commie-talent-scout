@@ -388,3 +388,43 @@ test('owner current-round observations derive ready consistently without complet
  f.sqlite.prepare("UPDATE work_tasks SET automation_rule='archive.follow_up' WHERE id=?").run(task.id);await check(true);
  f.sqlite.prepare("UPDATE work_tasks SET owner_id=NULL WHERE id=?").run(task.id);await check(false);
 });
+
+test('a task list page resolves result observations in bounded reads with the original visibility and order', async t => {
+  const f = fixture();
+  t.after(f.close);
+  const author = new WorkTasks(f.env, f.actor, 'web');
+  const reader = addMember(f, '任务读者');
+  const archives = new Archives(f.env, f.actor, 'web');
+  const archive = await archives.create({type: 'person', name: '任务关联档案', request_id: uuid()});
+  const other = await archives.create({type: 'person', name: '另一个档案', request_id: uuid()});
+  const first = resultReference(f, archive.id);
+  const second = resultReference(f, archive.id);
+  const removed = resultReference(f, archive.id);
+  const unrelated = resultReference(f, other.id);
+  f.sqlite.prepare('UPDATE observations SET deleted=1 WHERE id=?').run(removed.observation_id);
+  const refs = [second, removed, unrelated, {...first, content_version: 99}, first];
+  for (let i = 0; i < 20; i++) await author.create({...taskInput(), archive_id: archive.id});
+
+  // Count D1 statements for the same page before and after attaching its results.
+  const db = f.env.DB;
+  let reads = 0;
+  const counted = {...f.env, DB: {...db, prepare(sql) { reads++; return db.prepare(sql); }}};
+  const service = new WorkTasks(counted, reader, 'web');
+  const empty = await service.list({state: 'all'});
+  assert.equal(empty.tasks.length, 20);
+  assert.deepEqual(empty.tasks[0].result_references, []);
+  assert.equal(empty.tasks[0].result_references_restricted, false);
+  const baseline = reads;
+  f.sqlite.prepare('UPDATE work_tasks SET result_references_json=? WHERE archive_id=?').run(JSON.stringify(refs), archive.id);
+  reads = 0;
+  const page = await service.list({state: 'all'});
+  assert.equal(page.tasks.length, 20);
+  for (const task of page.tasks) {
+    assert.deepEqual(task.result_references, [second, first].map(ref => ({...ref, archive_id: archive.id})));
+    assert.equal(task.result_references_restricted, true);
+    assert.equal('result_references_json' in task, false);
+  }
+  assert.ok(reads <= baseline + 1, `20 tasks with 100 references used ${reads} D1 reads (empty results: ${baseline})`);
+  const own = await author.list({state: 'all', limit: 1});
+  assert.deepEqual(own.tasks[0].result_references, [second, removed, first].map(ref => ({...ref, archive_id: archive.id})));
+});

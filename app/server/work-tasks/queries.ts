@@ -5,12 +5,12 @@ import { taskOverdue } from "../../rules/task-notifications.ts";
 import { assertAdmin } from "../credentials.ts";
 import { now } from "../types.ts";
 import { pushCandidates, pushStage, preferenceMatchesSql, type PushableTaskKind } from "../../rules/task-preferences.ts";
-import { TagState, type TagLabel } from "../tag-state.ts";
+import { TagState } from "../tag-state.ts";
 import { isMemberArchive, archiveDisplayStatus, archivePath } from "../../rules/archive-states.ts";
 import { taskDeliveryReady, taskRequiresObservation } from "../../rules/task-delivery.ts";
 import { Archives } from "../archives.ts";
 import type { ServiceContext } from './context.ts';
-import { visibleReference } from './references.ts';
+import { referenceVisibility, visibleReference } from './references.ts';
 import { getTask, taskRoundStartedSql, ownerRoundObservationSql } from './records.ts';
 import { readTaskHistory } from './history.ts';
 import { readReviewRecognition } from './recognition.ts';
@@ -48,7 +48,16 @@ export async function listTasks(context: ServiceContext, input: unknown = {}) {
     where.push(`(${preferenceMatchesSql('?')} AND t.owner_id IS NULL)`);
     args.push(context.actor.id);
   }
-  const rows = await context.stmt(`SELECT t.*,${followUpTaskSql} follow_up,${taskRoundStartedSql} round_started_at,${ownerRoundObservationSql} has_owner_round_observation,
+  const visibility = referenceVisibility(context.actor);
+  const rows = await context.stmt(`SELECT t.*,
+      (SELECT json_group_array(json_object('observation_id',r.id,'archive_id',r.archive_id,'content_version',r.version))
+       FROM (
+         SELECT o.id,o.archive_id,ov.version FROM json_each(t.result_references_json) ref
+         JOIN observations o ON o.id=json_extract(ref.value,'$.observation_id') AND o.archive_id=ar.id
+         JOIN observation_versions ov ON ov.observation_id=o.id AND ov.version=json_extract(ref.value,'$.content_version')
+         WHERE ${visibility.sql} ORDER BY ref.key
+       ) r) visible_result_references_json,
+      ${followUpTaskSql} follow_up,${taskRoundStartedSql} round_started_at,${ownerRoundObservationSql} has_owner_round_observation,
       CASE WHEN t.status='open' THEN NULL ELSE COALESCE(
         (SELECT max(e.created_at) FROM work_task_events e WHERE e.task_id=t.id AND e.kind IN ('task.completed','task.cancelled','task.expired','completed','cancelled','expired')),
         t.completed_at
@@ -71,18 +80,17 @@ export async function listTasks(context: ServiceContext, input: unknown = {}) {
       (SELECT json_group_array(json_object('id',m.id,'name',m.name,'frozen',m.frozen)) FROM archive_bindings b JOIN members m ON m.id=b.member_id WHERE b.archive_id=ar.id AND b.status=ar.status) archive_members_json
       FROM work_tasks t
       LEFT JOIN archives ar ON ar.id=t.archive_id AND (ar.deleted=0 OR ?='admin')
-      WHERE ${where.join(' AND ')} ORDER BY t.priority,t.updated_at DESC,t.id LIMIT ? OFFSET ?`, context.actor.role, ...args, a.limit + 1, a.offset).all();
+      WHERE ${where.join(' AND ')} ORDER BY t.priority,t.updated_at DESC,t.id LIMIT ? OFFSET ?`, ...visibility.args, context.actor.role, ...args, a.limit + 1, a.offset).all();
   const next_offset = rows.results.length > a.limit ? a.offset + a.limit : null;
   const tasks = rows.results.slice(0, a.limit) as (Record<string, unknown> & {
     archive_id: string | null;
     archive_members_json?: string | null;
   })[];
-  const labelNames = await new WorkTaskLabels(context.env, context.actor, context.source).names(tasks.flatMap(task => JSON.parse(String(task.labels_json ?? '[]')) as string[]));
   const archiveIds = [...new Set(tasks.map(task => task.archive_id).filter((id): id is string => !!id))];
-  const tagSummaries = archiveIds.length ? await new TagState(context.env, context.actor).summaries(archiveIds) : new Map<string, {
-    tags: TagLabel[];
-    total: number;
-  }>();
+  const [labelNames, tagSummaries] = await Promise.all([
+    new WorkTaskLabels(context.env, context.actor, context.source).names(tasks.flatMap(task => JSON.parse(String(task.labels_json ?? '[]')) as string[])),
+    new TagState(context.env, context.actor).summaries(archiveIds)
+  ]);
   for (const task of tasks) {
     const labelKeys = taskLabelKeys(JSON.parse(String(task.labels_json ?? '[]')) as string[]);
     task.label_keys = labelKeys;
@@ -92,17 +100,10 @@ export async function listTasks(context: ServiceContext, input: unknown = {}) {
       deadline_at: String(task.deadline_at)
     }, now());
     task.initiator_name = task.initiator_name ?? '未知发起人';
-    const resultRefs = JSON.parse(String(task.result_references_json ?? '[]')) as {
-        observation_id: string;
-        content_version: number;
-      }[],
-      visibleResultRefs = [];
-    for (const reference of resultRefs) {
-      const current = await visibleReference(context, task as unknown as Row, reference);
-      if (current) visibleResultRefs.push(current);
-    }
-    task.result_references = visibleResultRefs;
-    task.result_references_restricted = visibleResultRefs.length !== resultRefs.length;
+    const visibleRefs = JSON.parse(String(task.visible_result_references_json)) as unknown[];
+    task.result_references = visibleRefs;
+    task.result_references_restricted = visibleRefs.length !== JSON.parse(String(task.result_references_json)).length;
+    delete task.visible_result_references_json;
     delete task.result_references_json;
     const subject = {
       type: String(task.archive_type),
