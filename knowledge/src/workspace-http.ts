@@ -59,6 +59,7 @@ workspaceApp.get('/history/:id',async c=>c.json(await c.get('workspace').commitD
 )));
 workspaceApp.get('/requests/:id',async c=>c.json({result:await c.get('workspace').receipt(c.req.param('id'))}));
 const commands={
+ '/reviews/withdraw':'withdrawReview','/tag-proposals/withdraw':'withdrawTag','/tag-drafts/save':'saveTagDraft',
  '/reading-defaults':'setReadingDefaults',
  '/branches':'createBranch','/branches/share':'shareBranch','/branches/delete':'deleteBranch','/documents':'save','/documents/remove':'remove',
  '/tag-proposals/approve':'approveTag','/categories/definition':'defineCategory','/categories':'editCategory','/reviews':'submitReview','/issues/from-comment':'issueFromComment','/merges':'propose','/merges/approve':'approve','/merges/accept':'accept',

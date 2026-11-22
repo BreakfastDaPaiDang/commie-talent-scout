@@ -68,6 +68,7 @@ export function workspaceTools(workspace:KnowledgeWorkspace, frontendUrl:(path:s
    ['knowledge_remove_document','在分支移除文档，保留历史',s.remove,'remove'],
    ['knowledge_define_category','提议修改已认可标签的解释',s.category,'defineCategory'],
    ['knowledge_propose_merge','为只含一篇文档改动的分支建立或更新七天合并请求',s.merge,'propose'],
+   ['knowledge_withdraw_review','经提交者明确授权，将本人未达三票的当前文档版本撤回为草稿，下次提交重新计票',s.approve,'withdrawReview'],
    ['knowledge_agree','本人正式成员明确同意当前具体修改',s.approve,'approve'],
    ['knowledge_merge','核验三人门槛、候选选择及冲突后明确合入主分支',s.accept,'accept'],
    ['knowledge_resolve_conflict','明确保留主分支或分支版本，更新后重新征求同意',s.resolve,'resolveConflict'],

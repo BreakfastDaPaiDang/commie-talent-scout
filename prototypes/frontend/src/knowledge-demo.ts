@@ -147,7 +147,7 @@ export function knowledgeDemo():KnowledgeApi{
     categories:categories.map(c=>{const tagged=all.filter(d=>hasTag(d,c.id));return {...c,count:tagged.length,branch_id:tagged[0]?.branch_id};}).filter(c=>c.independent||c.count)};
   }
   else if(url.pathname.startsWith('/documents/'))result=readDocument(b,url.pathname.split('/').pop()!,q.get('version_id'));
-  else if(url.pathname==='/tag-proposals')result={proposals:tagProposals.filter(p=>p.state==='pending'&&p.expires_at>date())};
+  else if(url.pathname==='/tag-proposals')result={proposals:tagProposals.filter(p=>p.state==='pending'&&p.expires_at>date()),drafts:tagProposals.filter(p=>p.author_id===actor.id&&p.draft)};
   else if(url.pathname.startsWith('/tag-proposals/')){
    const proposal=tagProposals.find(p=>p.id===url.pathname.split('/').pop());
    if(!proposal)throw new Error('找不到这份标签提议。');
@@ -218,6 +218,28 @@ export function knowledgeDemo():KnowledgeApi{
       pending:c.pending??0,state:'pending',author_id:actor.id,author_name:actor.name,created_at:date(),expires_at:expires(),approval_count:0,approved_by_me:0,approvers:[]};
     tagProposals.push(p);result={id:c.id,version:c.version,pending:c.pending,proposal_id:p.id,expires_at:p.expires_at};
   }
+  else if(path==='/tag-proposals/withdraw'){
+    const p=tagProposals.find(t=>t.id===a.id);
+    if(!p||p.author_id!==actor.id||p.state!=='pending'||p.expires_at<=date()||p.approval_count>=3)throw new Error('本轮无法撤回');
+    p.state='withdrawn';p.draft={name:p.name,definition:p.definition,version:1,category_version:categories.find(c=>c.id===p.category_id).version};
+    const tag=categories.find(c=>c.id===p.category_id);
+    if(tag.pending)tag.independent=0;
+    result={id:p.id,version:1};
+  }
+  else if(path==='/tag-drafts/save'){
+    const p=tagProposals.find(t=>t.id===a.id);
+    if(!p?.draft||p.author_id!==actor.id||p.draft.version!==a.expected_version)throw new Error('草稿已变化');
+    p.draft={name:a.name,definition:a.definition,version:p.draft.version+1,category_version:p.draft.category_version};
+    result={id:p.id,version:p.draft.version,proposal_id:null};
+    if(a.submit){
+      const next={...p,id:version(),name:a.name,definition:a.definition,created_at:date(),expires_at:expires(),
+        state:'pending' as const,approval_count:0,approved_by_me:0,approvers:[]};
+      delete next.draft;delete p.draft;tagProposals.push(next);
+      const tag=categories.find(c=>c.id===p.category_id);tag.independent=1;
+      if(tag.pending)Object.assign(tag,{name:a.name,definition:a.definition});
+      result.proposal_id=next.id;
+    }
+  }
   else if(path==='/tag-proposals/approve'){
     const p=tagProposals.find(t=>t.id===a.id);
     if(!p||p.state!=='pending'||p.expires_at<=date())throw new Error('本轮标签认可已结束');
@@ -283,6 +305,16 @@ export function knowledgeDemo():KnowledgeApi{
     if(newHead)Object.assign(m,{approval_count:0,approved_by_me:0,approvers:[],expires_at:expires()});
    }
    result={id:m.id,head_id:m.head_id,expires_at:m.expires_at};
+  }
+  else if(path==='/reviews/withdraw'){
+   const m=merges.find(row=>row.id===a.id),r=m&&reviewState(m);
+   if(!r||m.author_id!==actor.id||!active(r)||r.head_id!==a.head_id||r.voting_closed||r.approval_count>=3||r.changes.length!==1)throw new Error('本轮无法撤回');
+   const doc=diff(m.branch_id)[0].proposed;
+   let target=branches.find(x=>x.visibility==='private'&&x.state==='open'&&m.source_key===x.id+':'+doc.id&&visible(x.id).some(d=>d.id===doc.id));
+   if(!target){target={...main,id:version(),name:m.title,visibility:'private',version:1};branches.push(target);
+     bases.set(target.id,structuredClone(bases.get(m.branch_id)??[]));documents.set(target.id,structuredClone(visible(m.branch_id)));}
+   if(doc.deleted){const restored={...doc,id:version(),deleted:0};documents.set(target.id,[...visible(target.id).filter(x=>x.document_id!==doc.document_id),restored]);commit(target,'撤回移除申请',doc,restored);}
+   m.state='closed';result={id:m.id,head_id:m.head_id,branch_id:target.id,document_id:doc.document_id};
   }
   else if(path==='/merges/approve'){
    const m=merges.find(row=>row.id===a.id),state=m&&reviewState(m);

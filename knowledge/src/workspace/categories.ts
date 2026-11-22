@@ -30,13 +30,19 @@ export async function prepareCategoryChanges(context: ServiceContext, a: {
   expected_version?: number;
   name?: string;
   definition: string;
-}, at: string) {
-  const old = a.id ? await getCategory(context, a.branch_id, a.id) : null;
+}, at: string, draftCategory?: KnowledgeCategory) {
+  let old = draftCategory ?? (a.id ? await getCategory(context, a.branch_id, a.id) : null);
   if (old && old.version !== a.expected_version) throw new KnowledgeError(409, 'CONFLICT', '标签已更新，请重新读取');
   const name = a.name ?? old!.name,
     duplicate = await context.stmt('SELECT id FROM kw_categories WHERE name=?', name).first<{
       id: string;
     }>();
+  if (duplicate && !old && !a.id) {
+    // A withdrawn new tag keeps its ID so that existing document links survive.
+    // Any member may propose the name again without reading the author's draft.
+    old = await context.stmt(`SELECT c.* FROM kw_categories c WHERE c.id=? AND c.pending=1 AND c.independent=0
+      AND EXISTS(SELECT 1 FROM kw_tag_proposals p JOIN kw_tag_withdrawals w ON w.proposal_id=p.id WHERE p.category_id=c.id)`,duplicate.id).first<KnowledgeCategory>();
+  }
   if (duplicate && duplicate.id !== old?.id) throw new KnowledgeError(409, 'CATEGORY_EXISTS', '已有同名标签，请选择它或使用其他名称');
   if (await context.stmt("SELECT 1 FROM kw_tag_proposals WHERE name=? AND state='pending' AND expires_at>? AND category_id<>?",name,at,old?.id ?? '').first())
     throw new KnowledgeError(409,'CATEGORY_EXISTS','已有同名标签正在等待认可');
@@ -46,6 +52,7 @@ export async function prepareCategoryChanges(context: ServiceContext, a: {
   const expiresAt = new Date(Date.parse(at) + 7 * 86400000).toISOString();
   const statements: D1PreparedStatement[] = [];
   if (!old) statements.push(context.stmt('INSERT INTO kw_categories(id,name,definition,independent,updated_at,pending) VALUES(?,?,?,1,?,1)',id,name,a.definition,at));
+  else if (old.pending && (draftCategory || !a.id)) statements.push(context.stmt('UPDATE kw_categories SET independent=1,name=?,definition=?,updated_at=? WHERE id=?',name,a.definition,at,id));
   else statements.push(context.stmt('UPDATE kw_categories SET independent=1 WHERE id=?',id));
   statements.push(context.stmt("UPDATE kw_tag_proposals SET state='expired' WHERE category_id=? AND state='pending'",id),
     context.stmt('INSERT INTO kw_tag_proposals(id,category_id,name,definition,base_version,author_id,author_name,created_at,expires_at) VALUES(?,?,?,?,?,?,?,?,?)',

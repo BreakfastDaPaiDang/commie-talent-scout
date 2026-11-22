@@ -64,7 +64,8 @@ export type KnowledgeTagProposal = {
   author_name: string;
   created_at: string;
   expires_at: string;
-  state: 'pending' | 'approved' | 'expired';
+  state: 'pending' | 'approved' | 'expired' | 'withdrawn';
+  draft?: {name: string; definition: string; version: number; category_version: number};
   approvers: {id: string; name: string; created_at: string}[];
   approval_count: number;
   approved_by_me: number;

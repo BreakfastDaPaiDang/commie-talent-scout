@@ -109,7 +109,7 @@ export function useKnowledgeData(api: KnowledgeApi, canWrite: boolean, {scope, b
       branch_id: branchId, ...(versionId === null ? {} : {version_id: versionId}),
     }) : null, revision);
   const versionMismatch = versionId !== null && !!document.data && document.data.document?.id !== versionId;
-  const tagQueue = useKnowledgeRead<{proposals: KnowledgeTagProposal[]}>(api, all ? '/tag-proposals' : null, revision);
+  const tagQueue = useKnowledgeRead<{proposals: KnowledgeTagProposal[]; drafts?: KnowledgeTagProposal[]}>(api, all ? '/tag-proposals' : null, revision);
   const tagDetail = useKnowledgeRead<{proposal: KnowledgeTagProposal}>(api, all && tagProposalId ?
     '/tag-proposals/' + encodeURIComponent(tagProposalId) : null, revision);
   const refresh = useCallback(() => setRevision(v => v + 1), []);

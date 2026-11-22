@@ -5,17 +5,19 @@ import type { ServiceContext } from './context.ts';
 import { runCommand } from './command.ts';
 
 const proposalFields = `p.id,p.category_id,p.name,p.definition,p.author_id,p.author_name,p.created_at,p.expires_at,p.state,
+  w.withdrawn_at,CASE WHEN p.author_id=? AND w.resubmitted_id IS NULL AND w.proposal_id IS NOT NULL
+    THEN json_object('name',w.draft_name,'definition',w.draft_definition,'version',w.version,'category_version',c.version) END AS draft_json,
   c.name AS current_name,c.definition AS current_definition,c.pending,
   (SELECT json_group_array(json_object('id',v.actor_id,'name',v.actor_name,'created_at',v.created_at) ORDER BY v.created_at,v.actor_id)
     FROM kw_tag_votes v WHERE v.proposal_id=p.id) AS approvers_json,
   EXISTS(SELECT 1 FROM kw_tag_votes v WHERE v.proposal_id=p.id AND (v.membership_id=? OR v.actor_id=?)) AS approved_by_me`;
-const proposalSource = 'FROM kw_tag_proposals p JOIN kw_categories c ON c.id=p.category_id';
-type TagProposalRow = Omit<KnowledgeTagProposal, 'approvers' | 'approval_count'> & {approvers_json: string};
+const proposalSource = 'FROM kw_tag_proposals p JOIN kw_categories c ON c.id=p.category_id LEFT JOIN kw_tag_withdrawals w ON w.proposal_id=p.id';
+type TagProposalRow = Omit<KnowledgeTagProposal, 'approvers' | 'approval_count'> & {approvers_json: string; withdrawn_at: string | null; draft_json: string | null};
 
-function projectProposal({approvers_json, ...row}: TagProposalRow, at: string): KnowledgeTagProposal {
+function projectProposal({approvers_json, withdrawn_at, draft_json, ...row}: TagProposalRow, at: string): KnowledgeTagProposal {
   const approvers = JSON.parse(approvers_json) as KnowledgeTagProposal['approvers'];
-  const state = row.state === 'pending' && row.expires_at <= at ? 'expired' : row.state;
-  return {...row, state, approvers, approval_count: approvers.length};
+  const state = withdrawn_at ? 'withdrawn' : row.state === 'pending' && row.expires_at <= at ? 'expired' : row.state;
+  return {...row, state, ...(draft_json ? {draft:JSON.parse(draft_json)} : {}), approvers, approval_count: approvers.length};
 }
 
 export async function listTagProposals(context: ServiceContext) {
@@ -23,9 +25,11 @@ export async function listTagProposals(context: ServiceContext) {
   if (!context.showPendingTags || 'kind' in actor) return {proposals: []};
   const at = context.clock();
   const rows = await context.stmt(`SELECT ${proposalFields} ${proposalSource}
-    WHERE p.state='pending' AND p.expires_at>? ORDER BY p.expires_at,p.id`,
-    actor.membership_id,actor.id,at).all<TagProposalRow>();
-  return {proposals: rows.results.map(row => projectProposal(row, at))};
+    WHERE (p.state='pending' AND p.expires_at>?) OR (p.author_id=? AND w.proposal_id IS NOT NULL AND w.resubmitted_id IS NULL)
+    ORDER BY p.expires_at,p.id`,
+    actor.id,actor.membership_id,actor.id,at,actor.id).all<TagProposalRow>();
+  const items = rows.results.map(row => projectProposal(row, at));
+  return {proposals: items.filter(p => p.state === 'pending'), drafts: items.filter(p => !!p.draft)};
 }
 
 export async function getTagProposal(context: ServiceContext, id: string): Promise<KnowledgeTagProposal> {
@@ -33,12 +37,12 @@ export async function getTagProposal(context: ServiceContext, id: string): Promi
   if (!context.showPendingTags || 'kind' in actor) throw new KnowledgeError(404,'NOT_FOUND','标签提议不存在或不可见');
   const at = context.clock();
   const row = await context.stmt(`SELECT ${proposalFields},p.base_version,c.version AS category_version,c.definition_version_id
-    ${proposalSource} WHERE p.id=?`,actor.membership_id,actor.id,id)
+    ${proposalSource} WHERE p.id=?`,actor.id,actor.membership_id,actor.id,id)
     .first<TagProposalRow & {base_version: number;category_version: number;definition_version_id: string | null}>();
   if (!row) throw new KnowledgeError(404,'NOT_FOUND','标签提议不存在或不可见');
   const {base_version, category_version, definition_version_id, ...fields} = row;
   const proposal = projectProposal(fields, at);
-  if (base_version >= category_version) return proposal;
+  if (proposal.draft || base_version >= category_version) return proposal;
 
   // A proposal's creation receipt keeps its original new-tag flag after approval updates the category.
   const original = proposal.author_id === 'system' ? {pending: 1} : await context.stmt(`SELECT

@@ -40,11 +40,12 @@ type ReviewDetailProps = {
   onCollaborate: () => void;
   onOpenCurrent: () => void;
   onReadDocument: (id: string) => void;
+  onWithdrawn: (id: string, branchId: string) => void;
   onResubmitted: (result: KnowledgeSubmission) => void;
 };
 
 export function KnowledgeReviewDetail({
-  api, merge, identity, onIssue, revision, now, requestedHead, onChanged, onCollaborate, onOpenCurrent, onReadDocument, onResubmitted,
+  api, merge, identity, onIssue, revision, now, requestedHead, onChanged, onCollaborate, onOpenCurrent, onReadDocument, onResubmitted, onWithdrawn,
 }: ReviewDetailProps) {
   const [diff, setDiff] = useState<{branch: KnowledgeBranch; changes: KnowledgeDiff[]} | null>(null);
   const [readError, setReadError] = useState('');
@@ -91,6 +92,20 @@ export function KnowledgeReviewDetail({
     }
   }
 
+  async function withdraw() {
+    setBusy(true);
+    setWriteError('');
+    try {
+      const result = await api.write<{document_id:string; branch_id:string}>('/reviews/withdraw', {id:merge.id, head_id:merge.head_id});
+      onWithdrawn(result.document_id, result.branch_id);
+    } catch (error) {
+      setWriteError((error as Error).message);
+    } finally {
+      onChanged();
+      setBusy(false);
+    }
+  }
+
   async function resubmit(change: KnowledgeDiff) {
     if (!diff) return;
     setBusy(true);
@@ -120,6 +135,9 @@ export function KnowledgeReviewDetail({
   const ballot = <KnowledgeReviewBallot approval={status} identity={identity} deadline={reviewDeadline(status, now)}
     busy={busy} onApprove={canVote ? approve : undefined}
     showMyApproval={!canVote && !!status.approved_by_me && status.state === 'open'}>
+    {identity.can_write && identity.id === merge.author_id && changes?.length === 1 && status.state === 'open' &&
+      !votingClosed(status, now) && status.approval_count < 3 &&
+      <button className="button quiet" disabled={busy} onClick={withdraw}>撤回到草稿</button>}
     {status.state === 'merged' && changes?.length === 1 && !changes[0].proposed.deleted &&
       <button className="button quiet" onClick={() => onReadDocument(changes[0].document_id)}>查看已入库文档</button>}
   </KnowledgeReviewBallot>;
