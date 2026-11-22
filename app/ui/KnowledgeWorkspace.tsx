@@ -10,10 +10,11 @@ import { KnowledgeTagReviewDetail } from './KnowledgeTagProposals';
 import { knowledgeDocumentPath, remainingVoteTime } from '../shared/knowledge';
 import { KnowledgeHelp, KnowledgeHelpButton } from './KnowledgeHelp';
 import { KnowledgeBranches, KnowledgeBranchForm, KnowledgeIssues, KnowledgeHistory } from './KnowledgeCollaboration';
-import type { KnowledgeApi, KnowledgeCategory, KnowledgeIdentity, KnowledgeVersion } from '../shared/knowledge';
+import type { KnowledgeApi, KnowledgeCategory, KnowledgeIdentity, KnowledgeSubmission, KnowledgeVersion } from '../shared/knowledge';
 import { TagCatalog, TagChip } from './TagCatalog';
 import { Modal } from './Modal';
 import { KnowledgeEditor, RemoveDocument } from './knowledge/KnowledgeEditor';
+import { KnowledgeDocumentScopes } from './knowledge/KnowledgeDocumentScopes';
 import { useKnowledgeNavigation, type Tab, type Scope } from './knowledge/navigation';
 import { useKnowledgeData } from './knowledge/data';
 import './knowledge.css';
@@ -66,7 +67,7 @@ export function KnowledgeWorkspace({api, identity}: {api: KnowledgeApi; identity
   } = navigation;
   const {
     search, revision, merges, reviewMatches, branches, list, drafts, category, setCategory, query,
-    setQuery, doc, historical, publicReview, loadingDoc, loadingMerges, reviewError, tagQueue, tagDetail, error, refresh,
+    setQuery, doc, historical, publicReview, publishDirectly, publishedFromBranch, loadingDoc, loadingMerges, reviewError, tagQueue, tagDetail, error, refresh,
   } = useKnowledgeData(api, canWrite, navigation);
   const workspace = useRef<HTMLElement>(null);
   const detailScroll = useRef<HTMLDivElement>(null);
@@ -110,6 +111,11 @@ export function KnowledgeWorkspace({api, identity}: {api: KnowledgeApi; identity
   useEffect(() => {
     if (review && review.branch_id !== branchId) navigate({branchId: review.branch_id}, 'replace');
   }, [review, branchId, navigate]);
+
+  useEffect(() => {
+    if (tab !== 'content' || !publishedFromBranch || !documentId || branchId === 'main') return;
+    navigate({...noSelection, branchId: 'main', scope: simple ? 'all' : 'main', documentId, versionId, mobileDetail}, 'replace');
+  }, [publishedFromBranch, branchId, documentId, versionId, tab, simple, mobileDetail, navigate]);
 
   const activeReviews = merges.filter(merge =>
     merge.state === 'open' && ((!merge.expired && (!votingClosed(merge, now) || merge.approval_count >= 3)) ||
@@ -242,6 +248,21 @@ export function KnowledgeWorkspace({api, identity}: {api: KnowledgeApi; identity
   function selectDocument(id: string, bid: string, nextScope = scope) {
     navigate({...noSelection, scope: nextScope, documentId: id, branchId: bid, tab: 'content', mobileDetail: true});
     setNotice('');
+  }
+
+  function selectPublishedDocument(id: string) {
+    selectDocument(id, 'main', simple ? 'all' : 'main');
+    refresh();
+  }
+
+  function finishSubmission(result: KnowledgeSubmission) {
+    if (result.state === 'merged') {
+      selectPublishedDocument(result.document_id);
+    } else {
+      if (simple) selectReview(result.id, result.head_id, result.branch_id);
+      else selectDocument(result.document_id, result.branch_id, 'public');
+      refresh();
+    }
   }
 
   function closeTagPicker() {
@@ -403,11 +424,11 @@ export function KnowledgeWorkspace({api, identity}: {api: KnowledgeApi; identity
             now={now} requestedHead={reviewHead} onChanged={refresh} onCollaborate={collaborateOnReview}
             onOpenCurrent={() => selectReview(review.id, review.head_id, review.branch_id)}
             onIssue={openIssue} onReadDocument={id => selectDocument(id, 'main')}
-            onResubmitted={(id, head, bid) => {selectReview(id, head, bid); refresh();}} /> :
+            onResubmitted={finishSubmission} /> :
           <div className="kb-empty"><p role="status">{loadingMerges ? '正在读取审核…' : reviewError || '无法打开该审核，可能已关闭或不可访问。'}</p>
             {reviewError && <button className="text-button" onClick={refresh}>重试</button>}
           </div> :
-          doc ? <article className="kb-article">
+          doc && !publishedFromBranch ? <article className="kb-article">
             {simple ? <header className="kb-reading-header">
               <div className="kb-article-title">
                 <h1>{doc.title}</h1><span className={'kb-reading-status' + (branchId === 'main' && !historical ? ' is-adopted' : '')}>{documentState}</span>
@@ -431,6 +452,7 @@ export function KnowledgeWorkspace({api, identity}: {api: KnowledgeApi; identity
               <div className="kb-article-title"><h1>{doc.title}</h1></div>
               <p className="kb-article-meta">{documentState}{branch && ' · ' + branch.name}<span>{doc.author_name}</span></p>
             </>}
+            <KnowledgeDocumentScopes version={doc} />
             {historical ? <KnowledgeVersionBody version={doc} /> : <KnowledgeDocumentBody key={branchId + doc.id} api={api} document={doc} branchId={branchId} writable={documentWritable} identity={identity} onIssue={openIssue}
               footer={!simple && <div className="kb-document-actions">
                 <div>
@@ -443,7 +465,7 @@ export function KnowledgeWorkspace({api, identity}: {api: KnowledgeApi; identity
                 {documentWritable && branchId !== 'main' && editable && <button data-kb-help="remove" className="text-button" onClick={() => setRemoving(true)}>移除文档</button>}
               </div>} />}
           </article> : <div className="kb-empty">
-            {loadingDoc ? <p role="status">正在读取文档…</p> : !error && <p>选择一篇文档开始阅读。</p>}
+            {loadingDoc || publishedFromBranch ? <p role="status">正在读取文档…</p> : !error && <p>选择一篇文档开始阅读。</p>}
           </div>)}
         {tab === 'issues' && <KnowledgeIssues api={api} writable={canWrite} revision={revision} selectedId={issueId} onChanged={refresh} />}
         {tab === 'branches' && <KnowledgeBranches api={api} actorId={identity.id} branches={branches} branchId={branchId} writable={canWrite}
@@ -451,17 +473,9 @@ export function KnowledgeWorkspace({api, identity}: {api: KnowledgeApi; identity
           onReview={merge => selectReview(merge.id, merge.head_id, merge.branch_id)} />}
         {tab === 'history' && <KnowledgeHistory key={branchId + revision} api={api} branchId={branchId} />}
       </div>
-      {tab === 'content' && !reviewId && !tagProposalId && doc && branch && documentWritable && <KnowledgeReviewBar key={branchId + doc.id} api={api} branch={branch} document={doc}
-        actorId={identity.id} now={now} merge={merges.find(m => m.branch_id === branchId && m.state === 'open')}
-        onSubmitted={(bid, id, head) => {
-          if (simple) selectReview(id, head, bid);
-          else selectDocument(doc.document_id, bid, 'public');
-          refresh();
-        }}
-        onMerged={() => {
-          selectDocument(doc.document_id, 'main', simple ? 'all' : 'main');
-          refresh();
-        }}
+      {tab === 'content' && !reviewId && !tagProposalId && doc && !publishedFromBranch && branch && documentWritable && <KnowledgeReviewBar key={branchId + doc.id} api={api} branch={branch} document={doc}
+        actorId={identity.id} now={now} publishDirectly={publishDirectly} merge={merges.find(m => m.branch_id === branchId && m.state === 'open')}
+        onSubmitted={finishSubmission} onMerged={() => selectPublishedDocument(doc.document_id)}
         onChanged={refresh} onBranches={() => openTab('branches')} />}
     </section>
 
@@ -475,7 +489,7 @@ export function KnowledgeWorkspace({api, identity}: {api: KnowledgeApi; identity
       categories={[...tags.values()].map(({tag}) => tag)} simple={simple} close={() => setEditor(null)} done={(id, bid) => {
         setEditor(null);
         selectDocument(id, bid, simple ? 'all' : 'branch');
-        if (simple) setNotice('草稿已保存，可在底部提交到审核。');
+        if (simple) setNotice('草稿已保存。');
         refresh();
       }} />}
     {tagPicker && <Modal title="标签筛选" onClose={closeTagPicker}>

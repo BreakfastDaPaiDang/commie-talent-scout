@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { KnowledgeApi, KnowledgeCommitDetail, KnowledgeVersion } from '../shared/knowledge';
 import { Modal } from './Modal';
+import { KnowledgeDocumentScopes } from './knowledge/KnowledgeDocumentScopes';
 
 export type VersionTarget = {branchId: string; commitId: string; documentId?: string};
 
@@ -29,6 +30,7 @@ export function KnowledgeVersionModal({api, target, close}: {api: KnowledgeApi; 
         <h3>{detail.commit.message}</h3>
         {detail.changes.map(({document_id, after}) => after && <section key={document_id}>
           <h3>{after.title}</h3>
+          <KnowledgeDocumentScopes version={after} />
           <KnowledgeVersionBody version={after} />
         </section>)}
       </>}

@@ -65,7 +65,7 @@ app.onError((error,c)=>{
   console.error(JSON.stringify({event:'request.failed',path:c.req.path,code:'INTERNAL_ERROR'}));
   return c.json({error:{code:'INTERNAL_ERROR',message:'服务暂时不可用，请稍后重试'}},500);
 });
-app.get('/api/health',c=>c.json({ok:true,version:'1.2.0',environment:c.env.ENVIRONMENT,catalog_bridge:1,knowledge_workspace:1}));
+app.get('/api/health',c=>c.json({ok:true,version:'1.2.0',environment:c.env.ENVIRONMENT,catalog_bridge:1,knowledge_workspace:1,knowledge_identity:2}));
 app.all('/api/catalog/*',c=>catalogProxy(c.req.raw,c.env));
 app.all('/api/knowledge-workspace/*',c=>catalogProxy(c.req.raw,c.env,true));
 app.post('/api/auth/login',async c=>{

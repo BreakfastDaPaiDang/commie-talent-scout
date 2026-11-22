@@ -1,11 +1,14 @@
 import { KnowledgeError, uid } from "../types.ts";
 import type { KnowledgeBranch, KnowledgeVersion, KnowledgeCategory, KnowledgeDiff } from "../../../app/shared/knowledge.ts";
 import type { ServiceContext } from './context.ts';
-import { getBranch, getDocument, getDocumentRecord, assertEditable, prepareCommit, getVersion, changedDocument, tagProjection, visibleTag, withTags, type TaggedRow } from './records.ts';
+import { getBranch, getDocument, getDocumentRecord, assertEditable, prepareCommit, getVersion, changedDocument, scopeProjection, tagProjection, versionScopeFilter, visibleTag, withTags, type TaggedRow } from './records.ts';
 import { listCategories } from './categories.ts';
 import { runCommand } from './command.ts';
 import { workspaceSchemas } from './inputs.ts';
+import { inheritDocumentScopes, prepareDocumentScopes } from './document-scopes.ts';
 import { reviewSourceMatches, reviewVisible, singleDocumentBranch } from './review-queries.ts';
+import { readingDefaultsVersion, readingSelection } from './reading-defaults.ts';
+import { canPublishPersonalDocument, findPersonalPublication } from './personal-publication.ts';
 
 export type DocumentReferenceContext = 'main' | 'public' | 'drafts' | 'branch';
 
@@ -20,12 +23,18 @@ async function approvedTagRevision(context: ServiceContext) {
   return await context.stmt("SELECT COUNT(*) AS revision FROM kw_tag_proposals WHERE state='approved'").first<number>('revision') ?? 0;
 }
 
-export async function listDocuments(context: ServiceContext, input: unknown) {
+export async function listDocuments(context: ServiceContext, input: unknown, useMcpDefaults = false) {
   const a = workspaceSchemas.list.parse(input);
   if (context.guest && a.scope && a.scope !== 'main') throw new KnowledgeError(403, 'PUBLISHED_ONLY', '接收者只能阅读主要知识库');
   const tagRevision = await approvedTagRevision(context);
   const branch = await getBranch(context, a.scope === 'main' ? 'main' : a.branch_id),
     pattern = '%' + a.search.replace(/[!%_]/g, '!$&') + '%';
+  const separateBranches = a.scope === 'public' || a.scope === 'drafts';
+  const useDefaults = useMcpDefaults && !context.guest && branch.id === 'main' && !separateBranches &&
+    !a.all_scopes && !a.scope_ids && !a.search && !a.category_id && !a.any_tag_ids;
+  const defaults = useDefaults ? await readingSelection(context) : null;
+  const readingScopeIds = a.scope_ids ? [...new Set(a.scope_ids)] : defaults?.reading_scope_ids ?? null;
+  const documentScope = versionScopeFilter(readingScopeIds);
   const at = context.clock();
   let scope = 'i.branch_id=?',
     scopeArgs: unknown[] = [branch.id];
@@ -47,14 +56,16 @@ export async function listDocuments(context: ServiceContext, input: unknown) {
   const tagClause = tagIds.length ? `AND EXISTS(SELECT 1 FROM kw_document_tags t
     JOIN kw_categories filter_tag ON filter_tag.id=t.category_id WHERE t.version_id=v.id
     AND t.category_id IN (${tagIds.map(() => '?').join(',')}) AND ${tagVisibility})` : '';
-  const where = `${scope} AND v.deleted=0 ${tagClause} AND (v.title LIKE ? ESCAPE '!' OR v.body LIKE ? ESCAPE '!')`,
-    args = [...scopeArgs, ...tagIds, pattern, pattern];
-  const rows = await context.stmt(`SELECT v.*,i.branch_id,c.id AS visible_category_id,c.name AS category_name,${tagProjection(context)} ${from} WHERE ${where} ORDER BY v.created_at DESC,v.id,i.branch_id LIMIT ? OFFSET ?`, ...args, a.limit + 1, a.offset).all<TaggedRow>();
-  const categories = a.scope === 'public' || a.scope === 'drafts' ? (await context.stmt(`SELECT c.*,COUNT(*) AS count,MIN(i.branch_id) AS branch_id
+  const where = `${scope} AND v.deleted=0 ${documentScope.clause} ${tagClause} AND (v.title LIKE ? ESCAPE '!' OR v.body LIKE ? ESCAPE '!')`,
+    args = [...scopeArgs, ...documentScope.args, ...tagIds, pattern, pattern];
+  const rows = await context.stmt(`SELECT v.*,i.branch_id,c.id AS visible_category_id,c.name AS category_name,${tagProjection(context)},${scopeProjection} ${from} WHERE ${where} ORDER BY v.created_at DESC,v.id,i.branch_id LIMIT ? OFFSET ?`, ...args, a.limit + 1, a.offset).all<TaggedRow>();
+  const categories = separateBranches ? (await context.stmt(`SELECT c.*,COUNT(*) AS count,MIN(i.branch_id) AS branch_id
     FROM kw_items i JOIN kw_branches b ON b.id=i.branch_id JOIN kw_versions v ON v.id=i.version_id JOIN kw_document_tags t ON t.version_id=v.id JOIN kw_categories c ON c.id=t.category_id
-    WHERE ${scope} AND v.deleted=0 AND ${visibleTag(context, 'c')} GROUP BY c.id ORDER BY c.name`, ...scopeArgs).all<KnowledgeCategory>()).results : (await listCategories(context, branch.id, a.any_tag_ids)).categories;
-  if (!context.guest && (a.scope === 'public' || a.scope === 'drafts')) for (const c of (await context.stmt(`SELECT c.*,0 AS count FROM kw_categories c WHERE c.independent=1 AND ${visibleTag(context, 'c')} ORDER BY c.name`).all<KnowledgeCategory>()).results) if (!categories.some(x => x.id === c.id)) categories.push(c);
-  if ((!context.showPendingTags || a.any_tag_ids) && (tagRevision !== await approvedTagRevision(context) || branch.head_id !== (await getBranch(context, branch.id)).head_id)) {
+    WHERE ${scope} AND v.deleted=0 ${documentScope.clause} AND ${visibleTag(context, 'c')} GROUP BY c.id ORDER BY c.name`,
+    ...scopeArgs, ...documentScope.args).all<KnowledgeCategory>()).results : (await listCategories(context, branch.id, a.any_tag_ids, readingScopeIds)).categories;
+  if (!context.guest && separateBranches) for (const c of (await context.stmt(`SELECT c.*,0 AS count FROM kw_categories c WHERE c.independent=1 AND ${visibleTag(context, 'c')} ORDER BY c.name`).all<KnowledgeCategory>()).results) if (!categories.some(x => x.id === c.id)) categories.push(c);
+  if ((!context.showPendingTags || a.any_tag_ids || readingScopeIds) && (tagRevision !== await approvedTagRevision(context) ||
+      branch.head_id !== (await getBranch(context, branch.id)).head_id || defaults && defaults.version !== await readingDefaultsVersion(context))) {
     throw new KnowledgeError(409, 'KNOWLEDGE_SNAPSHOT_CHANGED', '知识库在读取时发生变化，请从第一页重新读取');
   }
   if (a.any_tag_ids) {
@@ -66,6 +77,8 @@ export async function listDocuments(context: ServiceContext, input: unknown) {
   return {
     branch,
     tag_revision: tagRevision,
+    reading_scope_ids: readingScopeIds,
+    reading_defaults_version: defaults?.version ?? null,
     reference_context: a.scope === 'public' || a.scope === 'drafts' ? a.scope : branchReferenceContext(branch),
     documents: rows.results.slice(0, a.limit).map(withTags),
     next_offset: rows.results.length > a.limit ? a.offset + a.limit : null,
@@ -81,7 +94,12 @@ export async function readDocument(context: ServiceContext, branchId: string, id
       branchId, id, document.id, context.clock()).first();
     if (review) reference_context = 'public';
   }
-  return {document, historical, reference_context};
+  const sourceVersion = !historical && (reference_context === 'drafts' || reference_context === 'branch');
+  const can_publish_directly = sourceVersion && await canPublishPersonalDocument(context, branchId, document);
+  const published_directly = sourceVersion && !can_publish_directly &&
+    document.scopes?.length === 1 && document.scopes[0].startsWith('personal:') &&
+    !!await findPersonalPublication(context, branchId, document.document_id, document.id);
+  return {document, historical, reference_context, can_publish_directly, published_directly};
 }
 export async function saveDocument(context: ServiceContext, input: unknown) {
   const a = workspaceSchemas.save.parse(input);
@@ -106,6 +124,7 @@ export async function saveDocument(context: ServiceContext, input: unknown) {
     if (a.category && !category) statements.push(context.stmt('INSERT INTO kw_categories(id,name,updated_at,pending) VALUES(?,?,?,1)', categoryId, a.category, at));
     if (!old) statements.push(context.stmt('INSERT INTO kw_documents VALUES(?,?,?,?)', documentId, context.actor.id, context.actor.name, at));
     statements.push(context.stmt('INSERT INTO kw_versions VALUES(?,?,?,?,?,?,?,?,?,?,?)', versionId, documentId, a.title, a.body, categoryId, a.kind, a.source, 0, context.actor.id, context.actor.name, at), prepareCommit(context, commitId, b, a.message, at), context.stmt('INSERT INTO kw_changes VALUES(?,?,?,?)', commitId, documentId, old?.id ?? null, versionId), context.stmt('INSERT INTO kw_items(branch_id,document_id,version_id) VALUES(?,?,?) ON CONFLICT(branch_id,document_id) DO UPDATE SET version_id=excluded.version_id', b.id, documentId, versionId), context.stmt('UPDATE kw_branches SET head_id=?,version=version+1,updated_at=? WHERE id=?', commitId, at, b.id));
+    statements.push(...prepareDocumentScopes(context, versionId, old, a.scopes));
     const additionalIds = new Set<string>();
     if (a.additional_tags?.length) {
       const visible = (await listCategories(context, b.id)).categories;
@@ -145,7 +164,7 @@ export async function removeDocument(context: ServiceContext, input: unknown) {
       version = uid(),
       commit = uid();
     return {
-      statements: [context.stmt('INSERT INTO kw_versions SELECT ?,document_id,title,body,category_id,kind,source,1,?,?,? FROM kw_versions WHERE id=?', version, context.actor.id, context.actor.name, at, v.id), context.stmt('INSERT INTO kw_version_tags SELECT ?,category_id,position FROM kw_version_tags WHERE version_id=?', version, v.id), prepareCommit(context, commit, b, a.message, at), context.stmt('INSERT INTO kw_changes VALUES(?,?,?,?)', commit, v.document_id, v.id, version), context.stmt('UPDATE kw_items SET version_id=? WHERE branch_id=? AND document_id=?', version, b.id, v.document_id), context.stmt('UPDATE kw_branches SET head_id=?,version=version+1,updated_at=? WHERE id=?', commit, at, b.id)],
+      statements: [context.stmt('INSERT INTO kw_versions SELECT ?,document_id,title,body,category_id,kind,source,1,?,?,? FROM kw_versions WHERE id=?', version, context.actor.id, context.actor.name, at, v.id), inheritDocumentScopes(context, version, v.id), context.stmt('INSERT INTO kw_version_tags SELECT ?,category_id,position FROM kw_version_tags WHERE version_id=?', version, v.id), prepareCommit(context, commit, b, a.message, at), context.stmt('INSERT INTO kw_changes VALUES(?,?,?,?)', commit, v.document_id, v.id, version), context.stmt('UPDATE kw_items SET version_id=? WHERE branch_id=? AND document_id=?', version, b.id, v.document_id), context.stmt('UPDATE kw_branches SET head_id=?,version=version+1,updated_at=? WHERE id=?', commit, at, b.id)],
       result: {
         id: v.document_id,
         branch_id: b.id,

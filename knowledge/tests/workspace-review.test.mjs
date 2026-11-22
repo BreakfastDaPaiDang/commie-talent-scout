@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {applyMigration,fixture,request} from './fixture.mjs';
+import {applyMigration,applyMigrationsAfter,fixture,request} from './fixture.mjs';
 import {KnowledgeWorkspace} from '../src/workspace.ts';
 import {locateAnnotation} from '../../app/shared/knowledge.ts';
 
@@ -175,7 +175,7 @@ test('deadline migration gives old open ballots seven days and preserves qualifi
  const before=sqliteNow();
  applyMigration(f.sqlite,'0006_review_deadlines.sql');
  const after=sqliteNow();
- applyMigration(f.sqlite,'0007_tag_proposals.sql');
+ applyMigrationsAfter(f.sqlite,'0006_review_deadlines.sql');
  const migrated=await f.w[0].mergeRequest(pending.id),deadline=Date.parse(migrated.expires_at);
  assert.ok(deadline>=before+week&&deadline<=after+week);
  assert.equal(migrated.approval_count,1);
@@ -207,7 +207,7 @@ test('MCP edits preserve hidden private tags without allowing clients to bind gu
  f.sqlite.prepare('INSERT INTO kw_categories(id,name,updated_at) VALUES(?,?,?)').run(oldTag,oldName,f.clock());
  const legacy=seedLegacyBranch(f,'旧私人草稿',f.clock(),{visibility:'private',categoryId:oldTag});
  applyMigration(f.sqlite,'0006_review_deadlines.sql');
- applyMigration(f.sqlite,'0007_tag_proposals.sql');
+ applyMigrationsAfter(f.sqlite,'0006_review_deadlines.sql');
 
  assert.equal((await writer.category(legacy.id,oldTag)).pending,1);
  assert.deepEqual((await agent.categories(legacy.id)).categories,[]);

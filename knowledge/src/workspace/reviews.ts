@@ -4,9 +4,10 @@ import type { ServiceContext } from './context.ts';
 import { runCommand } from './command.ts';
 import { getBranch, assertEditable, getDocument, prepareCommit } from './records.ts';
 import { branchDiff } from './documents.ts';
-import { getMergeRequest, hasReviewAlternative, qualifiedAlternatives, reviewExpiresAt, reviewSourceMatches, reviewVisible, singleDocumentBranch } from './review-queries.ts';
+import { getMergeRequest, hasReviewAlternative, matchingReviewSubmission, qualifiedAlternatives, reviewExpiresAt } from './review-queries.ts';
 import { getIssue } from './issue-queries.ts';
 import { workspaceSchemas } from './inputs.ts';
+import { canPublishPersonalDocument, findPersonalPublication, publishPersonalDocument } from './personal-publication.ts';
 function singleDocumentRequired() {
   return new KnowledgeError(409, 'SINGLE_DOCUMENT_REVIEW_REQUIRED', '审核须按文档分别提交，请打开候选并逐篇重新提交');
 }
@@ -15,25 +16,33 @@ function reviewDeadline(at: string) {
   return new Date(Date.parse(at) + 7 * 24 * 60 * 60 * 1000).toISOString();
 }
 
+function assertPublicationRoute(expected: 'direct' | 'review' | undefined, direct: boolean) {
+  if (expected && (expected === 'direct') !== direct) {
+    throw new KnowledgeError(409, 'PUBLICATION_ROUTE_CHANGED', '发布方式已变化，请刷新草稿后重新确认');
+  }
+}
+
 export async function submitReview(context: ServiceContext, input: unknown) {
   const a = workspaceSchemas.review.parse(input);
-  return runCommand(context, a, 'review.submit', async at => {
+  // Keep the fingerprint used by earlier workers when the client omitted a reason.
+  const command = {...a, reason: a.reason ?? '提交审核'};
+  return runCommand(context, command, 'review.submit', async at => {
     const source = await getBranch(context, a.branch_id);
+    const published = await findPersonalPublication(context, source.id, a.document_id, a.version_id);
+    if (published) {
+      assertPublicationRoute(a.expected_publication, true);
+      return {statements: [], result: published};
+    }
     assertEditable(context, source, a.expected_version);
     const document = await getDocument(context, source.id, a.document_id, true);
     if (document.id !== a.version_id) throw new KnowledgeError(409, 'CONFLICT', '草稿内容已变化，请重新核对');
     const existing = await context.stmt(`SELECT m.id,m.branch_id,m.head_id,m.state,${reviewExpiresAt} AS expires_at
-      FROM kw_review_sources s JOIN kw_merges m ON m.id=s.merge_id JOIN kw_branches b ON b.id=m.branch_id
-      WHERE s.source_branch_id=? AND s.document_id=? AND s.source_version_id=? AND ${reviewSourceMatches}
-        AND (m.state='merged' OR (m.state='open' AND m.head_id=b.head_id AND ${singleDocumentBranch} AND ${reviewVisible}))`,
+      ${matchingReviewSubmission}`,
       source.id, document.document_id, document.id, at).first<Record<string, unknown>>();
-    if (existing) return {
-      statements: [],
-      result: {
-        ...existing,
-        document_id: document.document_id
-      }
-    };
+    if (existing) {
+      assertPublicationRoute(a.expected_publication, false);
+      return {statements: [], result: {...existing, document_id: document.document_id}};
+    }
     const main = await getBranch(context, 'main'),
       base = await context.stmt('SELECT base_version_id FROM kw_items WHERE branch_id=? AND document_id=?', source.id, document.document_id).first<{
         base_version_id: string | null;
@@ -41,6 +50,11 @@ export async function submitReview(context: ServiceContext, input: unknown) {
     if (base?.base_version_id === document.id || (!base?.base_version_id && document.deleted)) {
       throw new KnowledgeError(400, 'NO_CHANGES', '这篇文档没有待审核的修改');
     }
+    const direct = await canPublishPersonalDocument(context, source.id, document, at);
+    assertPublicationRoute(a.expected_publication, direct);
+    if (direct) return publishPersonalDocument(context, {
+      source, main, document, baseVersionId: base?.base_version_id ?? null, message: a.reason || '发布：' + document.title, at,
+    });
     const branchId = uid(),
       commitId = uid(),
       mergeId = uid(),

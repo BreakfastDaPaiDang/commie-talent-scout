@@ -12,6 +12,8 @@ export function createWorkspaceContext(db: D1Database, actor: CatalogActor, cloc
       return {
         id: actor.id,
         name: actor.name,
+        membership_id: guest ? null : actor.membership_id,
+        membership_name: guest ? null : actor.membership_name ?? null,
         kind: guest ? 'guest' : 'member',
         can_write: !guest && actor.eligible
       };

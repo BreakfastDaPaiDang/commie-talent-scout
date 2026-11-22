@@ -6,16 +6,16 @@ import {catalogOrigin} from './catalog-bridge.ts';
 import {workspaceGuide,workspaceTools} from '../../knowledge/src/workspace-tools.ts';
 import type {KnowledgeWorkspace} from '../../knowledge/src/workspace.ts';
 
-function documentQuery(input: Record<string, unknown>) {
+function withQuery(path: string, input: Record<string, unknown>) {
  const params = new URLSearchParams();
  for (const [key, value] of Object.entries(input)) {
   if (value === undefined) continue;
   for (const item of Array.isArray(value) ? value : [value]) params.append(key, String(item));
  }
- return '/documents?' + params;
+ return path + '?' + params;
 }
-const reads:Record<string,(args:any[])=>string>={branches:()=>'/branches',list:([a])=>documentQuery(a),get:([branch_id,id,version_id])=>'/documents/'+id+'?'+new URLSearchParams({branch_id,...(version_id?{version_id}:{})}),diff:([branch])=>'/diff?branch_id='+encodeURIComponent(branch),mergeRequests:()=>'/merges',issues:([offset])=>'/issues?offset='+offset,comments:([a])=>'/comments?'+new URLSearchParams(a),history:([branch,offset])=>'/history?branch_id='+encodeURIComponent(branch)+'&offset='+offset,receipt:([id])=>'/requests/'+id};
-const writes:Record<string,string>={submitReview:'/reviews',editCategory:'/categories',issueFromComment:'/issues/from-comment',createBranch:'/branches',shareBranch:'/branches/share',deleteBranch:'/branches/delete',save:'/documents',remove:'/documents/remove',defineCategory:'/categories/definition',propose:'/merges',approve:'/merges/approve',accept:'/merges/accept',resolveConflict:'/branches/resolve',createIssue:'/issues',setIssueState:'/issues/state',comment:'/comments'};
+const reads:Record<string,(args:any[])=>string>={branches:()=>'/branches',list:([a])=>withQuery('/documents',a),readingScopes:([a])=>withQuery('/reading-scopes',a),readingDefaults:()=>'/reading-defaults',get:([branch_id,id,version_id])=>'/documents/'+id+'?'+new URLSearchParams({branch_id,...(version_id?{version_id}:{})}),diff:([branch])=>'/diff?branch_id='+encodeURIComponent(branch),mergeRequests:()=>'/merges',issues:([offset])=>'/issues?offset='+offset,comments:([a])=>'/comments?'+new URLSearchParams(a),history:([branch,offset])=>'/history?branch_id='+encodeURIComponent(branch)+'&offset='+offset,receipt:([id])=>'/requests/'+id};
+const writes:Record<string,string>={setReadingDefaults:'/reading-defaults',submitReview:'/reviews',editCategory:'/categories',issueFromComment:'/issues/from-comment',createBranch:'/branches',shareBranch:'/branches/share',deleteBranch:'/branches/delete',save:'/documents',remove:'/documents/remove',defineCategory:'/categories/definition',propose:'/merges',approve:'/merges/approve',accept:'/merges/accept',resolveConflict:'/branches/resolve',createIssue:'/issues',setIssueState:'/issues/state',comment:'/comments'};
 function toolsFor(call:(method:string,args:any[])=>Promise<any>,frontendUrl:(path:string)=>string){return workspaceTools(new Proxy({} as KnowledgeWorkspace,{get:(_,key)=> (...args:any[])=>call(String(key),args)}),frontendUrl);}
 export const knowledgeToolNames=toolsFor(async()=>null,path=>path).map(t=>t.name),knowledgeGuides=workspaceGuide;
 export function registerKnowledgeTools(server:McpServer,env:Env,actor:Actor,reply:McpReply){

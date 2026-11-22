@@ -16,19 +16,17 @@
 
 ## knowledge · 生效知识与修订提案
 
-身份核验在主站用 `whoami`，在独立知识 MCP 用 `knowledge_branches` 返回的 `identity`。仅接入时完成身份核验。每个会话首次开展人事业务时，先调用 `knowledge_workspace_guide`，再读取知识正文。上下文丢失后重新获取指南与全量知识。
+身份核验在主站用 `whoami`，在独立知识 MCP 用 `knowledge_branches` 返回的 `identity`。仅接入时完成身份核验。每个会话首次开展人事业务时，先调用 `knowledge_workspace_guide`，再读取知识正文。上下文丢失后重新获取指南与当前阅读范围内的生效知识。
 
-1. 从 `knowledge_documents({branch_id:"main",offset:0})` 开始，省略搜索和标签过滤。每页读取标题、已认可标签、正文全文、`document_id`、`version_id` 和版本链接 `reference_url`。把 `next_offset` 传为下一页的 `offset`，直到 `next_offset` 为 `null`。
-2. 记录首页的 `branch.head_id` 和 `tag_revision`，后续每页都核对。继续业务前用 `knowledge_documents({branch_id:"main",offset:0,limit:1})` 复核这两个值。任一值变化或收到 `KNOWLEDGE_SNAPSHOT_CHANGED` 时丢弃已读旧快照，从第一页重读。标签认可可以单独更新 `tag_revision`。
-3. 已有修订在审核时，继续以主分支当前版本为共同依据。草稿、待认可和移除后的历史只在讨论、修改或认可相应条目时，按权限另读。外部链接和附件按本次工作需要查阅。读取失败或截断时补齐缺页并重查快照，仍失败就说明知识未核验，以及哪些建议因此无法确认。
+1. 从 `knowledge_documents({branch_id:"main",offset:0})` 开始，省略搜索和过滤条件，默认涵盖全组织通用、人事组内、当前绑定社员的个人文档及账号增设的范围。同一篇命中多项只返回一次。每页读取文档范围、标题、已认可标签、正文全文、`document_id`、`version_id` 和版本链接 `reference_url`。把 `next_offset` 传为下一页的 `offset`，直到 `next_offset` 为 `null`。
+2. 记录首页的 `branch.head_id`、`tag_revision`、`reading_scope_ids` 和 `reading_defaults_version`，后续每页都核对。继续业务前用 `knowledge_documents({branch_id:"main",offset:0,limit:1})` 复核文档、标签以及实际阅读范围。任一值变化或收到 `KNOWLEDGE_SNAPSHOT_CHANGED` 时从第一页重读。
+3. 已有修订在审核时，继续引用主分支生效版本。引用仅属个人的文档时标明归属，避免将个人经验表述为组织共识。草稿、待认可和移除后的历史只在讨论、修改或认可相应条目时，按权限另读。外部链接和附件按本次工作需要查阅。读取失败或截断时补齐缺页并重查快照，仍失败就说明知识未核验，以及哪些建议因此无法确认。
 
-只有用户明确要求按多个已认可标签缩小知识范围时，才用 `knowledge_documents({scope:"main",any_tag_ids:[标签 ID]})` 读取匹配任一所选标签的文档。续页保留相同筛选。普通单标签浏览用 `category_id`，恢复全量时从第一页重读。
-
-后续按任务自动选择适用知识的规则供组会讨论。见[组织共用知识库，按工作选择默认阅读范围](../adr/0023-agent-knowledge-reading-scope.md)。
+按需检索全库可传 `all_scopes:true`，仅本次指定范围可传 `scope_ids`；原有 `category_id` 和 `any_tag_ids` 用于主题标签检索。续页保持同一筛选。要让后续会话也读某个公开个人范围，用 `knowledge_reading_scopes` 按名称查找，`knowledge_reading_defaults` 核对已有设置和版本，再按用户授权调用 `knowledge_set_reading_defaults`。同一账号的两个 MCP 入口共享设置。见[文档范围与个人发布](../adr/0024-document-scopes-and-personal-publication.md)。
 
 对照同一快照的各篇相关条款、适用范围和反例。发现跨文档业务矛盾、实际情形超出规则或值得补入的新经验时，提出新条目或修订草稿。写清问题、业务影响、各条款的适用条件、拟改措辞及待确认事项，每个引用给出标题、相关原句、版本和工具返回的链接。
 
-用户明确授权发起讨论后，可用 `knowledge_create_issue`，在议题正文中放入多个可公开的文档引用。已有可公开的批注可用 `knowledge_issue_from_annotation`。获准保存私人草稿时，用 `knowledge_create_branch` 指定 `visibility:"private"`，再用 `knowledge_save_document` 保存。获准提审时用 `knowledge_submit_review` 逐篇提交，获准认可具体候选版本时用 `knowledge_agree`。发布、修改、关闭和出具认可归属所连接账号，须取得对具体内容和动作的明确授权。采纳仍由共同认可决定。
+用户明确授权发起讨论后，可用 `knowledge_create_issue`，在议题正文中放入多个可公开的文档引用。已有可公开的批注可用 `knowledge_issue_from_annotation`。获准保存私人草稿时，用 `knowledge_create_branch` 指定 `visibility:"private"`，再用 `knowledge_save_document` 保存。获准提审时用 `knowledge_submit_review` 逐篇提交，获准认可具体候选版本时用 `knowledge_agree`。发布、修改、关闭和出具认可归属所连接账号，须取得对具体内容和动作的明确授权。仅本人个人范围的文档由本人明确发布或修订即生效；涉及共享范围的版本和变更仍走共同认可。
 
 ## personnel_review · 会前、会中、会后的人事审核
 

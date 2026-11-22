@@ -27,9 +27,17 @@ const activityQuery = z.object({
 }).strict().refine(exactReview, '请选择具体候选版本');
 workspaceApp.get('/branches',async c=>c.json(await c.get('workspace').branches()));
 workspaceApp.get('/documents',async c=>{
-  const query = {...c.req.query(), any_tag_ids: c.req.queries('any_tag_ids')};
-  return c.json(await c.get('workspace').list(query));
+  const {all_scopes, ...params} = c.req.query();
+  const query = {
+    ...params,
+    any_tag_ids: c.req.queries('any_tag_ids'),
+    scope_ids: c.req.queries('scope_ids'),
+    all_scopes: all_scopes === undefined ? undefined : z.enum(['true', 'false']).parse(all_scopes) === 'true'
+  };
+  return c.json(await c.get('workspace').list(query, c.req.header('X-Knowledge-MCP') === '1'));
 });
+workspaceApp.get('/reading-scopes',async c=>c.json(await c.get('workspace').readingScopes(c.req.query())));
+workspaceApp.get('/reading-defaults',async c=>c.json(await c.get('workspace').readingDefaults()));
 workspaceApp.get('/documents/:id',async c=>c.json(await c.get('workspace').get(
   branch(c.req.query('branch_id')), c.req.param('id'), key.optional().parse(c.req.query('version_id')),
 )));
@@ -51,6 +59,7 @@ workspaceApp.get('/history/:id',async c=>c.json(await c.get('workspace').commitD
 )));
 workspaceApp.get('/requests/:id',async c=>c.json({result:await c.get('workspace').receipt(c.req.param('id'))}));
 const commands={
+ '/reading-defaults':'setReadingDefaults',
  '/branches':'createBranch','/branches/share':'shareBranch','/branches/delete':'deleteBranch','/documents':'save','/documents/remove':'remove',
  '/tag-proposals/approve':'approveTag','/categories/definition':'defineCategory','/categories':'editCategory','/reviews':'submitReview','/issues/from-comment':'issueFromComment','/merges':'propose','/merges/approve':'approve','/merges/accept':'accept',
  '/branches/resolve':'resolveConflict','/issues':'createIssue','/issues/state':'setIssueState','/comments':'comment',

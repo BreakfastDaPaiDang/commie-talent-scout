@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {applyMigration,fixture,request} from './fixture.mjs';
+import {applyMigration,applyMigrationsAfter,fixture,request} from './fixture.mjs';
 import {KnowledgeWorkspace} from '../src/workspace.ts';
 
 test('article and tag use separate ballots, even when created together', async () => {
@@ -86,7 +86,7 @@ test('adopted edits retain the original comparison after subsequent category ver
     f.sqlite.prepare('INSERT INTO kw_categories(id,name,definition,updated_at) VALUES(?,?,?,?)').run(id,'旧标签','第一版词义',f.clock());
     applyMigration(f.sqlite,'0004_reviews_and_categories.sql');
     f.sqlite.prepare('UPDATE kw_categories SET independent=1 WHERE id=?').run(id);
-    for(const migration of ['0005_document_tags.sql','0006_review_deadlines.sql','0007_tag_proposals.sql']) applyMigration(f.sqlite,migration);
+    applyMigrationsAfter(f.sqlite,'0004_reviews_and_categories.sql');
     const [a,b,c]=f.actors.map(actor=>new KnowledgeWorkspace(f.db,actor,f.clock));
 
     async function edit(expected_version,name,definition) {

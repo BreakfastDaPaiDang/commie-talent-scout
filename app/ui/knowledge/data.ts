@@ -98,7 +98,13 @@ export function useKnowledgeData(api: KnowledgeApi, canWrite: boolean, {scope, b
   const list = useDocumentList(api, listFilter(scope === 'all' ? 'main' : scope, branchId, search, category), revision);
   const drafts = useDocumentList(api, all ? listFilter('drafts', 'main', search, category) : null, revision);
   const reviewSearch = all ? search : '';
-  const document = useKnowledgeRead<{document: KnowledgeVersion; historical?: boolean; reference_context?: string}>(api, documentId ?
+  const document = useKnowledgeRead<{
+    document: KnowledgeVersion;
+    historical?: boolean;
+    reference_context?: string;
+    can_publish_directly?: boolean;
+    published_directly?: boolean;
+  }>(api, documentId ?
     '/documents/' + encodeURIComponent(documentId) + '?' + new URLSearchParams({
       branch_id: branchId, ...(versionId === null ? {} : {version_id: versionId}),
     }) : null, revision);
@@ -150,6 +156,8 @@ export function useKnowledgeData(api: KnowledgeApi, canWrite: boolean, {scope, b
     doc: versionMismatch ? null : document.data?.document ?? null,
     historical: !!document.data?.historical,
     publicReview: document.data?.reference_context === 'public',
+    publishDirectly: !!document.data?.can_publish_directly,
+    publishedFromBranch: !!document.data?.published_directly,
     loadingDoc: document.loading,
     error: document.error || (versionMismatch ? '无法读取链接所指的文档版本' : branchError),
   };
